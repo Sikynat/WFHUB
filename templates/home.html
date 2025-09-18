@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}Página Inicial{% endblock %}
+
+{% block content %}
+    <h1>Bem-vindo à Página Inicial!</h1>
+    <p>Este é o conteúdo exclusivo da home page. Todo o cabeçalho e rodapé vêm do arquivo base.</p>
+
+
+    <h2>Nossos Produtos</h2>
+
+    <form action="" method="get" class="mb-3">
+        <div class="input-group">
+            <input type="text" name="codigo" placeholder="Código" class="form-control" value="{{ request.GET.codigo }}">
+            <input type="text" name="descricao" placeholder="Descrição" class="form-control" value="{{ request.GET.descricao }}">
+            <input type="text" name="grupo" placeholder="Grupo" class="form-control" value="{{ request.GET.grupo }}">
+            <input type="text" name="marca" placeholder="Marca" class="form-control" value="{{ request.GET.marca }}">
+            <button type="submit" class="btn btn-secondary">Filtrar</button>
+            <a href="{% url 'home' %}" class="btn btn-warning">Limpar Filtro</a>
+        </div>
+    </form>
+
+    <hr>
+
+    <form action="/gerar-pedido/" method="post">
+        {% csrf_token %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Código do Produto</th>
+                    <th>Descrição do Produto</th>
+                    <th>Grupo</th>
+                    <th>Marca</th>
+                    <th>Valor Unitário</th>
+                    <th>Quantidade</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in product_list %}
+                <tr>
+                    <td>{{ product.product_code }}</td>
+                    <td>{{ product.product_description }}</td>
+                    <td>{{ product.product_group }}</td>
+                    <td>{{ product.product_brand }}</td>
+                    <td class="product-value" data-value="{{ product.product_value }}">{{ product.product_value }}</td>
+                    <td>
+                        <input
+                            type="number"
+                            name="quantidade_{{ product.product_id }}"
+                            id="quantidade_{{ product.product_id }}"
+                            min="0"
+                            class="form-control sm">
+                    </td>
+                    <td>
+                        <span id="total_{{ product.product_id }}">R$ 0.00</span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7">Nenhum produto cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="6" class="text-end"><strong>Total Geral:</strong></td>
+                    <td><strong id="grand-total">R$ 0.00</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <button type="submit" class="btn btn-primary">Gerar Pedido</button>
+    </form>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
+            const grandTotalElement = document.getElementById('grand-total');
+
+            // Funções para carregar e salvar valores
+            quantidadeInputs.forEach(input => {
+                const savedValue = localStorage.getItem(input.id);
+                if (savedValue !== null && savedValue !== '0') {
+                    input.value = savedValue;
+                }
+            });
+
+            // Adiciona um listener para atualizar o total e salvar no localStorage
+            quantidadeInputs.forEach(input => {
+                input.addEventListener('input', (e) => {
+                    localStorage.setItem(e.target.id, e.target.value);
+                    updateTotals(e.target);
+                });
+            });
+
+            // Função para calcular e atualizar o total da linha e o total geral
+            function updateTotals(inputElement) {
+                const row = inputElement.closest('tr');
+                const valorUnitario = parseFloat(row.querySelector('.product-value').dataset.value);
+                const quantidade = parseFloat(inputElement.value);
+
+                if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
+                    const total = valorUnitario * quantidade;
+                    row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2)}`;
+                }
+
+                updateGrandTotal();
+            }
+
+            // Função para calcular e atualizar o total geral
+            function updateGrandTotal() {
+                let totalGeral = 0;
+                quantidadeInputs.forEach(input => {
+                    const row = input.closest('tr');
+                    const valorUnitario = parseFloat(row.querySelector('.product-value').dataset.value);
+                    const quantidade = parseFloat(input.value);
+                    if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
+                        totalGeral += valorUnitario * quantidade;
+                    }
+                });
+                grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2)}`;
+            }
+
+            // Atualiza os totais iniciais para todos os campos na carga da página
+            quantidadeInputs.forEach(updateTotals);
+        });
+    </script>
+{% endblock %}

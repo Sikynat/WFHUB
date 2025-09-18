@@ -54,7 +54,7 @@ ROOT_URLCONF = 'app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -149,3 +149,12 @@ INSTALLED_APPS = [
     # ... outros apps
     'wefixhub', # Deve ser 'clientes', não 'client' ou outro nome
 ]
+
+# Redireciona para a página inicial após o login
+LOGIN_REDIRECT_URL = '/'
+
+# URL para a página de login
+
+
+LOGIN_URL = '/accounts/login/'
+LOGOUT_REDIRECT_URL = '/accounts/login/'

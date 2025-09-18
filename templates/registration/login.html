@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+
+<section>
+   <div class="container mt-5 pt-5">
+          <div class="row">
+                
+                <div class="col-12 col-sm8 col-md-6 m-auto">
+                    <div class="card border-0 shadow">
+                        <div class="card-body  ">
+                         
+                           <div class="d-flex justify-content-center m-3">
+                                 
+                                 <svg class="" xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="currentColor" class="bi bi-person-circle" viewBox="0 0 16 16" >
+                                 <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0"/>
+                                <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1"/>
+                                </svg>
+                            </div>
+                           
+                          
+                                    <form method="post">
+                                        {% csrf_token %}
+
+                                        <div class="mb-3">
+                                            <input 
+                                                type="text" 
+                                                name="{{ form.username.name }}" 
+                                                class="form-control my-4 py-2" 
+                                                placeholder="Nome de usuário" 
+                                                id="{{ form.username.id_for_label }}">
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <input 
+                                                type="password" 
+                                                name="{{ form.password.name }}" 
+                                                class="form-control my-4 py-2" 
+                                                placeholder="Senha" 
+                                                id="{{ form.password.id_for_label }}">
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary">Entrar</button>
+                                    </form>
+                        </div>
+                        
+                    </div>
+                        
+                </div>
+                    
+            </div>
+   </div>
+      
+    
+</section>
+
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Checkout{% endblock %}
+
+{% block content %}
+    <h1>Finalizar Compra</h1>
+    <hr>
+    <h3>Resumo do Pedido</h3>
+    
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Valor Unitário</th>
+                <th>Quantidade</th>
+                <th>Valor Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in carrinho_detalhes %}
+                <tr>
+                    <td>{{ item.product.product_code }}</td>
+                    <td>{{ item.product.product_description }}</td>
+                    <td>R$ {{ item.product.product_value }}</td>
+                    <td>{{ item.quantidade }}</td>
+                    <td>R$ {{ item.valor_total|floatformat:2 }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <a href="{% url 'carrinho' %}" class="btn btn-secondary">Voltar ao Carrinho</a>
+    
+    <form action="{% url 'salvar_pedido' %}" method="post" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">Confirmar Compra</button>
+    </form>
+{% endblock %}

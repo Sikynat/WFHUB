@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Carrinho de Compras{% endblock %}
+
+{% block content %}
+    <h1>Seu Carrinho de Compras</h1>
+    <hr>
+    {% if carrinho_detalhes %}
+        <form action="{% url 'atualizar_carrinho' %}" method="post">
+            {% csrf_token %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Valor Unitário</th>
+                        <th>Quantidade</th>
+                        <th>Valor Total</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in carrinho_detalhes %}
+                        <tr>
+                            <td>{{ item.product.product_code }}</td>
+                            <td>{{ item.product.product_description }}</td>
+                            <td>R$ {{ item.product.product_value }}</td>
+                            <td>
+                                <input
+                                    type="number"
+                                    name="quantidade_{{ item.product.product_id }}"
+                                    value="{{ item.quantidade }}"
+                                    min="1"
+                                    class="form-control"
+                                    style="width: 80px;">
+                            </td>
+                            <td>R$ {{ item.valor_total|floatformat:2 }}</td>
+                            <td>
+                                <a href="{% url 'remover_item' item.product.product_id %}" class="btn btn-danger btn-sm">Remover</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                        <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
+                        <td>
+                            <button type="submit" class="btn btn-success">Atualizar</button>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </form>
+        <a href="{% url 'limpar_carrinho' %}" class="btn btn-warning">Limpar Carrinho</a>
+        <a href="{% url 'home' %}" class="btn btn-secondary">Continuar Comprando</a>
+      <a href="{% url 'checkout' %}" class="btn btn-success">Finalizar Pedido</a>
+    {% else %}
+        <p class="alert alert-info">Seu carrinho de compras está vazio.</p>
+        <a href="{% url 'home' %}" class="btn btn-primary">Voltar para a Loja</a>
+    {% endif %}
+{% endblock %}

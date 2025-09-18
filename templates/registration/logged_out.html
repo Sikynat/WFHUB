@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block title %}Desconectado{% endblock %}
+
+{% block content %}
+<h2>Você saiu da sua conta.</h2>
+<p>Obrigado por usar nossos serviços. <a href="{% url 'login' %}">Clique aqui para entrar novamente.</a></p>
+{% endblock %}
