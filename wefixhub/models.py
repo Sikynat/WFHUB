@@ -2,10 +2,17 @@ from django.db import models
 
 # Create your models here.
 
-class UF(models.Model):
+class wefixhub_uf (models.Model):
     uf_id = models.AutoField(primary_key=True)
     uf_name = models.CharField(max_length=2)
 
+    class Meta:
+        db_table = 'wefixhub_uf'
+        verbose_name = 'wefixhub_uf'
+        verbose_name_plural = 'wefixhub_uf'
+    
+    def __str__(self):
+        return self.uf_name
 
 
 class WfClient(models.Model):
@@ -15,7 +22,7 @@ class WfClient(models.Model):
     client_cnpj = models.CharField(max_length=14, unique=True)
     client_adress = models.CharField(max_length=255)
     client_city = models.CharField(max_length=100)
-    client_state = models.ForeignKey(UF,on_delete=models.PROTECT, related_name='state_uf')
+    client_state = models.ForeignKey(wefixhub_uf,on_delete=models.PROTECT, related_name='state_uf')
     client_state_subscription = models.CharField(max_length=14, blank=True, null=True)
     client_date = models.DateField(blank=True, null=True)
     client_is_active = models.BooleanField(default=False)
