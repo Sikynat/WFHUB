@@ -30,7 +30,10 @@ urlpatterns = [
     path('atualizar-carrinho/', views.atualizar_carrinho, name='atualizar_carrinho'),
     path('limpar-carrinho/', views.limpar_carrinho, name='limpar_carrinho'),
     path('checkout/', views.checkout, name='checkout'),
-   # path('salvar-pedido/', views.salvar_pedido, name='salvar_pedido'), # Vamos criar essa view no próximo passo
+    path('pedido-concluido/', views.pedido_concluido, name='pedido_concluido'),
+    path('salvar-pedido/', views.salvar_pedido, name='salvar_pedido'),
+    path('pedidos/', views.historico_pedidos, name='pedidos'),
+    path('pedidos/<int:pedido_id>/', views.detalhes_pedido, name='detalhes_pedido'),
 ]
 
 

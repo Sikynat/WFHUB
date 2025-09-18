@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Histórico de Pedidos{% endblock %}
+
+{% block content %}
+    <h1>Seus Pedidos</h1>
+    <hr>
+    {% if pedidos %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Número do Pedido</th>
+                    <th>Data</th>
+                    <th>Detalhes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pedido in pedidos %}
+                    <tr>
+                        <td>{{ pedido.id }}</td>
+                        <td>{{ pedido.data_criacao }}</td>
+                         <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="alert alert-info">Você ainda não tem pedidos.</p>
+    {% endif %}
+{% endblock %}

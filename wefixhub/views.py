@@ -162,3 +162,80 @@ def checkout(request):
     return render(request, 'checkout.html', contexto)
 
 
+from django.shortcuts import redirect
+from django.contrib.auth.decorators import login_required
+from .models import Product, Pedido, ItemPedido, WfClient
+
+
+@login_required
+def pedido_concluido(request):
+    return render(request, 'pedido_concluido.html')
+
+@login_required
+def salvar_pedido(request):
+    if request.method == 'POST':
+        carrinho_da_sessao = request.session.get('carrinho', {})
+
+        if not carrinho_da_sessao:
+            return redirect('carrinho')
+
+        try:
+            # CORREÇÃO AQUI: Pega o WfClient diretamente através do usuário logado
+            cliente_logado = request.user.wfclient
+        except WfClient.DoesNotExist:
+            return redirect('home')
+
+        pedido_criado = Pedido.objects.create(cliente=cliente_logado)
+
+        # ... (o restante da sua view para criar ItemPedido)
+        for product_id, quantidade in carrinho_da_sessao.items():
+            try:
+                product = Product.objects.get(product_id=product_id)
+                
+                ItemPedido.objects.create(
+                    pedido=pedido_criado,
+                    produto=product,
+                    quantidade=quantidade
+                )
+            except Product.DoesNotExist:
+                continue
+        
+        del request.session['carrinho']
+        request.session.modified = True
+
+        return redirect('pedido_concluido')
+    
+    return redirect('checkout')
+
+
+@login_required
+def historico_pedidos(request):
+    try:
+        # Puxa todos os pedidos do cliente logado
+        cliente_logado = request.user.wfclient
+        pedidos = Pedido.objects.filter(cliente=cliente_logado).order_by('-data_criacao')
+    except:
+        pedidos = []
+    
+    contexto = {
+        'titulo': 'Histórico de Pedidos',
+        'pedidos': pedidos
+    }
+    return render(request, 'historico_pedidos.html', contexto)
+
+@login_required
+def detalhes_pedido(request, pedido_id):
+    try:
+        # Puxa o pedido pelo ID e verifica se ele pertence ao usuário logado
+        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=request.user.wfclient)
+        itens = ItemPedido.objects.filter(pedido=pedido)
+        
+        contexto = {
+            'titulo': f"Detalhes do Pedido #{pedido.id}",
+            'pedido': pedido,
+            'itens': itens,
+        }
+        return render(request, 'detalhes_pedido.html', contexto)
+
+    except Pedido.DoesNotExist:
+        return redirect('pedidos')

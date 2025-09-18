@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+    <h1>Detalhes do Pedido #{{ pedido.id }}</h1>
+    <p><strong>Data da Compra:</strong> {{ pedido.data_criacao }}</p>
+    <hr>
+    
+    <h2>Itens do Pedido</h2>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Valor Unitário</th>
+                <th>Quantidade</th>
+                <th>Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in itens %}
+            <tr>
+                <td>{{ item.produto.product_code }}</td>
+                <td>{{ item.produto.product_description }}</td>
+                <td>R$ {{ item.produto.product_value }}</td>
+                <td>{{ item.quantidade }}</td>
+                <td>R$ {{ item.get_total|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                <td><strong>R$ {{ pedido.get_total_geral|floatformat:2 }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <a href="{% url 'pedidos' %}" class="btn btn-secondary mt-3">Voltar para o Histórico</a>
+{% endblock %}
