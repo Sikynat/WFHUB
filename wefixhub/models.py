@@ -57,8 +57,6 @@ class Product(models.Model):
     def __str__(self):
         return self.product_description
 
-# --- NOVOS MODELOS DE PEDIDO ---
-
 # Modelo de Pedido
 class Pedido(models.Model):
     cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
@@ -67,18 +65,20 @@ class Pedido(models.Model):
     def __str__(self):
         return f"Pedido #{self.id} de {self.cliente.client_name}"
 
-    # Adicione este método para calcular o total
+    # Método que calcula o total geral do pedido
     def get_total_geral(self):
-        total = sum(item.produto.product_value * item.quantidade for item in self.itens.all())
+        total = sum(item.get_total() for item in self.itens.all())
         return total
 
 # Modelo de Item do Pedido
 class ItemPedido(models.Model):
-    # Vincula o item ao pedido
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens')
-    # Vincula o item ao produto
     produto = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='itens_do_pedido')
     quantidade = models.IntegerField(default=1)
 
     def __str__(self):
         return f"{self.quantidade} x {self.produto.product_description} em {self.pedido.id}"
+
+    # Método que calcula o subtotal de um item
+    def get_total(self):
+        return self.produto.product_value * self.quantidade
