@@ -1,18 +1,5 @@
 """
 URL configuration for app project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
 from django.urls import path, include
@@ -30,8 +17,9 @@ urlpatterns = [
     path('atualizar-carrinho/', views.atualizar_carrinho, name='atualizar_carrinho'),
     path('limpar-carrinho/', views.limpar_carrinho, name='limpar_carrinho'),
     path('checkout/', views.checkout, name='checkout'),
-   # path('salvar-pedido/', views.salvar_pedido, name='salvar_pedido'), # Vamos criar essa view no próximo passo
+    path('admin-dashboard/', views.dashboard_admin, name='dashboard_admin'),
+    path('pedidos/<int:pedido_id>/', views.detalhes_pedido, name='detalhes_pedido'),
+    path('salvar-pedido/', views.salvar_pedido, name='salvar_pedido'),
+    path('pedido-concluido/', views.pedido_concluido, name='pedido_concluido'),
+    path('pedidos/', views.historico_pedidos, name='pedidos'),
 ]
-
-
-

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+    <h1>Dashboard Administrativo</h1>
+    <hr>
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card text-center text-white bg-info mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Clientes</h5>
+                    <h1 class="card-text">{{ total_clientes }}</h1>
+                </div>
+            </div>
+        </div>
+    </div>
+    <hr>
+    <h2>Pedidos Recentes</h2>
+    {% if pedidos_recentes %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID do Pedido</th>
+                    <th>Cliente</th>
+                    <th>Data</th>
+                    <th>Detalhes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pedido in pedidos_recentes %}
+                    <tr>
+                        <td>{{ pedido.id }}</td>
+                        <td>{{ pedido.cliente.client_name }}</td>
+                        <td>{{ pedido.data_criacao }}</td>
+                        <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="alert alert-info">Nenhum pedido recente encontrado.</p>
+    {% endif %}
+{% endblock %}
