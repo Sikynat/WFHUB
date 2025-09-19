@@ -6,6 +6,8 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -24,10 +26,16 @@
 
                 <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
                     {% if user.is_authenticated %}
-                        <li class="nav-item d-flex align-items-center me-2">
-                            <span class="navbar-text">
-                                Logado como: <strong>{{ user.username }}</strong>
-                            </span>
+                        {% if user.is_staff %}
+                            <li class="nav-item">
+                                <a class="nav-link btn btn-secondary me-2" href="{% url 'dashboard_admin' %}">Dashboard</a>
+                            </li>
+                        {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link btn btn-success me-2" href="{% url 'carrinho' %}">Ver Carrinho</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link btn btn-primary me-2" href="{% url 'pedidos' %}">Histórico de Pedidos</a>
                         </li>
                         <li class="nav-item">
                             <form action="{% url 'logout' %}" method="post">
@@ -40,20 +48,7 @@
                             <a class="btn btn-primary" href="{% url 'login' %}">Entrar</a>
                         </li>
                     {% endif %}
-
-                    <a href="{% url 'carrinho' %}" class="btn btn-success">Ver Carrinho</a>
                 </ul>
-
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                    {% if user.is_authenticated %}
-                        {% if user.is_staff %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{% url 'dashboard_admin' %}">Dashboard</a>
-                            </li>
-                        {% endif %}
-                        {% endif %}
-                </ul>
-
             </div>
         </div>
     </nav>

@@ -3,16 +3,9 @@
 
 {% block content %}
     <h1>Dashboard Administrativo</h1>
-    
-    {% if messages %}
-        <ul class="messages">
-            {% for message in messages %}
-                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-            {% endfor %}
-        </ul>
-    {% endif %}
-
     <hr>
+
+    
     <div class="row">
         <div class="col-md-4">
             <div class="card text-center text-white bg-info mb-3">
@@ -40,6 +33,7 @@
         </div>
     </div>
     <hr>
+
     <h2>Pedidos Recentes</h2>
     <div class="mb-3">
         <a href="{% url 'exportar_pedidos_excel' %}" class="btn btn-success">Exportar para Excel</a>
@@ -52,7 +46,8 @@
                     <th>ID do Pedido</th>
                     <th>Cliente</th>
                     <th>Data</th>
-                    <th>Valor Total</th> <th>Detalhes</th>
+                    <th>Valor Total</th>
+                    <th>Detalhes</th>
                 </tr>
             </thead>
             <tbody>
@@ -61,7 +56,8 @@
                         <td>{{ pedido.id }}</td>
                         <td>{{ pedido.cliente.client_name }}</td>
                         <td>{{ pedido.data_criacao }}</td>
-                        <td>R$ {{ pedido.total|floatformat:2 }}</td> <td>
+                        <td>R$ {{ pedido.total|floatformat:2 }}</td>
+                        <td>
                             <a href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
                         </td>
                     </tr>
@@ -71,5 +67,6 @@
     {% else %}
         <p class="alert alert-info">Nenhum pedido recente encontrado.</p>
     {% endif %}
+    
 
 {% endblock %}

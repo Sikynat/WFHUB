@@ -8,6 +8,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 import openpyxl
 
+from django.db.models.functions import ExtractMonth
 # View para a página inicial com filtros e paginação
 @login_required
 def home(request):
@@ -38,6 +39,7 @@ def home(request):
         except (ValueError, TypeError):
             pass
 
+    # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
     page = request.GET.get('page')
     try:
@@ -47,11 +49,20 @@ def home(request):
     except EmptyPage:
         produtos_na_pagina = paginator.page(paginator.num_pages)
     
+    # NOVO: Puxa o objeto WfClient do usuário logado
+    cliente_logado = None
+    if request.user.is_authenticated:
+        try:
+            cliente_logado = request.user.wfclient
+        except WfClient.DoesNotExist:
+            cliente_logado = None
+
     carrinho_da_sessao = request.session.get('carrinho', {})
     contexto = {
         'titulo': 'Página Inicial',
         'product_list': produtos_na_pagina,
         'carrinho': carrinho_da_sessao,
+        'cliente_logado': cliente_logado, # NOVO: Adiciona o cliente ao contexto
     }
     return render(request, 'home.html', contexto)
 
@@ -355,7 +366,7 @@ def detalhes_pedido_admin(request, pedido_id):
     except Pedido.DoesNotExist:
         return redirect('dashboard_admin')
 
-@staff_member_required
+
 def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     try:
         pedido = get_object_or_404(Pedido, id=pedido_id)
@@ -403,3 +414,5 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
 
     workbook.save(response)
     return response
+
+

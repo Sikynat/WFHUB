@@ -5,6 +5,18 @@
     <h1>Bem-vindo à Página Inicial!</h1>
     <p>Este é o conteúdo exclusivo da home page. Todo o cabeçalho e rodapé vêm do arquivo base.</p>
 
+    {% if user.is_authenticated %}
+        {% if cliente_logado %}
+            <p>
+                Você está logado como: <strong>{{ cliente_logado.client_name }}</strong>
+                {% if not request.user.is_staff %}
+                    (Código: {{ cliente_logado.client_code }})
+                {% endif %}
+            </p>
+        {% else %}
+            <p>Você está logado como: <strong>{{ user.username }}</strong></p>
+        {% endif %}
+    {% endif %}
 
     <h2>Nossos Produtos</h2>
 
@@ -20,7 +32,7 @@
     </form>
 
     <hr>
-
+    
     <form action="/gerar-pedido/" method="post">
         {% csrf_token %}
         <table class="table table-striped">
@@ -77,7 +89,6 @@
             const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
             const grandTotalElement = document.getElementById('grand-total');
 
-            // Funções para carregar e salvar valores
             quantidadeInputs.forEach(input => {
                 const savedValue = localStorage.getItem(input.id);
                 if (savedValue !== null && savedValue !== '0') {
@@ -85,7 +96,6 @@
                 }
             });
 
-            // Adiciona um listener para atualizar o total e salvar no localStorage
             quantidadeInputs.forEach(input => {
                 input.addEventListener('input', (e) => {
                     localStorage.setItem(e.target.id, e.target.value);
@@ -93,7 +103,6 @@
                 });
             });
 
-            // Função para calcular e atualizar o total da linha e o total geral
             function updateTotals(inputElement) {
                 const row = inputElement.closest('tr');
                 const valorUnitario = parseFloat(row.querySelector('.product-value').dataset.value);
@@ -107,7 +116,6 @@
                 updateGrandTotal();
             }
 
-            // Função para calcular e atualizar o total geral
             function updateGrandTotal() {
                 let totalGeral = 0;
                 quantidadeInputs.forEach(input => {
@@ -121,7 +129,6 @@
                 grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2)}`;
             }
 
-            // Atualiza os totais iniciais para todos os campos na carga da página
             quantidadeInputs.forEach(updateTotals);
         });
     </script>
