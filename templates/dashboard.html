@@ -39,7 +39,7 @@
                     <th>ID do Pedido</th>
                     <th>Cliente</th>
                     <th>Data</th>
-                    <th>Detalhes</th>
+                    <th>Valor Total</th> <th>Detalhes</th>
                 </tr>
             </thead>
             <tbody>
@@ -48,7 +48,7 @@
                         <td>{{ pedido.id }}</td>
                         <td>{{ pedido.cliente.client_name }}</td>
                         <td>{{ pedido.data_criacao }}</td>
-                        <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
+                        <td>R$ {{ pedido.total|floatformat:2 }}</td> <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
                     </tr>
                 {% endfor %}
             </tbody>
@@ -56,4 +56,5 @@
     {% else %}
         <p class="alert alert-info">Nenhum pedido recente encontrado.</p>
     {% endif %}
+
 {% endblock %}

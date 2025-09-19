@@ -262,13 +262,23 @@ def dashboard_admin(request):
     total_vendas_agregadas = ItemPedido.objects.aggregate(total_vendas=Sum('produto__product_value'))
     valor_total_vendas = total_vendas_agregadas['total_vendas'] if total_vendas_agregadas['total_vendas'] else 0
 
-    pedidos_recentes = Pedido.objects.all().order_by('-data_criacao')[:5]
+    pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
+    
+    # NOVO: Criando uma lista de dicionários com os totais calculados
+    pedidos_com_total = []
+    for pedido in pedidos_recentes_qs:
+        pedidos_com_total.append({
+            'id': pedido.id,
+            'cliente': pedido.cliente,
+            'data_criacao': pedido.data_criacao,
+            'total': pedido.get_total_geral() # Chamando o método do modelo Pedido
+        })
 
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': total_clientes,
         'total_pedidos': total_pedidos,
         'total_vendas': valor_total_vendas,
-        'pedidos_recentes': pedidos_recentes
+        'pedidos_recentes': pedidos_com_total # NOVO: Passando a lista com os totais
     }
     return render(request, 'dashboard.html', contexto)
