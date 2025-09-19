@@ -29,6 +29,12 @@
                                 Logado como: <strong>{{ user.username }}</strong>
                             </span>
                         </li>
+                        <li class="nav-item me-2">
+                            <a href="{% url 'carrinho' %}" class="btn btn-success">Ver Carrinho</a>
+                        </li>
+                        <li class="nav-item me-2">
+                            <a href="{% url 'pedidos' %}" class="btn btn-success">Histórico De Pedidos</a>
+                        </li>
                         <li class="nav-item">
                             <form action="{% url 'logout' %}" method="post">
                                 {% csrf_token %}
@@ -40,10 +46,6 @@
                             <a class="btn btn-primary" href="{% url 'login' %}">Entrar</a>
                         </li>
                     {% endif %}
-
-                    <a href="{% url 'carrinho' %}" class="btn btn-success">Ver Carrinho</a>
-
-                     <a href="{% url 'pedidos' %}" class="btn btn-success">Histórico De Pedidos</a>
                 </ul>
 
             </div>
