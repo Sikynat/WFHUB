@@ -34,7 +34,7 @@ def home(request):
             pass
 
     # Lógica de Paginação:
-    paginator = Paginator(product_list, 10)  # Mostra 10 produtos por página
+    paginator = Paginator(product_list, 10)
     page = request.GET.get('page')
 
     try:
