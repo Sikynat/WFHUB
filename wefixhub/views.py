@@ -3,7 +3,9 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import Product, Pedido, ItemPedido, WfClient
-
+from django.http import HttpResponse # NOVO: Importe HttpResponse
+import openpyxl # NOVO: Importe a biblioteca openpyxl
+from django.utils import timezone
 
 # View para a página inicial com filtros e paginação
 @login_required
@@ -282,3 +284,54 @@ def dashboard_admin(request):
         'pedidos_recentes': pedidos_com_total # NOVO: Passando a lista com os totais
     }
     return render(request, 'dashboard.html', contexto)
+
+
+# Exportar pedido Excel
+
+@staff_member_required
+def exportar_pedidos_excel(request):
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="pedidos_recentes.xlsx"'
+
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Pedidos Recentes"
+
+    columns = ['ID do Pedido', 'Cliente', 'Data', 'Valor Total']
+    row_num = 1
+    for col_num, column_title in enumerate(columns, 1):
+        worksheet.cell(row=row_num, column=col_num, value=column_title)
+
+    pedidos_recentes = Pedido.objects.all().order_by('-data_criacao')[:10]
+    for pedido in pedidos_recentes:
+        row_num += 1
+
+        # NOVO: Converte a data para o fuso horário local e a torna "naive"
+        data_sem_tz = timezone.localtime(pedido.data_criacao).replace(tzinfo=None)
+
+        worksheet.cell(row=row_num, column=1, value=pedido.id)
+        worksheet.cell(row=row_num, column=2, value=pedido.cliente.client_name)
+        worksheet.cell(row=row_num, column=3, value=data_sem_tz) # Usa a data convertida
+        worksheet.cell(row=row_num, column=4, value=pedido.get_total_geral())
+
+    workbook.save(response)
+    
+    return response
+
+@staff_member_required
+def detalhes_pedido_admin(request, pedido_id):
+    try:
+        # AQUI ESTÁ A MUDANÇA: Não filtra pelo cliente
+        pedido = get_object_or_404(Pedido, id=pedido_id) 
+        itens = ItemPedido.objects.filter(pedido=pedido)
+        
+        contexto = {
+            'titulo': f"Detalhes do Pedido #{pedido.id}",
+            'pedido': pedido,
+            'itens': itens,
+        }
+        return render(request, 'detalhes_pedido.html', contexto)
+
+    except Pedido.DoesNotExist:
+        # Redireciona para o dashboard se o pedido não existir
+        return redirect('dashboard_admin')

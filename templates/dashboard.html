@@ -31,7 +31,7 @@
         </div>
     </div>
     <hr>
-    <h2>Pedidos Recentes</h2>
+  <h2>Pedidos Recentes</h2>
     {% if pedidos_recentes %}
         <table class="table table-striped">
             <thead>
@@ -39,7 +39,7 @@
                     <th>ID do Pedido</th>
                     <th>Cliente</th>
                     <th>Data</th>
-                    <th>Valor Total</th> <th>Detalhes</th>
+                    <th>Detalhes</th>
                 </tr>
             </thead>
             <tbody>
@@ -48,7 +48,9 @@
                         <td>{{ pedido.id }}</td>
                         <td>{{ pedido.cliente.client_name }}</td>
                         <td>{{ pedido.data_criacao }}</td>
-                        <td>R$ {{ pedido.total|floatformat:2 }}</td> <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
+                        <td>
+                            <a href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
+                        </td>
                     </tr>
                 {% endfor %}
             </tbody>
