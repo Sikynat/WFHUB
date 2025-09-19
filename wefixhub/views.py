@@ -1,11 +1,12 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models import Count, Sum
 from .models import Product, Pedido, ItemPedido, WfClient
-from django.http import HttpResponse # NOVO: Importe HttpResponse
-import openpyxl # NOVO: Importe a biblioteca openpyxl
+from django.http import HttpResponse
 from django.utils import timezone
+import openpyxl
 
 # View para a página inicial com filtros e paginação
 @login_required
@@ -37,10 +38,8 @@ def home(request):
         except (ValueError, TypeError):
             pass
 
-    # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
     page = request.GET.get('page')
-
     try:
         produtos_na_pagina = paginator.page(page)
     except PageNotAnInteger:
@@ -56,36 +55,28 @@ def home(request):
     }
     return render(request, 'home.html', contexto)
 
-
-# View para adicionar itens ao carrinho
 @login_required
 def gerar_pedido(request):
     if request.method == 'POST':
         request.session['carrinho'] = {}
-            
         for key, value in request.POST.items():
             if key.startswith('quantidade_') and value.isdigit() and int(value) > 0:
                 product_id = key.split('_')[1]
                 quantidade = int(value)
                 request.session['carrinho'][product_id] = quantidade
-
         request.session.modified = True
     return redirect('carrinho')
 
-
-# View para a página do carrinho
 @login_required
 def carrinho(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
     carrinho_detalhes = []
     total_geral = 0
-
     for product_id, quantidade in carrinho_da_sessao.items():
         try:
             product = Product.objects.get(product_id=product_id)
             valor_total_item = product.product_value * quantidade
             total_geral += valor_total_item
-            
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
@@ -93,7 +84,6 @@ def carrinho(request):
             })
         except Product.DoesNotExist:
             continue
-
     contexto = {
         'titulo': 'Carrinho de Compras',
         'carrinho_detalhes': carrinho_detalhes,
@@ -101,8 +91,6 @@ def carrinho(request):
     }
     return render(request, 'carrinho.html', contexto)
 
-
-# Views para gerenciar o carrinho
 @login_required
 def remover_item_carrinho(request, product_id):
     carrinho = request.session.get('carrinho', {})
@@ -110,7 +98,6 @@ def remover_item_carrinho(request, product_id):
         del carrinho[str(product_id)]
         request.session.modified = True
     return redirect('carrinho')
-
 
 @login_required
 def atualizar_carrinho(request):
@@ -127,7 +114,6 @@ def atualizar_carrinho(request):
         request.session.modified = True
     return redirect('carrinho')
 
-
 @login_required
 def limpar_carrinho(request):
     if 'carrinho' in request.session:
@@ -135,23 +121,18 @@ def limpar_carrinho(request):
         request.session.modified = True
     return redirect('carrinho')
 
-
-# View para a página de checkout
 @login_required
 def checkout(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
     carrinho_detalhes = []
     total_geral = 0
-
     if not carrinho_da_sessao:
         return redirect('carrinho')
-
     for product_id, quantidade in carrinho_da_sessao.items():
         try:
             product = Product.objects.get(product_id=product_id)
             valor_total_item = product.product_value * quantidade
             total_geral += valor_total_item
-            
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
@@ -159,7 +140,6 @@ def checkout(request):
             })
         except Product.DoesNotExist:
             continue
-
     contexto = {
         'titulo': 'Confirmação de Compra',
         'carrinho_detalhes': carrinho_detalhes,
@@ -167,23 +147,17 @@ def checkout(request):
     }
     return render(request, 'checkout.html', contexto)
 
-
-# View para salvar o pedido no banco de dados
 @login_required
 def salvar_pedido(request):
     if request.method == 'POST':
         carrinho_da_sessao = request.session.get('carrinho', {})
-
         if not carrinho_da_sessao:
             return redirect('carrinho')
-
         try:
             cliente_logado = request.user.wfclient
         except WfClient.DoesNotExist:
             return redirect('home')
-
         pedido_criado = Pedido.objects.create(cliente=cliente_logado)
-
         for product_id, quantidade in carrinho_da_sessao.items():
             try:
                 product = Product.objects.get(product_id=product_id)
@@ -194,22 +168,15 @@ def salvar_pedido(request):
                 )
             except Product.DoesNotExist:
                 continue
-        
         del request.session['carrinho']
         request.session.modified = True
-
         return redirect('pedido_concluido')
-    
     return redirect('checkout')
 
-
-# View de sucesso após o pedido
 @login_required
 def pedido_concluido(request):
     return render(request, 'pedido_concluido.html')
 
-
-# View para o histórico de pedidos
 @login_required
 def historico_pedidos(request):
     try:
@@ -217,111 +184,149 @@ def historico_pedidos(request):
         pedidos = Pedido.objects.filter(cliente=cliente_logado).order_by('-data_criacao')
     except WfClient.DoesNotExist:
         pedidos = []
-    
     contexto = {
         'titulo': 'Histórico de Pedidos',
         'pedidos': pedidos
     }
     return render(request, 'historico_pedidos.html', contexto)
 
-
-# View para os detalhes de um pedido específico
 @login_required
 def detalhes_pedido(request, pedido_id):
     try:
         cliente_logado = request.user.wfclient
         pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
         itens = ItemPedido.objects.filter(pedido=pedido)
-        
         contexto = {
             'titulo': f"Detalhes do Pedido #{pedido.id}",
             'pedido': pedido,
             'itens': itens,
         }
         return render(request, 'detalhes_pedido.html', contexto)
-
     except WfClient.DoesNotExist:
         return redirect('pedidos')
     except Pedido.DoesNotExist:
         return redirect('pedidos')
 
-# View para o dashboard administrativo
-# wefixhub/views.py
-
-from django.shortcuts import render
-from django.contrib.admin.views.decorators import staff_member_required
-from django.db.models import Count, Sum
-from .models import WfClient, Pedido, ItemPedido
-
-# ... (suas outras views, se houver)
-
 @staff_member_required
 def dashboard_admin(request):
     total_clientes = WfClient.objects.count()
     total_pedidos = Pedido.objects.count()
-    
-    # Calcula o valor total das vendas, somando os subtotais de cada ItemPedido
     total_vendas_agregadas = ItemPedido.objects.aggregate(total_vendas=Sum('produto__product_value'))
     valor_total_vendas = total_vendas_agregadas['total_vendas'] if total_vendas_agregadas['total_vendas'] else 0
-
     pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
-    
-    # NOVO: Criando uma lista de dicionários com os totais calculados
     pedidos_com_total = []
     for pedido in pedidos_recentes_qs:
         pedidos_com_total.append({
             'id': pedido.id,
             'cliente': pedido.cliente,
             'data_criacao': pedido.data_criacao,
-            'total': pedido.get_total_geral() # Chamando o método do modelo Pedido
+            'total': pedido.get_total_geral()
         })
-
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': total_clientes,
         'total_pedidos': total_pedidos,
         'total_vendas': valor_total_vendas,
-        'pedidos_recentes': pedidos_com_total # NOVO: Passando a lista com os totais
+        'pedidos_recentes': pedidos_com_total
     }
     return render(request, 'dashboard.html', contexto)
 
-
-# Exportar pedido Excel
-
+# View para exportação de pedidos
 @staff_member_required
 def exportar_pedidos_excel(request):
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="pedidos_recentes.xlsx"'
+    try:
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Pedidos Recentes"
+        columns = ['ID do Pedido', 'Cliente', 'Data', 'Valor Total']
+        row_num = 1
+        for col_num, column_title in enumerate(columns, 1):
+            worksheet.cell(row=row_num, column=col_num, value=column_title)
+        pedidos_recentes = Pedido.objects.all().order_by('-data_criacao')[:10]
+        for pedido in pedidos_recentes:
+            row_num += 1
+            data_sem_tz = timezone.localtime(pedido.data_criacao).replace(tzinfo=None)
+            worksheet.cell(row=row_num, column=1, value=pedido.id)
+            worksheet.cell(row=row_num, column=2, value=pedido.cliente.client_name)
+            worksheet.cell(row=row_num, column=3, value=data_sem_tz)
+            worksheet.cell(row=row_num, column=4, value=pedido.get_total_geral())
+        workbook.save(response)
+        return response
+    except Exception as e:
+        return redirect('dashboard_admin')
 
+@login_required
+def exportar_detalhes_pedido_excel(request, pedido_id):
+    try:
+        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=request.user.wfclient)
+    except WfClient.DoesNotExist:
+        return redirect('pedidos')
+    except Pedido.DoesNotExist:
+        return redirect('pedidos')
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
-    worksheet.title = "Pedidos Recentes"
-
-    columns = ['ID do Pedido', 'Cliente', 'Data', 'Valor Total']
+    worksheet.title = f"Pedido #{pedido.id}"
+    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
     row_num = 1
     for col_num, column_title in enumerate(columns, 1):
         worksheet.cell(row=row_num, column=col_num, value=column_title)
-
-    pedidos_recentes = Pedido.objects.all().order_by('-data_criacao')[:10]
-    for pedido in pedidos_recentes:
+    itens = ItemPedido.objects.filter(pedido=pedido)
+    total_geral = 0
+    for item in itens:
         row_num += 1
-
-        # NOVO: Converte a data para o fuso horário local e a torna "naive"
-        data_sem_tz = timezone.localtime(pedido.data_criacao).replace(tzinfo=None)
-
-        worksheet.cell(row=row_num, column=1, value=pedido.id)
-        worksheet.cell(row=row_num, column=2, value=pedido.cliente.client_name)
-        worksheet.cell(row=row_num, column=3, value=data_sem_tz) # Usa a data convertida
-        worksheet.cell(row=row_num, column=4, value=pedido.get_total_geral())
-
+        subtotal = item.get_total()
+        total_geral += subtotal
+        worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
+        worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
+        worksheet.cell(row=row_num, column=3, value=item.quantidade)
+        worksheet.cell(row=row_num, column=4, value=item.produto.product_value)
+        worksheet.cell(row=row_num, column=5, value=subtotal)
+    row_num += 1
+    worksheet.cell(row=row_num, column=4, value="Total Geral:")
+    worksheet.cell(row=row_num, column=5, value=total_geral)
     workbook.save(response)
-    
+    return response
+
+@staff_member_required
+def exportar_detalhes_pedido_admin_excel(request, pedido_id):
+    try:
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+    except Pedido.DoesNotExist:
+        return redirect('dashboard_admin')
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = f"Pedido #{pedido.id}"
+    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+    row_num = 1
+    for col_num, column_title in enumerate(columns, 1):
+        worksheet.cell(row=row_num, column=col_num, value=column_title)
+    itens = ItemPedido.objects.filter(pedido=pedido)
+    total_geral = 0
+    for item in itens:
+        row_num += 1
+        subtotal = item.get_total()
+        total_geral += subtotal
+        worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
+        worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
+        worksheet.cell(row=row_num, column=3, value=item.quantidade)
+        worksheet.cell(row=row_num, column=4, value=item.produto.product_value)
+        worksheet.cell(row=row_num, column=5, value=subtotal)
+    row_num += 1
+    worksheet.cell(row=row_num, column=4, value="Total Geral:")
+    worksheet.cell(row=row_num, column=5, value=total_geral)
+    workbook.save(response)
     return response
 
 @staff_member_required
 def detalhes_pedido_admin(request, pedido_id):
     try:
-        # AQUI ESTÁ A MUDANÇA: Não filtra pelo cliente
+        # Puxa o pedido pelo ID (sem filtrar por cliente)
         pedido = get_object_or_404(Pedido, id=pedido_id) 
         itens = ItemPedido.objects.filter(pedido=pedido)
         
@@ -335,3 +340,66 @@ def detalhes_pedido_admin(request, pedido_id):
     except Pedido.DoesNotExist:
         # Redireciona para o dashboard se o pedido não existir
         return redirect('dashboard_admin')
+    
+@staff_member_required
+def detalhes_pedido_admin(request, pedido_id):
+    try:
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+        itens = ItemPedido.objects.filter(pedido=pedido)
+        contexto = {
+            'titulo': f"Detalhes do Pedido #{pedido.id}",
+            'pedido': pedido,
+            'itens': itens,
+        }
+        return render(request, 'detalhes_pedido.html', contexto)
+    except Pedido.DoesNotExist:
+        return redirect('dashboard_admin')
+
+@staff_member_required
+def exportar_detalhes_pedido_admin_excel(request, pedido_id):
+    try:
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+    except Pedido.DoesNotExist:
+        return redirect('dashboard_admin')
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
+
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = f"Pedido #{pedido.id}"
+
+    # Dados do Pedido
+    worksheet.cell(row=1, column=1, value="Pedido ID:")
+    worksheet.cell(row=1, column=2, value=pedido.id)
+    worksheet.cell(row=2, column=1, value="Cliente:")
+    worksheet.cell(row=2, column=2, value=pedido.cliente.client_name)
+    worksheet.cell(row=3, column=1, value="Data da Compra:")
+    data_sem_tz = timezone.localtime(pedido.data_criacao).replace(tzinfo=None)
+    worksheet.cell(row=3, column=2, value=data_sem_tz)
+
+    # Tabela de Itens
+    worksheet.cell(row=5, column=1, value="Itens do Pedido:")
+    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+    row_num = 6
+    for col_num, column_title in enumerate(columns, 1):
+        worksheet.cell(row=row_num, column=col_num, value=column_title)
+
+    itens = ItemPedido.objects.filter(pedido=pedido)
+    total_geral = 0
+    for item in itens:
+        row_num += 1
+        subtotal = item.get_total()
+        total_geral += subtotal
+        worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
+        worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
+        worksheet.cell(row=row_num, column=3, value=item.quantidade)
+        worksheet.cell(row=row_num, column=4, value=item.produto.product_value)
+        worksheet.cell(row=row_num, column=5, value=subtotal)
+    
+    row_num += 1
+    worksheet.cell(row=row_num, column=4, value="Total Geral:")
+    worksheet.cell(row=row_num, column=5, value=total_geral)
+
+    workbook.save(response)
+    return response

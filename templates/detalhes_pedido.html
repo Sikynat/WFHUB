@@ -36,5 +36,7 @@
         </tfoot>
     </table>
     
-    <a href="{% url 'pedidos' %}" class="btn btn-secondary mt-3">Voltar para o Histórico</a>
+    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-3">Voltar para o Dashboard</a>
+    <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel</a>
+
 {% endblock %}

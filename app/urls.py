@@ -3,11 +3,7 @@ URL configuration for app project.
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.conf.urls.static import static
 from wefixhub import views
-
-    # URLs do Django Admin e Autenticação
-# wefixhub/urls.py
 
 urlpatterns = [
     # URLs do Django Admin e Autenticação
@@ -28,7 +24,10 @@ urlpatterns = [
 
     path('pedidos/', views.historico_pedidos, name='pedidos'),
     path('pedidos/<int:pedido_id>/', views.detalhes_pedido, name='detalhes_pedido'),
-
+    path('pedidos/exportar/<int:pedido_id>/', views.exportar_detalhes_pedido_excel, name='exportar_detalhes_pedido_excel'),
+    
     # URLs do Dashboard Administrativo
     path('dashboard/', include('wefixhub.admin_urls')),
+    path('dashboard/pedidos/<int:pedido_id>/', views.detalhes_pedido_admin, name='detalhes_pedido_admin'),
+    path('dashboard/pedidos/exportar/<int:pedido_id>/', views.exportar_detalhes_pedido_admin_excel, name='exportar_detalhes_pedido_admin_excel'),
 ]
