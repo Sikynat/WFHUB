@@ -244,14 +244,31 @@ def detalhes_pedido(request, pedido_id):
         return redirect('pedidos')
 
 # View para o dashboard administrativo
+# wefixhub/views.py
+
+from django.shortcuts import render
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Count, Sum
+from .models import WfClient, Pedido, ItemPedido
+
+# ... (suas outras views, se houver)
+
 @staff_member_required
 def dashboard_admin(request):
     total_clientes = WfClient.objects.count()
+    total_pedidos = Pedido.objects.count()
+    
+    # Calcula o valor total das vendas, somando os subtotais de cada ItemPedido
+    total_vendas_agregadas = ItemPedido.objects.aggregate(total_vendas=Sum('produto__product_value'))
+    valor_total_vendas = total_vendas_agregadas['total_vendas'] if total_vendas_agregadas['total_vendas'] else 0
+
     pedidos_recentes = Pedido.objects.all().order_by('-data_criacao')[:5]
 
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': total_clientes,
+        'total_pedidos': total_pedidos,
+        'total_vendas': valor_total_vendas,
         'pedidos_recentes': pedidos_recentes
     }
     return render(request, 'dashboard.html', contexto)

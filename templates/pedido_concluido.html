@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Pedido Concluído{% endblock %}
+
+{% block content %}
+    <div class="alert alert-success mt-4" role="alert">
+        <h4 class="alert-heading">Pedido Concluído com Sucesso!</h4>
+        <p>Agradecemos a sua compra. Seu pedido foi registrado em nosso sistema.</p>
+        <hr>
+        <p class="mb-0">Você pode <a href="{% url 'home' %}">continuar comprando</a> ou <a href="{% url 'pedidos' %}">ver o histórico dos seus pedidos</a>.</p>
+    </div>
+
+    <script>
+        // Limpa o localStorage quando a página de sucesso é carregada
+        localStorage.clear();
+    </script>
+{% endblock %}
