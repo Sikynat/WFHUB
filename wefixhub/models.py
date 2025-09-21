@@ -1,6 +1,5 @@
 from django.db import models
-
-# Create your models here.
+from django.contrib.auth.models import User
 
 # Uf Model
 class wefixhub_uf (models.Model):
@@ -16,8 +15,8 @@ class wefixhub_uf (models.Model):
         return self.uf_name
 
 # Client Model
-
 class WfClient(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True)
     client_id = models.AutoField(primary_key=True)
     client_code = models.IntegerField()
     client_name = models.CharField(max_length=128)
@@ -38,7 +37,6 @@ class WfClient(models.Model):
         return self.client_name
 
 # Product model
-
 class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
     product_code = models.CharField(max_length=5, unique=True)
@@ -54,3 +52,27 @@ class Product(models.Model):
 
     def __str__(self):
         return self.product_description
+
+# Modelo de Pedido
+class Pedido(models.Model):
+    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
+    data_criacao = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Pedido #{self.id} de {self.cliente.client_name}"
+
+    def get_total_geral(self):
+        total = sum(item.get_total() for item in self.itens.all())
+        return total
+
+# Modelo de Item do Pedido
+class ItemPedido(models.Model):
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens')
+    produto = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='itens_do_pedido')
+    quantidade = models.IntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.quantidade} x {self.produto.product_description} em {self.pedido.id}"
+        
+    def get_total(self):
+        return self.produto.product_value * self.quantidade

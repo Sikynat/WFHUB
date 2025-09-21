@@ -1,6 +1,7 @@
 from django.contrib import admin
 from wefixhub.models import WfClient
 from wefixhub.models import Product
+
 # Register your models here.
 
 class ClientAdmin(admin.ModelAdmin):
@@ -14,3 +15,4 @@ class ProductAdmin(admin.ModelAdmin):
     search_fields = ['product_id','product_description', 'product_id', 'product_brand', 'product_code']
 
 admin.site.register(Product, ProductAdmin)
+
