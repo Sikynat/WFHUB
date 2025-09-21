@@ -3,12 +3,14 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Count, Sum
+from django.db.models.functions import ExtractMonth
 from .models import Product, Pedido, ItemPedido, WfClient
 from django.http import HttpResponse
 from django.utils import timezone
 import openpyxl
+from .models import Pedido
 
-from django.db.models.functions import ExtractMonth
+
 # View para a página inicial com filtros e paginação
 @login_required
 def home(request):
@@ -415,4 +417,71 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     workbook.save(response)
     return response
 
+# wefixhub/views.py
 
+
+@staff_member_required
+def todos_os_pedidos(request):
+    pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
+
+    # AQUI ESTÁ O COMANDO DE DEPURACAO
+    print("--- Verificando o banco de dados ---")
+    for pedido in pedidos_qs:
+        print(f"Pedido ID: {pedido.id}, Status: {pedido.status}")
+    print("-------------------------------------")
+
+    # Lógica de Paginação
+    paginator = Paginator(pedidos_qs, 20)
+    page = request.GET.get('page')
+    try:
+        pedidos = paginator.page(page)
+    except PageNotAnInteger:
+        pedidos = paginator.page(1)
+    except EmptyPage:
+        pedidos = paginator.page(paginator.num_pages)
+
+    contexto = {
+        'titulo': 'Todos os Pedidos',
+        'pedidos': pedidos,
+    }
+    return render(request, 'todos_os_pedidos.html', contexto)
+
+
+from django.db import models
+from django.contrib.auth.models import User
+
+# ... (seus outros modelos)
+
+# Modelo de Pedido
+class PedidoStatus(models.Model):
+    # Opções de status do pedido
+    STATUS_CHOICES = [
+        ('PENDENTE', 'Pendente'),
+        ('EM_ENVIO', 'Em Envio'),
+        ('ENTREGUE', 'Entregue'),
+    ]
+
+    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE') # NOVO: Campo de status
+
+    def __str__(self):
+        return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"
+
+    def get_total_geral(self):
+        total = sum(item.get_total() for item in self.itens.all())
+        return total
+    
+@staff_member_required
+def atualizar_status_pedido(request, pedido_id):
+    # NOVO: Adicione estas duas linhas para depuração
+    print(request.POST) 
+    print(f"Pedido ID: {pedido_id}")
+    
+    if request.method == 'POST':
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+        novo_status = request.POST.get('status')
+        if novo_status in ['PENDENTE', 'EM_ENVIO', 'ENTREGUE']:
+            pedido.status = novo_status
+            pedido.save()
+    return redirect('todos_os_pedidos')
