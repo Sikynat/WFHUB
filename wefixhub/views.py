@@ -10,7 +10,7 @@ from django.utils import timezone
 import openpyxl
 from .models import Pedido
 from datetime import datetime, timedelta
-
+from .forms import WfClientForm
 
 # View para a página inicial com filtros e paginação
 @login_required
@@ -515,3 +515,25 @@ def atualizar_status_pedido(request, pedido_id):
             pedido.status = novo_status
             pedido.save()
     return redirect('todos_os_pedidos')
+
+@login_required
+def editar_perfil(request):
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        # Se o usuário não tiver um perfil, ele é redirecionado
+        return redirect('home')
+
+    if request.method == 'POST':
+        form = WfClientForm(request.POST, instance=cliente)
+        if form.is_valid():
+            form.save()
+            return redirect('home')
+    else:
+        form = WfClientForm(instance=cliente)
+
+    contexto = {
+        'form': form,
+        'titulo': 'Editar Perfil',
+    }
+    return render(request, 'editar_perfil.html', contexto)
