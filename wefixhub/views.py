@@ -214,12 +214,24 @@ def pedido_concluido(request):
 def historico_pedidos(request):
     try:
         cliente_logado = request.user.wfclient
-        pedidos = Pedido.objects.filter(cliente=cliente_logado).order_by('-data_criacao')
     except WfClient.DoesNotExist:
-        pedidos = []
+        return redirect('home')
+
+    pedidos_qs = Pedido.objects.filter(cliente=cliente_logado).order_by('-data_criacao')
+
+    # Lógica de Paginação
+    paginator = Paginator(pedidos_qs, 10) # 10 pedidos por página para o cliente
+    page = request.GET.get('page')
+
+    try:
+        pedidos = paginator.page(page)
+    except PageNotAnInteger:
+        pedidos = paginator.page(1)
+    except EmptyPage:
+        pedidos = paginator.page(paginator.num_pages)
+
     contexto = {
-        'titulo': 'Histórico de Pedidos',
-        'pedidos': pedidos
+        'pedidos': pedidos,
     }
     return render(request, 'historico_pedidos.html', contexto)
 
@@ -444,16 +456,10 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
 def todos_os_pedidos(request):
     pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
 
-    # AQUI ESTÁ O COMANDO DE DEPURACAO
-    '''
-    print("--- Verificando o banco de dados ---")
-    for pedido in pedidos_qs:
-        print(f"Pedido ID: {pedido.id}, Status: {pedido.status}")
-    print("-------------------------------------")'''
-
     # Lógica de Paginação
-    paginator = Paginator(pedidos_qs, 20)
+    paginator = Paginator(pedidos_qs, 20) # 20 pedidos por página
     page = request.GET.get('page')
+
     try:
         pedidos = paginator.page(page)
     except PageNotAnInteger:
@@ -466,6 +472,7 @@ def todos_os_pedidos(request):
         'pedidos': pedidos,
     }
     return render(request, 'todos_os_pedidos.html', contexto)
+
 
 
 from django.db import models

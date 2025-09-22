@@ -2,7 +2,7 @@
 {% block title %}Histórico de Pedidos{% endblock %}
 
 {% block content %}
-     <h1>Seus Pedidos</h1>
+    <h1>Seus Pedidos</h1>
     <hr>
     {% if pedidos %}
         <table class="table table-striped">
@@ -10,19 +10,39 @@
                 <tr>
                     <th>Número do Pedido</th>
                     <th>Data</th>
-                    <th>Data de Envio</th> <th>Detalhes</th>
+                    <th>Data de Envio</th>
+                    <th>Detalhes</th>
                 </tr>
             </thead>
             <tbody>
                 {% for pedido in pedidos %}
                     <tr>
                         <td>{{ pedido.id }}</td>
-                        <td>{{ pedido.data_criacao }}</td>
-                        <td>{{ pedido.data_envio_solicitada }}</td> <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
+                        <td>{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
+                        <td>{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</td>
+                        <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
+
+        {% if pedidos.has_other_pages %}
+            <nav aria-label="Navegação de Páginas">
+                <ul class="pagination justify-content-center">
+                    {% if pedidos.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.previous_page_number }}">Anterior</a></li>
+                    {% endif %}
+
+                    {% for num in pedidos.paginator.page_range %}
+                        <li class="page-item {% if pedidos.number == num %}active{% endif %}"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                    {% endfor %}
+
+                    {% if pedidos.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.next_page_number }}">Próximo</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
     {% else %}
         <p class="alert alert-info">Você ainda não tem pedidos.</p>
     {% endif %}

@@ -4,6 +4,7 @@
 {% block content %}
     <h1>Detalhes do Pedido #{{ pedido.id }}</h1>
     <p><strong>Data da Compra:</strong> {{ pedido.data_criacao }}</p>
+    <p><strong>Data da expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
     <hr>
     
     <h2>Itens do Pedido</h2>
@@ -36,7 +37,12 @@
         </tfoot>
     </table>
     
-    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-3">Voltar para o Dashboard</a>
+    {% if user.is_staff %}
+        <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-3">Voltar para o Dashboard</a>
+    {% else %}
+        <a href="{% url 'pedidos' %}" class="btn btn-secondary mt-3">Voltar para o Histórico</a>
+    {% endif %}
+
     <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel</a>
 
 {% endblock %}
