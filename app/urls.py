@@ -18,4 +18,5 @@ urlpatterns = [
     path('editar-perfil/', views.editar_perfil, name='editar_perfil'),
     path('dashboard/', include('wefixhub.admin_urls')),
     path('gerenciar-enderecos/', views.gerenciar_enderecos, name='gerenciar_enderecos'),
+        path('editar-endereco/<int:endereco_id>/', views.editar_endereco, name='editar_endereco'), 
 ]

@@ -1,7 +1,6 @@
 # wefixhub/forms.py
-
 from django import forms
-from .models import WfClient, Endereco, wefixhub_uf
+from .models import Endereco, WfClient, wefixhub_uf
 
 class WfClientForm(forms.ModelForm):
     class Meta:

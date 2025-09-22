@@ -563,3 +563,25 @@ def gerenciar_enderecos(request):
         'form': form
     }
     return render(request, 'gerenciar_enderecos.html', contexto)
+
+
+@login_required
+def editar_endereco(request, endereco_id):
+    try:
+        endereco = get_object_or_404(Endereco, id=endereco_id, cliente=request.user.wfclient)
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    if request.method == 'POST':
+        form = EnderecoForm(request.POST, instance=endereco)
+        if form.is_valid():
+            form.save()
+            return redirect('editar_perfil')
+    else:
+        form = EnderecoForm(instance=endereco)
+
+    contexto = {
+        'form': form,
+        'titulo': 'Editar Endereço',
+    }
+    return render(request, 'editar_endereco.html', contexto)
