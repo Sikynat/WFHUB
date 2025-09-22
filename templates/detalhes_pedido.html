@@ -5,6 +5,17 @@
     <h1>Detalhes do Pedido #{{ pedido.id }}</h1>
     <p><strong>Data da Compra:</strong> {{ pedido.data_criacao }}</p>
     <p><strong>Data da expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
+
+
+    <hr>
+           <div class="card mb-4">
+        <div class="card-header">
+            <h3>Endereço de Envio</h3>
+        </div>
+        <div class="card-body">
+            <p>{{ pedido.endereco.logradouro }}, {{ pedido.endereco.numero }} - {{ pedido.endereco.cidade }} (CEP: {{ pedido.endereco.cep }})</p>
+        </div>
+    </div>
     <hr>
     
     <h2>Itens do Pedido</h2>
