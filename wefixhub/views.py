@@ -138,6 +138,7 @@ def limpar_carrinho(request):
         request.session.modified = True
     return redirect('carrinho')
 
+
 @login_required
 def checkout(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
@@ -159,14 +160,14 @@ def checkout(request):
             continue
     try:
         cliente = request.user.wfclient
-        enderecos = Endereco.objects.filter(cliente=cliente)
+        enderecos = Endereco.objects.filter(cliente=cliente) # NOVO: Puxa todos os endereços do cliente
     except WfClient.DoesNotExist:
         enderecos = []
     contexto = {
         'titulo': 'Confirmação de Compra',
         'carrinho_detalhes': carrinho_detalhes,
         'total_geral': total_geral,
-        'enderecos': enderecos,
+        'enderecos': enderecos, # NOVO: Passa os endereços para o template
     }
     return render(request, 'checkout.html', contexto)
 
@@ -174,8 +175,10 @@ def checkout(request):
 def salvar_pedido(request):
     if request.method == 'POST':
         carrinho_da_sessao = request.session.get('carrinho', {})
+
         if not carrinho_da_sessao:
             return redirect('carrinho')
+
         try:
             cliente_logado = request.user.wfclient
             endereco_id = request.POST.get('endereco_selecionado')
@@ -185,7 +188,20 @@ def salvar_pedido(request):
         except Endereco.DoesNotExist:
             return redirect('checkout')
 
-        pedido_criado = Pedido.objects.create(cliente=cliente_logado, endereco=endereco_selecionado) # Novo: salva o endereço
+        # CORREÇÃO AQUI: Lógica para a data de envio
+        data_envio = request.POST.get('data_envio')
+        if not data_envio: # Se a data não for fornecida
+            data_envio_solicitada = datetime.now().date() + timedelta(days=1)
+        else:
+            data_envio_solicitada = datetime.strptime(data_envio, '%Y-%m-%d').date()
+
+        # Cria a instância de Pedido com a nova data
+        pedido_criado = Pedido.objects.create(
+            cliente=cliente_logado, 
+            data_envio_solicitada=data_envio_solicitada,
+            endereco=endereco_selecionado
+        )
+
         for product_id, quantidade in carrinho_da_sessao.items():
             try:
                 product = Product.objects.get(product_id=product_id)
@@ -196,12 +212,14 @@ def salvar_pedido(request):
                 )
             except Product.DoesNotExist:
                 continue
+        
         del request.session['carrinho']
         request.session.modified = True
+
         return redirect('pedido_concluido')
+    
     return redirect('checkout')
 
-@login_required
 def pedido_concluido(request):
     return render(request, 'pedido_concluido.html')
 

@@ -38,11 +38,30 @@
     <form action="{% url 'salvar_pedido' %}" method="post">
         {% csrf_token %}
         <div class="mb-3">
-            <label for="data_envio" class="form-label">Data de Envio Solicitada:</label>
-            <input type="date" class="form-control" id="data_envio" name="data_envio" required>
+            <label class="form-label">Selecione o Endereço de Envio:</label>
+            {% if enderecos %}
+                {% for endereco in enderecos %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="endereco_selecionado" id="endereco_{{ endereco.id }}" value="{{ endereco.id }}" {% if endereco.is_default %}checked{% endif %}>
+                        <label class="form-check-label" for="endereco_{{ endereco.id }}">
+                            {{ endereco.logradouro }}, {{ endereco.numero }} - {{ endereco.cidade }} (CEP: {{ endereco.cep }})
+                            {% if endereco.is_default %}
+                                <span class="badge bg-success ms-2">Padrão</span>
+                            {% endif %}
+                        </label>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="alert alert-warning mt-2">Você precisa cadastrar um endereço em seu perfil.</p>
+                <a href="{% url 'editar_perfil' %}" class="btn btn-warning">Cadastrar Endereço</a>
+            {% endif %}
         </div>
-        
-        <a href="{% url 'carrinho' %}" class="btn btn-secondary">Voltar ao Carrinho</a>
+        <div class="mb-3">
+            <label for="data_envio" class="form-label">Data de Envio Solicitada:</label>
+            <input type="date" class="form-control" id="data_envio" name="data_envio">
+        </div>
+        <hr>
         <button type="submit" class="btn btn-success">Confirmar Compra</button>
+        <a href="{% url 'carrinho' %}" class="btn btn-secondary">Voltar ao Carrinho</a>
     </form>
 {% endblock %}

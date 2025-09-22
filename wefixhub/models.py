@@ -35,6 +35,28 @@ class WfClient(models.Model):
 
     def __str__(self):
         return self.client_name
+        
+# Modelo para Endereços
+class Endereco(models.Model):
+    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='enderecos')
+    logradouro = models.CharField(max_length=255)
+    numero = models.CharField(max_length=10)
+    bairro = models.CharField(max_length=100)
+    cidade = models.CharField(max_length=100)
+    estado = models.ForeignKey(wefixhub_uf, on_delete=models.PROTECT, related_name='enderecos')
+    cep = models.CharField(max_length=9)
+    is_default = models.BooleanField(default=False) # Campo para definir como padrão
+
+    def __str__(self):
+        return f"{self.logradouro}, {self.numero} - {self.cidade}"
+
+    def save(self, *args, **kwargs):
+        # Se este endereço está sendo marcado como padrão...
+        if self.is_default:
+            # Desmarca qualquer outro endereço padrão para este cliente
+            Endereco.objects.filter(cliente=self.cliente, is_default=True).exclude(pk=self.pk).update(is_default=False)
+        
+        super().save(*args, **kwargs) # Salva o endereço atual
 
 # Modelo para Produtos
 class Product(models.Model):
@@ -58,28 +80,6 @@ class Product(models.Model):
 
     def __str__(self):
         return self.product_description
-        
-# Novo models de endereço
-class Endereco(models.Model):
-    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='enderecos')
-    logradouro = models.CharField(max_length=255)
-    numero = models.CharField(max_length=10)
-    bairro = models.CharField(max_length=100)
-    cidade = models.CharField(max_length=100)
-    estado = models.ForeignKey(wefixhub_uf, on_delete=models.PROTECT, related_name='enderecos')
-    cep = models.CharField(max_length=9)
-    is_default = models.BooleanField(default=False)
-
-    def __str__(self):
-        return f"{self.logradouro}, {self.numero} - {self.cidade}"
-
-    def save(self, *args, **kwargs):
-        # Se este endereço está sendo marcado como padrão...
-        if self.is_default:
-            # Desmarca qualquer outro endereço padrão para este cliente
-            Endereco.objects.filter(cliente=self.cliente, is_default=True).exclude(pk=self.pk).update(is_default=False)
-        
-        super().save(*args, **kwargs) # Salva o endereço atual
 
 # Modelo de Pedido
 class Pedido(models.Model):
@@ -93,7 +93,8 @@ class Pedido(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
     data_envio_solicitada = models.DateField(null=True, blank=True)
-    
+    endereco = models.ForeignKey(Endereco, on_delete=models.PROTECT, null=True, related_name='pedidos')
+
     def __str__(self):
         return f"Pedido #{self.id} de {self.cliente.client_name}"
 
