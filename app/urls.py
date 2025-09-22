@@ -17,4 +17,5 @@ urlpatterns = [
     path('pedidos/exportar/<int:pedido_id>/', views.exportar_detalhes_pedido_excel, name='exportar_detalhes_pedido_excel'),
     path('editar-perfil/', views.editar_perfil, name='editar_perfil'),
     path('dashboard/', include('wefixhub.admin_urls')),
+    path('gerenciar-enderecos/', views.gerenciar_enderecos, name='gerenciar_enderecos'),
 ]

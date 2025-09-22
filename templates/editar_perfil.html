@@ -1,14 +1,84 @@
-
 {% extends 'base.html' %}
 {% block title %}{{ titulo }}{% endblock %}
 
 {% block content %}
-    <h1>{{ titulo }}</h1>
-    <hr>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-    </form>
-    <a href="{% url 'home' %}" class="btn btn-secondary mt-3">Cancelar</a>
+    <h1 class="mb-4">{{ titulo }}</h1>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2>Seus Endereços</h2>
+                </div>
+                <div class="card-body">
+                    {% if enderecos %}
+                        <ul class="list-group list-group-flush">
+                            {% for endereco in enderecos %}
+                                <li class="list-group-item">
+                                    {{ endereco.logradouro }}, {{ endereco.numero }} - {{ endereco.cidade }} (CEP: {{ endereco.cep }})
+                                    {% if endereco.is_default %}
+                                        <span class="badge bg-success ms-2">Padrão</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>Você ainda não tem endereços cadastrados.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Adicionar Novo Endereço</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="id_logradouro" class="form-label">Logradouro:</label>
+                            {{ form.logradouro }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_numero" class="form-label">Número:</label>
+                            {{ form.numero }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_bairro" class="form-label">Bairro:</label>
+                            {{ form.bairro }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_cidade" class="form-label">Cidade:</label>
+                            {{ form.cidade }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_estado" class="form-label">Estado:</label>
+                            {{ form.estado }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_cep" class="form-label">CEP:</label>
+                            {{ form.cep }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Endereço Padrão?</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="is_default" id="id_is_default_0" value="True">
+                                <label class="form-check-label" for="id_is_default_0">Sim</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="is_default" id="id_is_default_1" value="False">
+                                <label class="form-check-label" for="id_is_default_1">Não</label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Adicionar Endereço</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <a href="{% url 'home' %}" class="btn btn-secondary mt-4">Voltar para a Home</a>
 {% endblock %}

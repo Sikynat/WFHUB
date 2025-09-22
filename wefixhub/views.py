@@ -11,6 +11,9 @@ import openpyxl
 from .models import Pedido
 from datetime import datetime, timedelta
 from .forms import WfClientForm
+from .forms import EnderecoForm
+from .forms import EnderecoForm # Adicionando o novo formulário
+from .models import WfClient, Endereco, Pedido, Product
 
 # View para a página inicial com filtros e paginação
 @login_required
@@ -154,10 +157,16 @@ def checkout(request):
             })
         except Product.DoesNotExist:
             continue
+    try:
+        cliente = request.user.wfclient
+        enderecos = Endereco.objects.filter(cliente=cliente)
+    except WfClient.DoesNotExist:
+        enderecos = []
     contexto = {
         'titulo': 'Confirmação de Compra',
         'carrinho_detalhes': carrinho_detalhes,
-        'total_geral': total_geral
+        'total_geral': total_geral,
+        'enderecos': enderecos,
     }
     return render(request, 'checkout.html', contexto)
 
@@ -165,28 +174,18 @@ def checkout(request):
 def salvar_pedido(request):
     if request.method == 'POST':
         carrinho_da_sessao = request.session.get('carrinho', {})
-
         if not carrinho_da_sessao:
             return redirect('carrinho')
-
         try:
             cliente_logado = request.user.wfclient
+            endereco_id = request.POST.get('endereco_selecionado')
+            endereco_selecionado = Endereco.objects.get(id=endereco_id)
         except WfClient.DoesNotExist:
             return redirect('home')
-        
-        # NOVO: Lógica para a data de envio
-        data_envio = request.POST.get('data_envio')
-        if not data_envio: # Se a data não for fornecida
-            # Define a data de envio para o dia seguinte
-            data_envio_solicitada = datetime.now().date() + timedelta(days=1)
-        else:
-            # Caso contrário, usa a data que o cliente forneceu
-            data_envio_solicitada = datetime.strptime(data_envio, '%Y-%m-%d').date()
+        except Endereco.DoesNotExist:
+            return redirect('checkout')
 
-        # Cria a instância de Pedido com a nova data
-        pedido_criado = Pedido.objects.create(cliente=cliente_logado, data_envio_solicitada=data_envio_solicitada)
-
-        # ... (restante do código para criar ItemPedido)
+        pedido_criado = Pedido.objects.create(cliente=cliente_logado, endereco=endereco_selecionado) # Novo: salva o endereço
         for product_id, quantidade in carrinho_da_sessao.items():
             try:
                 product = Product.objects.get(product_id=product_id)
@@ -197,14 +196,10 @@ def salvar_pedido(request):
                 )
             except Product.DoesNotExist:
                 continue
-        
         del request.session['carrinho']
         request.session.modified = True
-
         return redirect('pedido_concluido')
-    
     return redirect('checkout')
-
 
 @login_required
 def pedido_concluido(request):
@@ -521,19 +516,50 @@ def editar_perfil(request):
     try:
         cliente = request.user.wfclient
     except WfClient.DoesNotExist:
-        # Se o usuário não tiver um perfil, ele é redirecionado
         return redirect('home')
 
     if request.method == 'POST':
-        form = WfClientForm(request.POST, instance=cliente)
+        form = EnderecoForm(request.POST)
         if form.is_valid():
-            form.save()
-            return redirect('home')
+            novo_endereco = form.save(commit=False)
+            novo_endereco.cliente = cliente
+            novo_endereco.save()
+            return redirect('editar_perfil')
     else:
-        form = WfClientForm(instance=cliente)
+        form = EnderecoForm()
 
+    enderecos = Endereco.objects.filter(cliente=cliente)
+    
     contexto = {
         'form': form,
-        'titulo': 'Editar Perfil',
+        'enderecos': enderecos,
+        'titulo': 'Gerenciar Endereços',
     }
     return render(request, 'editar_perfil.html', contexto)
+
+
+@login_required
+def gerenciar_enderecos(request):
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return redirect('home')
+        
+    enderecos = Endereco.objects.filter(cliente=cliente)
+    
+    if request.method == 'POST':
+        form = EnderecoForm(request.POST)
+        if form.is_valid():
+            novo_endereco = form.save(commit=False)
+            novo_endereco.cliente = cliente
+            novo_endereco.save()
+            return redirect('gerenciar_enderecos')
+    else:
+        form = EnderecoForm()
+
+    contexto = {
+        'titulo': 'Gerenciar Endereços',
+        'enderecos': enderecos,
+        'form': form
+    }
+    return render(request, 'gerenciar_enderecos.html', contexto)
