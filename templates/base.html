@@ -31,15 +31,16 @@
                                 <a class="nav-link btn btn-secondary me-2" href="{% url 'dashboard_admin' %}">Dashboard</a>
                             </li>
                             <li>
-                                 <a class="nav-link btn btn-secondary me-2" href="{% url 'todos_os_pedidos' %}">Todos Pedidos</a>
+                                <a class="nav-link btn btn-secondary me-2" href="{% url 'todos_os_pedidos' %}">Todos Pedidos</a>
+                            </li>
+                        {% else %}
+                            <li class="nav-item">
+                                <a class="nav-link btn btn-success me-2" href="{% url 'carrinho' %}">Ver Carrinho</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link btn btn-primary me-2" href="{% url 'pedidos' %}">Histórico de Pedidos</a>
                             </li>
                         {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link btn btn-success me-2" href="{% url 'carrinho' %}">Ver Carrinho</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link btn btn-primary me-2" href="{% url 'pedidos' %}">Histórico de Pedidos</a>
-                        </li>
                         <li class="nav-item">
                             <form action="{% url 'logout' %}" method="post">
                                 {% csrf_token %}

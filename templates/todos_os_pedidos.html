@@ -10,6 +10,7 @@
                 <tr>
                     <th>ID do Pedido</th>
                     <th>Cliente</th>
+                    <th>Código</th>
                     <th>Data</th>
                     <th>Data de Envio</th>
                     <th>Valor Total</th>
@@ -22,6 +23,7 @@
                     <tr>
                         <td>{{ pedido.id }}</td>
                         <td>{{ pedido.cliente.client_name }}</td>
+                        <td>{{ pedido.cliente.client_code }}</td>
                         <td>{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
                         <td>{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</td>
                         <td>R$ {{ pedido.get_total_geral|floatformat:2 }}</td>
@@ -30,6 +32,7 @@
                                 {% csrf_token %}
                                 <select name="status" onchange="this.form.submit()" class="form-control">
                                     <option value="PENDENTE" {% if pedido.status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                                     <option value="SOLICITADO" {% if pedido.status == 'SOLICITADO' %}selected{% endif %}>Solicitado</option>
                                     <option value="EM_ENVIO" {% if pedido.status == 'EM_ENVIO' %}selected{% endif %}>Em Envio</option>
                                     <option value="ENTREGUE" {% if pedido.status == 'ENTREGUE' %}selected{% endif %}>Entregue</option>
                                 </select>

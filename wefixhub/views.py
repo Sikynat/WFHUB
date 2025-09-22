@@ -485,6 +485,7 @@ class PedidoStatus(models.Model):
     # Opções de status do pedido
     STATUS_CHOICES = [
         ('PENDENTE', 'Pendente'),
+        ('SOLICITADO', 'Solicitado'),
         ('EM_ENVIO', 'Em Envio'),
         ('ENTREGUE', 'Entregue'),
     ]
@@ -510,7 +511,7 @@ def atualizar_status_pedido(request, pedido_id):
     if request.method == 'POST':
         pedido = get_object_or_404(Pedido, id=pedido_id)
         novo_status = request.POST.get('status')
-        if novo_status in ['PENDENTE', 'EM_ENVIO', 'ENTREGUE']:
+        if novo_status in ['PENDENTE', 'SOLICITADO', 'EM_ENVIO', 'ENTREGUE']:
             pedido.status = novo_status
             pedido.save()
     return redirect('todos_os_pedidos')
