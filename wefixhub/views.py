@@ -9,6 +9,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 import openpyxl
 from .models import Pedido
+from datetime import datetime, timedelta
 
 
 # View para a página inicial com filtros e paginação
@@ -164,13 +165,28 @@ def checkout(request):
 def salvar_pedido(request):
     if request.method == 'POST':
         carrinho_da_sessao = request.session.get('carrinho', {})
+
         if not carrinho_da_sessao:
             return redirect('carrinho')
+
         try:
             cliente_logado = request.user.wfclient
         except WfClient.DoesNotExist:
             return redirect('home')
-        pedido_criado = Pedido.objects.create(cliente=cliente_logado)
+        
+        # NOVO: Lógica para a data de envio
+        data_envio = request.POST.get('data_envio')
+        if not data_envio: # Se a data não for fornecida
+            # Define a data de envio para o dia seguinte
+            data_envio_solicitada = datetime.now().date() + timedelta(days=1)
+        else:
+            # Caso contrário, usa a data que o cliente forneceu
+            data_envio_solicitada = datetime.strptime(data_envio, '%Y-%m-%d').date()
+
+        # Cria a instância de Pedido com a nova data
+        pedido_criado = Pedido.objects.create(cliente=cliente_logado, data_envio_solicitada=data_envio_solicitada)
+
+        # ... (restante do código para criar ItemPedido)
         for product_id, quantidade in carrinho_da_sessao.items():
             try:
                 product = Product.objects.get(product_id=product_id)
@@ -181,10 +197,14 @@ def salvar_pedido(request):
                 )
             except Product.DoesNotExist:
                 continue
+        
         del request.session['carrinho']
         request.session.modified = True
+
         return redirect('pedido_concluido')
+    
     return redirect('checkout')
+
 
 @login_required
 def pedido_concluido(request):
@@ -425,10 +445,11 @@ def todos_os_pedidos(request):
     pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
 
     # AQUI ESTÁ O COMANDO DE DEPURACAO
+    '''
     print("--- Verificando o banco de dados ---")
     for pedido in pedidos_qs:
         print(f"Pedido ID: {pedido.id}, Status: {pedido.status}")
-    print("-------------------------------------")
+    print("-------------------------------------")'''
 
     # Lógica de Paginação
     paginator = Paginator(pedidos_qs, 20)
@@ -475,8 +496,9 @@ class PedidoStatus(models.Model):
 @staff_member_required
 def atualizar_status_pedido(request, pedido_id):
     # NOVO: Adicione estas duas linhas para depuração
-    print(request.POST) 
-    print(f"Pedido ID: {pedido_id}")
+
+    #print(request.POST) 
+   # print(f"Pedido ID: {pedido_id}")
     
     if request.method == 'POST':
         pedido = get_object_or_404(Pedido, id=pedido_id)

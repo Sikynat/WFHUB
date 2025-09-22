@@ -60,6 +60,10 @@ class Product(models.Model):
         return self.product_description
 
 # Modelo de Pedido
+
+
+
+
 class Pedido(models.Model):
     STATUS_CHOICES = [
         ('PENDENTE', 'Pendente'),
@@ -70,6 +74,8 @@ class Pedido(models.Model):
     cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
     data_criacao = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE') # NOVO: Campo de status
+    data_envio_solicitada = models.DateField(null=True, blank=True)
+    
     def __str__(self):
         return f"Pedido #{self.id} de {self.cliente.client_name}"
 

@@ -11,6 +11,7 @@
                     <th>ID do Pedido</th>
                     <th>Cliente</th>
                     <th>Data</th>
+                    <th>Data de Envio</th>
                     <th>Valor Total</th>
                     <th>Status</th>
                     <th>Detalhes</th>
@@ -22,6 +23,7 @@
                         <td>{{ pedido.id }}</td>
                         <td>{{ pedido.cliente.client_name }}</td>
                         <td>{{ pedido.data_criacao }}</td>
+                        <td>{{ pedido.data_envio_solicitada }}</td> <td>R$ {{ pedido.get_total_geral|floatformat:2 }}</td>
                         <td>R$ {{ pedido.get_total_geral|floatformat:2 }}</td>
                         <td>
                             <form action="{% url 'atualizar_status_pedido' pedido.id %}" method="post">
@@ -40,26 +42,7 @@
                 {% endfor %}
             </tbody>
         </table>
-
-        {% if pedidos.has_other_pages %}
-            <nav aria-label="Navegação de Páginas">
-                <ul class="pagination justify-content-center">
-                    {% if pedidos.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.previous_page_number }}">Anterior</a></li>
-                    {% endif %}
-
-                    {% for num in pedidos.paginator.page_range %}
-                        <li class="page-item {% if pedidos.number == num %}active{% endif %}"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
-                    {% endfor %}
-
-                    {% if pedidos.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.next_page_number }}">Próximo</a></li>
-                    {% endif %}
-                </ul>
-            </nav>
-        {% endif %}
-
-    {% else %}
+        {% else %}
         <p class="alert alert-info">Nenhum pedido encontrado.</p>
     {% endif %}
 {% endblock %}
