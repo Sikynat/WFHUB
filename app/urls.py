@@ -30,4 +30,6 @@ urlpatterns = [
     path('dashboard/', include('wefixhub.admin_urls')),
     path('dashboard/pedidos/<int:pedido_id>/', views.detalhes_pedido_admin, name='detalhes_pedido_admin'),
     path('dashboard/pedidos/exportar/<int:pedido_id>/', views.exportar_detalhes_pedido_admin_excel, name='exportar_detalhes_pedido_admin_excel'),
-]
+    path('dashboard/todos-pedidos/', views.todos_os_pedidos, name='todos_os_pedidos'),
+    path('dashboard/atualizar-status-pedido/<int:pedido_id>/', views.atualizar_status_pedido, name='atualizar_status_pedido'),
+    ]

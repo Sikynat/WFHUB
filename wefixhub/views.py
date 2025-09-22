@@ -3,12 +3,15 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Count, Sum
+from django.db.models.functions import ExtractMonth
 from .models import Product, Pedido, ItemPedido, WfClient
 from django.http import HttpResponse
 from django.utils import timezone
 import openpyxl
+from .models import Pedido
+from datetime import datetime, timedelta
 
-from django.db.models.functions import ExtractMonth
+
 # View para a página inicial com filtros e paginação
 @login_required
 def home(request):
@@ -162,13 +165,28 @@ def checkout(request):
 def salvar_pedido(request):
     if request.method == 'POST':
         carrinho_da_sessao = request.session.get('carrinho', {})
+
         if not carrinho_da_sessao:
             return redirect('carrinho')
+
         try:
             cliente_logado = request.user.wfclient
         except WfClient.DoesNotExist:
             return redirect('home')
-        pedido_criado = Pedido.objects.create(cliente=cliente_logado)
+        
+        # NOVO: Lógica para a data de envio
+        data_envio = request.POST.get('data_envio')
+        if not data_envio: # Se a data não for fornecida
+            # Define a data de envio para o dia seguinte
+            data_envio_solicitada = datetime.now().date() + timedelta(days=1)
+        else:
+            # Caso contrário, usa a data que o cliente forneceu
+            data_envio_solicitada = datetime.strptime(data_envio, '%Y-%m-%d').date()
+
+        # Cria a instância de Pedido com a nova data
+        pedido_criado = Pedido.objects.create(cliente=cliente_logado, data_envio_solicitada=data_envio_solicitada)
+
+        # ... (restante do código para criar ItemPedido)
         for product_id, quantidade in carrinho_da_sessao.items():
             try:
                 product = Product.objects.get(product_id=product_id)
@@ -179,10 +197,14 @@ def salvar_pedido(request):
                 )
             except Product.DoesNotExist:
                 continue
+        
         del request.session['carrinho']
         request.session.modified = True
+
         return redirect('pedido_concluido')
+    
     return redirect('checkout')
+
 
 @login_required
 def pedido_concluido(request):
@@ -192,12 +214,24 @@ def pedido_concluido(request):
 def historico_pedidos(request):
     try:
         cliente_logado = request.user.wfclient
-        pedidos = Pedido.objects.filter(cliente=cliente_logado).order_by('-data_criacao')
     except WfClient.DoesNotExist:
-        pedidos = []
+        return redirect('home')
+
+    pedidos_qs = Pedido.objects.filter(cliente=cliente_logado).order_by('-data_criacao')
+
+    # Lógica de Paginação
+    paginator = Paginator(pedidos_qs, 10) # 10 pedidos por página para o cliente
+    page = request.GET.get('page')
+
+    try:
+        pedidos = paginator.page(page)
+    except PageNotAnInteger:
+        pedidos = paginator.page(1)
+    except EmptyPage:
+        pedidos = paginator.page(paginator.num_pages)
+
     contexto = {
-        'titulo': 'Histórico de Pedidos',
-        'pedidos': pedidos
+        'pedidos': pedidos,
     }
     return render(request, 'historico_pedidos.html', contexto)
 
@@ -415,4 +449,69 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     workbook.save(response)
     return response
 
+# wefixhub/views.py
 
+
+@staff_member_required
+def todos_os_pedidos(request):
+    pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
+
+    # Lógica de Paginação
+    paginator = Paginator(pedidos_qs, 20) # 20 pedidos por página
+    page = request.GET.get('page')
+
+    try:
+        pedidos = paginator.page(page)
+    except PageNotAnInteger:
+        pedidos = paginator.page(1)
+    except EmptyPage:
+        pedidos = paginator.page(paginator.num_pages)
+
+    contexto = {
+        'titulo': 'Todos os Pedidos',
+        'pedidos': pedidos,
+    }
+    return render(request, 'todos_os_pedidos.html', contexto)
+
+
+
+from django.db import models
+from django.contrib.auth.models import User
+
+# ... (seus outros modelos)
+
+# Modelo de Pedido
+class PedidoStatus(models.Model):
+    # Opções de status do pedido
+    STATUS_CHOICES = [
+        ('PENDENTE', 'Pendente'),
+        ('SOLICITADO', 'Solicitado'),
+        ('EM_ENVIO', 'Em Envio'),
+        ('ENTREGUE', 'Entregue'),
+    ]
+
+    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE') # NOVO: Campo de status
+
+    def __str__(self):
+        return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"
+
+    def get_total_geral(self):
+        total = sum(item.get_total() for item in self.itens.all())
+        return total
+    
+@staff_member_required
+def atualizar_status_pedido(request, pedido_id):
+    # NOVO: Adicione estas duas linhas para depuração
+
+    #print(request.POST) 
+   # print(f"Pedido ID: {pedido_id}")
+    
+    if request.method == 'POST':
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+        novo_status = request.POST.get('status')
+        if novo_status in ['PENDENTE', 'SOLICITADO', 'EM_ENVIO', 'ENTREGUE']:
+            pedido.status = novo_status
+            pedido.save()
+    return redirect('todos_os_pedidos')

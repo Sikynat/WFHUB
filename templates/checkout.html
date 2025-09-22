@@ -35,10 +35,14 @@
         </tfoot>
     </table>
     
-    <a href="{% url 'carrinho' %}" class="btn btn-secondary">Voltar ao Carrinho</a>
-    
-    <form action="{% url 'salvar_pedido' %}" method="post" style="display: inline;">
+    <form action="{% url 'salvar_pedido' %}" method="post">
         {% csrf_token %}
+        <div class="mb-3">
+            <label for="data_envio" class="form-label">Data de Envio Solicitada:</label>
+            <input type="date" class="form-control" id="data_envio" name="data_envio" required>
+        </div>
+        
+        <a href="{% url 'carrinho' %}" class="btn btn-secondary">Voltar ao Carrinho</a>
         <button type="submit" class="btn btn-success">Confirmar Compra</button>
     </form>
 {% endblock %}

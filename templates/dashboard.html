@@ -45,6 +45,7 @@
                 <tr>
                     <th>ID do Pedido</th>
                     <th>Cliente</th>
+                    <th>Código</th>
                     <th>Data</th>
                     <th>Valor Total</th>
                     <th>Detalhes</th>
@@ -55,6 +56,7 @@
                     <tr>
                         <td>{{ pedido.id }}</td>
                         <td>{{ pedido.cliente.client_name }}</td>
+                         <td>{{ pedido.cliente.client_code }}</td>
                         <td>{{ pedido.data_criacao }}</td>
                         <td>R$ {{ pedido.total|floatformat:2 }}</td>
                         <td>
