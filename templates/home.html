@@ -26,7 +26,7 @@
             <input type="text" name="descricao" placeholder="Descrição" class="form-control" value="{{ request.GET.descricao }}">
             <input type="text" name="grupo" placeholder="Grupo" class="form-control" value="{{ request.GET.grupo }}">
             <input type="text" name="marca" placeholder="Marca" class="form-control" value="{{ request.GET.marca }}">
-            <button type="submit" class="btn btn-secondary">Filtrar</button>
+            <button type="submit" class="btn btn-success">Filtrar</button>
             <a href="{% url 'home' %}" class="btn btn-warning">Limpar Filtro</a>
         </div>
     </form>
