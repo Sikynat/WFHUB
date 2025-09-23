@@ -87,8 +87,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'wf_hub',
-        'USER': 'root',
-        'PASSWORD': '',
+        'USER': 'cdadm',
+        'PASSWORD': '33#ba-M-A',
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {
