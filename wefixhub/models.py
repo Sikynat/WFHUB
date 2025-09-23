@@ -51,11 +51,8 @@ class Endereco(models.Model):
         return f"{self.logradouro}, {self.numero} - {self.cidade}"
 
     def save(self, *args, **kwargs):
-        # Se este endereço está sendo marcado como padrão...
         if self.is_default:
-            # Desmarca qualquer outro endereço padrão para este cliente
             Endereco.objects.filter(cliente=self.cliente, is_default=True).exclude(pk=self.pk).update(is_default=False)
-        
         super().save(*args, **kwargs) # Salva o endereço atual
 
 # Modelo para Produtos
@@ -89,14 +86,14 @@ class Pedido(models.Model):
         ('ENTREGUE', 'Entregue'),
     ]
     
-    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
+    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos_cliente')
     data_criacao = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
     data_envio_solicitada = models.DateField(null=True, blank=True)
-    endereco = models.ForeignKey(Endereco, on_delete=models.PROTECT, null=True, related_name='pedidos')
+    endereco = models.ForeignKey(Endereco, on_delete=models.PROTECT, null=True, related_name='pedidos_endereco')
 
     def __str__(self):
-        return f"Pedido #{self.id} de {self.cliente.client_name}"
+        return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"
 
     def get_total_geral(self):
         total = sum(item.get_total() for item in self.itens.all())
