@@ -9,6 +9,7 @@
             <thead>
                 <tr>
                     <th>Número do Pedido</th>
+                    <th>Situção do Pedido</th>
                     <th>Data</th>
                     <th>Data de Envio</th>
                     <th>Detalhes</th>
@@ -18,6 +19,7 @@
                 {% for pedido in pedidos %}
                     <tr>
                         <td>{{ pedido.id }}</td>
+                        <td>{{ pedido.status }}</td>
                         <td>{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
                         <td>{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</td>
                         <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
