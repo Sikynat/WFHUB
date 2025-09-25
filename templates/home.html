@@ -33,7 +33,7 @@
 
     <hr>
     
-    <form action="/gerar-pedido/" method="post">
+    <form action="{% url 'gerar_pedido' %}" method="post">
         {% csrf_token %}
         <table class="table table-striped">
             <thead>
@@ -96,9 +96,10 @@
         </table>
 
         <button type="submit" class="btn btn-primary">Gerar Pedido</button>
-         <a href="#" class="btn btn-warning" onclick="limparCache()">Limpar Carrinho</a>
+        <a href="#" class="btn btn-warning" onclick="limparCache()">Limpar Carrinho</a>
     </form>
-     {% if product_list.has_other_pages %}
+    
+    {% if product_list.has_other_pages %}
         <nav aria-label="Navegação da página">
             <ul class="pagination justify-content-center">
                 {% if product_list.has_previous %}
@@ -127,97 +128,26 @@
             const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
             const grandTotalElement = document.getElementById('grand-total');
 
-            quantidadeInputs.forEach(input => {
-                const savedValue = localStorage.getItem(input.id);
-                if (savedValue !== null && savedValue !== '0') {
-                    input.value = savedValue;
-                }
-            });
-
-            quantidadeInputs.forEach(input => {
-                input.addEventListener('input', (e) => {
-                    localStorage.setItem(e.target.id, e.target.value);
-                    updateTotals(e.target);
-                });
-            });
-
-            function updateTotals(inputElement) {
-                const row = inputElement.closest('tr');
-                const valorUnitarioElement = row.querySelector('.product-value');
-
-                if (!valorUnitarioElement) {
-                    // Superusuário (staff) vê duas colunas, a 'product-value' não existe
-                    // Então, o cálculo não será feito aqui.
-                    return;
-                }
-                
-                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value);
-                const quantidade = parseFloat(inputElement.value);
-
-                if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
-                    const total = valorUnitario * quantidade;
-                    row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2)}`;
-                }
-
-                updateGrandTotal();
-            }
-
-            function updateGrandTotal() {
-                let totalGeral = 0;
-                quantidadeInputs.forEach(input => {
-                    const row = input.closest('tr');
-                    const valorUnitarioElement = row.querySelector('.product-value');
-
-                    if (!valorUnitarioElement) {
-                        // Se não houver a classe 'product-value', o cálculo não é aplicável
-                        return;
-                    }
-
-                    const valorUnitario = parseFloat(valorUnitarioElement.dataset.value);
-                    const quantidade = parseFloat(input.value);
-                    if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
-                        totalGeral += valorUnitario * quantidade;
-                    }
-                });
-                grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2)}`;
-            }
-
-            // Garante que o total é calculado quando a página carrega, mesmo sem interação
-            quantidadeInputs.forEach(updateTotals);
-        });
-
-       // Apagar o cache
-
-        document.addEventListener('DOMContentLoaded', (event) => {
-            const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-            const grandTotalElement = document.getElementById('grand-total');
-
-            // Adiciona a lógica para verificar a mensagem do Django
+            // 1. Lógica para verificar a mensagem e limpar o cache
             const messagesDiv = document.querySelector('.messages');
             if (messagesDiv && messagesDiv.querySelector('.alert-success')) {
-                // Se houver uma mensagem de sucesso, limpa todos os dados salvos
-                quantidadeInputs.forEach(input => {
-                    localStorage.removeItem(input.id);
-                    input.value = 0; // Reseta o valor visualmente
-                });
-                updateGrandTotal(); // Atualiza o total para zero
+                limparLocalStorage();
+                // Opcional: recarregar a página para garantir que os inputs estejam zerados
+                // location.reload();
             }
 
-            // O seu código original para carregar os valores do localStorage
-            quantidadeInputs.forEach(input => {
-                const savedValue = localStorage.getItem(input.id);
-                if (savedValue !== null && savedValue !== '0') {
-                    input.value = savedValue;
-                }
-            });
-
-            quantidadeInputs.forEach(input => {
-                input.addEventListener('input', (e) => {
-                    localStorage.setItem(e.target.id, e.target.value);
-                    updateTotals(e.target);
+            // 2. Lógica para carregar os valores do localStorage
+            function loadAndCalculateTotals() {
+                quantidadeInputs.forEach(input => {
+                    const savedValue = localStorage.getItem(input.id);
+                    if (savedValue !== null && savedValue !== '0') {
+                        input.value = savedValue;
+                    }
+                    updateTotals(input);
                 });
-            });
+            }
 
+            // 3. Funções de cálculo de totais
             function updateTotals(inputElement) {
                 const row = inputElement.closest('tr');
                 const valorUnitarioElement = row.querySelector('.product-value');
@@ -256,20 +186,30 @@
                 grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2)}`;
             }
 
-            quantidadeInputs.forEach(updateTotals);
+            // 4. Listeners para atualizar os totais
+            quantidadeInputs.forEach(input => {
+                input.addEventListener('input', (e) => {
+                    localStorage.setItem(e.target.id, e.target.value);
+                    updateTotals(e.target);
+                });
+            });
+
+            // Chama a função principal de inicialização
+            loadAndCalculateTotals();
         });
 
-       
+        // Funções globais para o botão "Limpar Carrinho"
+        function limparCache() {
+            limparLocalStorage();
+            location.reload();
+        }
 
-// Limpa cache
-    function limparCache() {
-        const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-        quantidadeInputs.forEach(input => {
-            localStorage.removeItem(input.id);
-        });
-        location.reload();
-    }
-
-
+        // Função que realmente limpa o localStorage
+        function limparLocalStorage() {
+            const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
+            quantidadeInputs.forEach(input => {
+                localStorage.removeItem(input.id);
+            });
+        }
     </script>
 {% endblock %}

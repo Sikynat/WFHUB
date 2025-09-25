@@ -135,6 +135,7 @@ def gerar_pedido(request):
     
     return redirect('home')
 
+
 # Fim gerar pedido
 
 # Inicio do carrinho
@@ -238,7 +239,6 @@ def checkout(request):
         messages.error(request, 'Seu carrinho está vazio.')
         return redirect('home')
 
-    # Lógica de exibição dos detalhes do carrinho e total geral
     carrinho_detalhes = []
     total_geral = 0
     preco_exibido = None
@@ -256,7 +256,6 @@ def checkout(request):
         messages.error(request, 'Usuário não tem um cliente associado.')
         return redirect('home')
 
-    # Pega os detalhes dos produtos e calcula os totais para exibição
     for product_id, quantidade in carrinho_da_sessao.items():
         try:
             product = get_object_or_404(Product, product_id=product_id)
@@ -280,7 +279,6 @@ def checkout(request):
         except Product.DoesNotExist:
             continue
     
-    # Lógica para processar o formulário de checkout
     if request.method == 'POST':
         endereco_id = request.POST.get('endereco_selecionado')
         data_envio = request.POST.get('data_envio')
@@ -310,9 +308,10 @@ def checkout(request):
 
         if 'carrinho' in request.session:
             del request.session['carrinho']
-        
-        messages.success(request, 'Pedido gerado com sucesso!')
-        return redirect('detalhes_pedido', pedido_id=pedido.id)
+
+        # CÓDIGO A SER EXECUTADO
+        response = HttpResponse('<script>localStorage.clear(); window.location.href = "/";</script>')
+        return response
     
     enderecos = Endereco.objects.filter(cliente=cliente_logado)
     contexto = {
@@ -386,7 +385,7 @@ def detalhes_pedido(request, pedido_id):
         cliente_logado = request.user.wfclient
         pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
         
-        # Lógica para determinar o valor de preço a ser usado
+        # Lógica de controle de preço
         preco_exibido = None
         if request.user.is_staff:
             preco_exibido = 'todos'
@@ -400,7 +399,6 @@ def detalhes_pedido(request, pedido_id):
         itens = ItemPedido.objects.filter(pedido=pedido)
 
         for item in itens:
-            # ALTERAÇÃO AQUI: A view de detalhes deve usar o valor "congelado" no ItemPedido
             if preco_exibido == 'sp':
                 valor_unitario = item.valor_unitario_sp
             elif preco_exibido == 'es':
@@ -408,7 +406,7 @@ def detalhes_pedido(request, pedido_id):
             elif preco_exibido == 'todos':
                 valor_unitario_sp = item.valor_unitario_sp
                 valor_unitario_es = item.valor_unitario_es
-                valor_unitario = valor_unitario_sp # Para o cálculo do total geral
+                valor_unitario = valor_unitario_sp
             else:
                 valor_unitario = 0
             
@@ -419,8 +417,8 @@ def detalhes_pedido(request, pedido_id):
                 'item': item,
                 'valor_unitario': valor_unitario,
                 'valor_total': valor_total_item,
-                'valor_unitario_sp': item.valor_unitario_sp, # Para a visualização de admin
-                'valor_unitario_es': item.valor_unitario_es  # Para a visualização de admin
+                'valor_unitario_sp': item.valor_unitario_sp,
+                'valor_unitario_es': item.valor_unitario_es
             })
 
         contexto = {
@@ -430,10 +428,15 @@ def detalhes_pedido(request, pedido_id):
             'total_geral': total_geral,
             'preco_exibido': preco_exibido
         }
+        
+        # Redireciona para a home
         return render(request, 'detalhes_pedido.html', contexto)
+    
     except WfClient.DoesNotExist:
+        messages.error(request, "Erro: Cliente não encontrado.")
         return redirect('pedidos')
     except Pedido.DoesNotExist:
+        messages.error(request, "Erro: Pedido não encontrado.")
         return redirect('pedidos')
 
 # Fim detalhes pedido
