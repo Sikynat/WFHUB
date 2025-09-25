@@ -13,38 +13,76 @@ from datetime import datetime, timedelta
 from .forms import WfClientForm
 from .forms import EnderecoForm
 from .forms import EnderecoForm # Adicionando o novo formulário
-from .models import WfClient, Endereco, Pedido, Product
+from django.db import connection
+import pandas as pd
+from django.shortcuts import render
+import numpy as np
+from .models import Product, WfClient, Endereco, ItemPedido, Pedido
+from django.db import transaction
+from django.contrib import messages
+import datetime
+
+
 
 # View para a página inicial com filtros e paginação
-@login_required
 def home(request):
-    product_list = Product.objects.all()
-    codigo = request.GET.get('codigo')
-    descricao = request.GET.get('descricao')
-    grupo = request.GET.get('grupo')
-    marca = request.GET.get('marca')
-    valor_min = request.GET.get('valor_min')
-    valor_max = request.GET.get('valor_max')
+    # Lógica de filtragem atual
+    codigo = request.GET.get('codigo', None)
+    descricao = request.GET.get('descricao', None)
+    grupo = request.GET.get('grupo', None)
+    marca = request.GET.get('marca', None)
+
+    # NOVO FILTRO: Apenas produtos com data de hoje
+    products = Product.objects.filter(date_product=datetime.date.today()).order_by('product_code')
 
     if codigo:
-        product_list = product_list.filter(product_code__icontains=codigo)
+        products = products.filter(product_code__icontains=codigo)
     if descricao:
-        product_list = product_list.filter(product_description__icontains=descricao)
+        products = products.filter(product_description__icontains=descricao)
     if grupo:
-        product_list = product_list.filter(product_group__icontains=grupo)
+        products = products.filter(product_group__icontains=grupo)
     if marca:
-        product_list = product_list.filter(product_brand__icontains=marca)
-    if valor_min:
-        try:
-            product_list = product_list.filter(product_value__gte=valor_min)
-        except (ValueError, TypeError):
-            pass
-    if valor_max:
-        try:
-            product_list = product_list.filter(product_value__lte=valor_max)
-        except (ValueError, TypeError):
-            pass
+        products = products.filter(product_brand__icontains=marca)
 
+    # --- Lógica de PREÇO ADICIONADA ---
+    preco_exibido = None
+    cliente_logado = None
+
+    if request.user.is_authenticated:
+        if request.user.is_staff:
+            preco_exibido = 'todos'
+            try:
+                cliente_logado = request.user.wfclient
+            except WfClient.DoesNotExist:
+                pass
+        else:
+            try:
+                cliente_logado = request.user.wfclient
+                if cliente_logado.client_state.uf_name == 'SP':
+                    preco_exibido = 'sp'
+                elif cliente_logado.client_state.uf_name == 'ES':
+                    preco_exibido = 'es'
+            except WfClient.DoesNotExist:
+                pass
+    
+    paginator = Paginator(products, 10) 
+    page = request.GET.get('page')
+
+    try:
+        product_list = paginator.page(page)
+    except PageNotAnInteger:
+        product_list = paginator.page(1)
+    except EmptyPage:
+        product_list = paginator.page(paginator.num_pages)
+        
+    context = {
+        'product_list': product_list,
+        'cliente_logado': cliente_logado,
+        'preco_exibido': preco_exibido, # Variável para controlar a exibição no template
+    }
+            
+    return render(request, 'home.html', context)
+"""
     # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
     page = request.GET.get('page')
@@ -70,43 +108,90 @@ def home(request):
         'carrinho': carrinho_da_sessao,
         'cliente_logado': cliente_logado, # NOVO: Adiciona o cliente ao contexto
     }
-    return render(request, 'home.html', contexto)
+    return render(request, 'home.html', contexto)"""
+
+# Inicio gerar pedido
 
 @login_required
 def gerar_pedido(request):
     if request.method == 'POST':
-        request.session['carrinho'] = {}
+        carrinho_da_sessao = {}
         for key, value in request.POST.items():
             if key.startswith('quantidade_') and value.isdigit() and int(value) > 0:
                 product_id = key.split('_')[1]
                 quantidade = int(value)
-                request.session['carrinho'][product_id] = quantidade
+                carrinho_da_sessao[product_id] = quantidade
+        
+        request.session['carrinho'] = carrinho_da_sessao
         request.session.modified = True
-    return redirect('carrinho')
+        
+        return redirect('checkout')
+    
+    return redirect('home')
+
+# Fim gerar pedido
+
+# Inicio do carrinho
 
 @login_required
 def carrinho(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
     carrinho_detalhes = []
     total_geral = 0
+    
+    # Lógica para determinar o valor de preço a ser usado
+    preco_exibido = None
+    if request.user.is_authenticated:
+        if request.user.is_staff:
+            preco_exibido = 'todos'
+        else:
+            try:
+                cliente_logado = request.user.wfclient
+                if cliente_logado.client_state.uf_name == 'SP':
+                    preco_exibido = 'sp'
+                elif cliente_logado.client_state.uf_name == 'ES':
+                    preco_exibido = 'es'
+            except WfClient.DoesNotExist:
+                pass
+
     for product_id, quantidade in carrinho_da_sessao.items():
         try:
             product = Product.objects.get(product_id=product_id)
-            valor_total_item = product.product_value * quantidade
+            
+            # ALTERAÇÃO AQUI: A view do carrinho deve usar o preço atual do produto
+            # já que o pedido ainda não foi gerado. A lógica é a mesma que você já tem.
+            if preco_exibido == 'sp':
+                valor_unitario = product.product_value_sp
+            elif preco_exibido == 'es':
+                valor_unitario = product.product_value_es
+            elif preco_exibido == 'todos':
+                valor_unitario = product.product_value_sp # Ou ES, à sua escolha
+            else:
+                valor_unitario = 0
+
+            valor_total_item = valor_unitario * quantidade
             total_geral += valor_total_item
+            
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
+                'valor_unitario': valor_unitario,
                 'valor_total': valor_total_item
             })
         except Product.DoesNotExist:
             continue
+    
     contexto = {
         'titulo': 'Carrinho de Compras',
         'carrinho_detalhes': carrinho_detalhes,
-        'total_geral': total_geral
+        'total_geral': total_geral,
+        'preco_exibido': preco_exibido
     }
+    
     return render(request, 'carrinho.html', contexto)
+
+# Fim do carrinho
+
 
 @login_required
 def remover_item_carrinho(request, product_id):
@@ -139,86 +224,125 @@ def limpar_carrinho(request):
     return redirect('carrinho')
 
 
+# Inicio Checkout
 @login_required
 def checkout(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
+    if not carrinho_da_sessao:
+        messages.error(request, 'Seu carrinho está vazio.')
+        return redirect('home')
+
+    # Lógica de exibição dos detalhes do carrinho e total geral
     carrinho_detalhes = []
     total_geral = 0
-    if not carrinho_da_sessao:
-        return redirect('carrinho')
+    preco_exibido = None
+
+    try:
+        cliente_logado = request.user.wfclient
+        if request.user.is_staff:
+            preco_exibido = 'todos'
+        else:
+            if cliente_logado.client_state.uf_name == 'SP':
+                preco_exibido = 'sp'
+            elif cliente_logado.client_state.uf_name == 'ES':
+                preco_exibido = 'es'
+    except WfClient.DoesNotExist:
+        messages.error(request, 'Usuário não tem um cliente associado.')
+        return redirect('home')
+
+    # Pega os detalhes dos produtos e calcula os totais para exibição
     for product_id, quantidade in carrinho_da_sessao.items():
         try:
-            product = Product.objects.get(product_id=product_id)
-            valor_total_item = product.product_value * quantidade
+            product = get_object_or_404(Product, product_id=product_id)
+            
+            if preco_exibido == 'sp':
+                valor_unitario = product.product_value_sp
+            elif preco_exibido == 'es':
+                valor_unitario = product.product_value_es
+            else:
+                valor_unitario = product.product_value_sp
+            
+            valor_total_item = valor_unitario * quantidade
             total_geral += valor_total_item
+            
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
-                'valor_total': valor_total_item
+                'valor_unitario': valor_unitario,
+                'valor_total': valor_total_item,
             })
         except Product.DoesNotExist:
             continue
-    try:
-        cliente = request.user.wfclient
-        enderecos = Endereco.objects.filter(cliente=cliente) # NOVO: Puxa todos os endereços do cliente
-    except WfClient.DoesNotExist:
-        enderecos = []
+    
+    # Lógica para processar o formulário de checkout
+    if request.method == 'POST':
+        endereco_id = request.POST.get('endereco_selecionado')
+        data_envio = request.POST.get('data_envio')
+        
+        try:
+            endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=cliente_logado)
+            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
+        except (Endereco.DoesNotExist, ValueError):
+            messages.error(request, 'Endereço ou data de envio inválidos.')
+            return redirect('checkout')
+        
+        with transaction.atomic():
+            pedido = Pedido.objects.create(
+                cliente=cliente_logado,
+                endereco=endereco_selecionado,
+                data_envio_solicitada=data_envio,
+            )
+            
+            for item in carrinho_detalhes:
+                ItemPedido.objects.create(
+                    pedido=pedido,
+                    produto=item['product'],
+                    quantidade=item['quantidade'],
+                    valor_unitario_sp=item['product'].product_value_sp,
+                    valor_unitario_es=item['product'].product_value_es,
+                )
+
+        if 'carrinho' in request.session:
+            del request.session['carrinho']
+        
+        messages.success(request, 'Pedido gerado com sucesso!')
+        return redirect('detalhes_pedido', pedido_id=pedido.id)
+    
+    enderecos = Endereco.objects.filter(cliente=cliente_logado)
     contexto = {
         'titulo': 'Confirmação de Compra',
         'carrinho_detalhes': carrinho_detalhes,
         'total_geral': total_geral,
-        'enderecos': enderecos, # NOVO: Passa os endereços para o template
+        'enderecos': enderecos,
+        'preco_exibido': preco_exibido,
     }
     return render(request, 'checkout.html', contexto)
+
+
+# Fim Checkout
+
+# Inicio salvar pedido
 
 @login_required
 def salvar_pedido(request):
     if request.method == 'POST':
-        carrinho_da_sessao = request.session.get('carrinho', {})
-
-        if not carrinho_da_sessao:
-            return redirect('carrinho')
+        endereco_id = request.POST.get('endereco')
+        data_envio = request.POST.get('data_envio')
 
         try:
-            cliente_logado = request.user.wfclient
-            endereco_id = request.POST.get('endereco_selecionado')
-            endereco_selecionado = Endereco.objects.get(id=endereco_id)
-        except WfClient.DoesNotExist:
-            return redirect('home')
-        except Endereco.DoesNotExist:
+            endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=request.user.wfclient)
+            # ALTERAÇÃO AQUI: Use datetime.datetime.strptime()
+            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
+        except (Endereco.DoesNotExist, ValueError):
+            messages.error(request, 'Endereço ou data de envio inválidos.')
             return redirect('checkout')
-
-        # CORREÇÃO AQUI: Lógica para a data de envio
-        data_envio = request.POST.get('data_envio')
-        if not data_envio: # Se a data não for fornecida
-            data_envio_solicitada = datetime.now().date() + timedelta(days=1)
-        else:
-            data_envio_solicitada = datetime.strptime(data_envio, '%Y-%m-%d').date()
-
-        # Cria a instância de Pedido com a nova data
-        pedido_criado = Pedido.objects.create(
-            cliente=cliente_logado, 
-            data_envio_solicitada=data_envio_solicitada,
-            endereco=endereco_selecionado
-        )
-
-        for product_id, quantidade in carrinho_da_sessao.items():
-            try:
-                product = Product.objects.get(product_id=product_id)
-                ItemPedido.objects.create(
-                    pedido=pedido_criado,
-                    produto=product,
-                    quantidade=quantidade
-                )
-            except Product.DoesNotExist:
-                continue
         
-        del request.session['carrinho']
-        request.session.modified = True
+        # ... (restante do código para salvar o pedido)
+        # O restante do seu código aqui...
 
-        return redirect('pedido_concluido')
-    
     return redirect('checkout')
+
+# Fim Salvar Pedido
 
 def pedido_concluido(request):
     return render(request, 'pedido_concluido.html')
@@ -248,22 +372,65 @@ def historico_pedidos(request):
     }
     return render(request, 'historico_pedidos.html', contexto)
 
+#Inicio detalhes pedido
+
 @login_required
 def detalhes_pedido(request, pedido_id):
     try:
         cliente_logado = request.user.wfclient
         pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
+        
+        # Lógica para determinar o valor de preço a ser usado
+        preco_exibido = None
+        if request.user.is_staff:
+            preco_exibido = 'todos'
+        elif cliente_logado.client_state.uf_name == 'SP':
+            preco_exibido = 'sp'
+        elif cliente_logado.client_state.uf_name == 'ES':
+            preco_exibido = 'es'
+
+        itens_detalhes = []
+        total_geral = 0
         itens = ItemPedido.objects.filter(pedido=pedido)
+
+        for item in itens:
+            # ALTERAÇÃO AQUI: A view de detalhes deve usar o valor "congelado" no ItemPedido
+            if preco_exibido == 'sp':
+                valor_unitario = item.valor_unitario_sp
+            elif preco_exibido == 'es':
+                valor_unitario = item.valor_unitario_es
+            elif preco_exibido == 'todos':
+                valor_unitario_sp = item.valor_unitario_sp
+                valor_unitario_es = item.valor_unitario_es
+                valor_unitario = valor_unitario_sp # Para o cálculo do total geral
+            else:
+                valor_unitario = 0
+            
+            valor_total_item = valor_unitario * item.quantidade
+            total_geral += valor_total_item
+
+            itens_detalhes.append({
+                'item': item,
+                'valor_unitario': valor_unitario,
+                'valor_total': valor_total_item,
+                'valor_unitario_sp': item.valor_unitario_sp, # Para a visualização de admin
+                'valor_unitario_es': item.valor_unitario_es  # Para a visualização de admin
+            })
+
         contexto = {
             'titulo': f"Detalhes do Pedido #{pedido.id}",
             'pedido': pedido,
-            'itens': itens,
+            'itens_detalhes': itens_detalhes,
+            'total_geral': total_geral,
+            'preco_exibido': preco_exibido
         }
         return render(request, 'detalhes_pedido.html', contexto)
     except WfClient.DoesNotExist:
         return redirect('pedidos')
     except Pedido.DoesNotExist:
         return redirect('pedidos')
+
+# Fim detalhes pedido
 
 @staff_member_required
 def dashboard_admin(request):
@@ -318,34 +485,65 @@ def exportar_pedidos_excel(request):
 @login_required
 def exportar_detalhes_pedido_excel(request, pedido_id):
     try:
-        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=request.user.wfclient)
+        # Garante que o usuário logado só pode exportar o próprio pedido
+        cliente_logado = request.user.wfclient
+        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
+        uf_cliente = cliente_logado.client_state.uf_name
     except WfClient.DoesNotExist:
+        # Se o usuário não tiver um cliente associado, redireciona
         return redirect('pedidos')
     except Pedido.DoesNotExist:
+        # Se o pedido não existir ou não pertencer ao cliente, retorna um erro
         return redirect('pedidos')
+    
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
+    
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
     worksheet.title = f"Pedido #{pedido.id}"
-    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+    
+    # Define as colunas dinamicamente com base no estado do cliente
+    if uf_cliente == 'SP':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        valor_key = 'product_value_sp'
+    elif uf_cliente == 'ES':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        valor_key = 'product_value_es'
+    else:
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        valor_key = None
+        
     row_num = 1
     for col_num, column_title in enumerate(columns, 1):
         worksheet.cell(row=row_num, column=col_num, value=column_title)
+        
     itens = ItemPedido.objects.filter(pedido=pedido)
     total_geral = 0
+    
     for item in itens:
         row_num += 1
-        subtotal = item.get_total()
+        
+        # Acessa o valor do produto dinamicamente
+        if valor_key:
+            valor_unitario = getattr(item.produto, valor_key, 0)
+        else:
+            valor_unitario = 0
+
+        # Calcula o subtotal diretamente
+        subtotal = valor_unitario * item.quantidade
         total_geral += subtotal
+        
         worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
         worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
         worksheet.cell(row=row_num, column=3, value=item.quantidade)
-        worksheet.cell(row=row_num, column=4, value=item.produto.product_value)
+        worksheet.cell(row=row_num, column=4, value=valor_unitario)
         worksheet.cell(row=row_num, column=5, value=subtotal)
+        
     row_num += 1
     worksheet.cell(row=row_num, column=4, value="Total Geral:")
     worksheet.cell(row=row_num, column=5, value=total_geral)
+    
     workbook.save(response)
     return response
 
@@ -355,29 +553,42 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
         pedido = get_object_or_404(Pedido, id=pedido_id)
     except Pedido.DoesNotExist:
         return redirect('dashboard_admin')
+    
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
+    
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
     worksheet.title = f"Pedido #{pedido.id}"
-    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+    
+    # Colunas agora mostram apenas o preço de SP
+    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal (Base SP)']
+    
     row_num = 1
     for col_num, column_title in enumerate(columns, 1):
         worksheet.cell(row=row_num, column=col_num, value=column_title)
+    
     itens = ItemPedido.objects.filter(pedido=pedido)
     total_geral = 0
+    
     for item in itens:
         row_num += 1
-        subtotal = item.get_total()
+        
+        # Usa o valor de SP para o cálculo do subtotal
+        valor_unitario = item.produto.product_value_sp
+        subtotal = valor_unitario * item.quantidade
         total_geral += subtotal
+        
         worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
         worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
         worksheet.cell(row=row_num, column=3, value=item.quantidade)
-        worksheet.cell(row=row_num, column=4, value=item.produto.product_value)
+        worksheet.cell(row=row_num, column=4, value=valor_unitario)
         worksheet.cell(row=row_num, column=5, value=subtotal)
+        
     row_num += 1
     worksheet.cell(row=row_num, column=4, value="Total Geral:")
     worksheet.cell(row=row_num, column=5, value=total_geral)
+    
     workbook.save(response)
     return response
 
@@ -414,9 +625,12 @@ def detalhes_pedido_admin(request, pedido_id):
         return redirect('dashboard_admin')
 
 
+@staff_member_required
 def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     try:
         pedido = get_object_or_404(Pedido, id=pedido_id)
+        cliente = pedido.cliente # Pega o cliente do pedido
+        uf_cliente = cliente.client_state.uf_name
     except Pedido.DoesNotExist:
         return redirect('dashboard_admin')
 
@@ -427,34 +641,43 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     worksheet = workbook.active
     worksheet.title = f"Pedido #{pedido.id}"
 
-    # Dados do Pedido
-    worksheet.cell(row=1, column=1, value="Pedido ID:")
-    worksheet.cell(row=1, column=2, value=pedido.id)
-    worksheet.cell(row=2, column=1, value="Cliente:")
-    worksheet.cell(row=2, column=2, value=pedido.cliente.client_name)
-    worksheet.cell(row=3, column=1, value="Data da Compra:")
-    data_sem_tz = timezone.localtime(pedido.data_criacao).replace(tzinfo=None)
-    worksheet.cell(row=3, column=2, value=data_sem_tz)
+    # Define as colunas dinamicamente com base no estado do cliente
+    if uf_cliente == 'SP':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        valor_key = 'product_value_sp'
+    elif uf_cliente == 'ES':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        valor_key = 'product_value_es'
+    else:
+        # Padrão caso o estado não seja SP ou ES
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        valor_key = None # ou um valor padrão
 
-    # Tabela de Itens
-    worksheet.cell(row=5, column=1, value="Itens do Pedido:")
-    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
-    row_num = 6
+    row_num = 1
     for col_num, column_title in enumerate(columns, 1):
         worksheet.cell(row=row_num, column=col_num, value=column_title)
 
     itens = ItemPedido.objects.filter(pedido=pedido)
     total_geral = 0
+
     for item in itens:
         row_num += 1
-        subtotal = item.get_total()
+
+        # Acessa o valor do produto dinamicamente
+        if valor_key:
+            valor_unitario = getattr(item.produto, valor_key, 0)
+        else:
+            valor_unitario = 0
+
+        subtotal = valor_unitario * item.quantidade
         total_geral += subtotal
+
         worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
         worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
         worksheet.cell(row=row_num, column=3, value=item.quantidade)
-        worksheet.cell(row=row_num, column=4, value=item.produto.product_value)
+        worksheet.cell(row=row_num, column=4, value=valor_unitario)
         worksheet.cell(row=row_num, column=5, value=subtotal)
-    
+
     row_num += 1
     worksheet.cell(row=row_num, column=4, value="Total Geral:")
     worksheet.cell(row=row_num, column=5, value=total_geral)
@@ -462,7 +685,74 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     workbook.save(response)
     return response
 
-# wefixhub/views.py
+# Exportar para o cliente
+@login_required
+def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
+    try:
+        # Garante que o usuário logado só possa exportar o próprio pedido
+        cliente_logado = request.user.wfclient
+        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
+        uf_cliente = cliente_logado.client_state.uf_name
+    except WfClient.DoesNotExist:
+        # Se o usuário não tiver um cliente associado, redireciona para a página de pedidos
+        return redirect('pedidos')
+    except Pedido.DoesNotExist:
+        # Se o pedido não existir ou não pertencer ao cliente, retorna um erro 404
+        return redirect('pedidos')
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
+
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = f"Pedido #{pedido.id}"
+
+    # Define as colunas dinamicamente com base no estado do cliente
+    if uf_cliente == 'SP':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        valor_key = 'product_value_sp'
+    elif uf_cliente == 'ES':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        valor_key = 'product_value_es'
+    else:
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        valor_key = None
+
+    row_num = 1
+    for col_num, column_title in enumerate(columns, 1):
+        worksheet.cell(row=row_num, column=col_num, value=column_title)
+
+    itens = ItemPedido.objects.filter(pedido=pedido)
+    total_geral = 0
+
+    for item in itens:
+        row_num += 1
+
+        if valor_key:
+            valor_unitario = getattr(item.produto, valor_key, 0)
+        else:
+            valor_unitario = 0
+
+        # CÁLCULO DIRETO DO SUBTOTAL
+        subtotal = valor_unitario * item.quantidade
+        total_geral += subtotal
+
+        worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
+        worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
+        worksheet.cell(row=row_num, column=3, value=item.quantidade)
+        worksheet.cell(row=row_num, column=4, value=valor_unitario)
+        worksheet.cell(row=row_num, column=5, value=subtotal)
+
+    row_num += 1
+    worksheet.cell(row=row_num, column=4, value="Total Geral:")
+    worksheet.cell(row=row_num, column=5, value=total_geral)
+
+    workbook.save(response)
+    return response
+
+
+
+
 
 
 @staff_member_required
@@ -603,3 +893,54 @@ def editar_endereco(request, endereco_id):
         'titulo': 'Editar Endereço',
     }
     return render(request, 'editar_endereco.html', contexto)
+
+
+# A página para exibir o formulário de upload
+def pagina_upload(request):
+    return render(request, 'upload_planilha.html')
+
+def processar_upload(request):
+    if request.method == 'POST':
+        planilha_es_file = request.FILES.get('planilha_es')
+        planilha_sp_file = request.FILES.get('planilha_sp')
+
+        if not planilha_es_file or not planilha_sp_file:
+            messages.error(request, 'Por favor, selecione ambas as planilhas.')
+            return redirect('pagina_upload')
+
+        try:
+            df_es = pd.read_excel(planilha_es_file, usecols=['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'TABELA'])
+            df_es = df_es.rename(columns={'CÓDIGO': 'product_code', 'DESCRIÇÃO': 'product_description', 'GRUPO': 'product_group', 'TABELA': 'product_value_es'})
+
+            df_sp = pd.read_excel(planilha_sp_file, usecols=['CÓDIGO', 'TABELA'])
+            df_sp = df_sp.rename(columns={'CÓDIGO': 'product_code', 'TABELA': 'product_value_sp'})
+            
+            df_es.loc[df_es['product_value_es'] == 'SEM ESTOQUE', 'product_value_es'] = 0
+            df_sp.loc[df_sp['product_value_sp'] == 'SEM ESTOQUE', 'product_value_sp'] = 0
+
+            df_final = pd.merge(df_es, df_sp, on='product_code', how='left')
+            df_final = df_final.replace({np.nan: None})
+
+            with transaction.atomic():
+                produtos_criados = 0
+                for _, row in df_final.iterrows():
+                    Product.objects.create(
+                        product_code=row['product_code'],
+                        product_description=row['product_description'],
+                        product_group=row['product_group'],
+                        product_value_sp=row['product_value_sp'],
+                        product_value_es=row['product_value_es'],
+                        status='PENDENTE',
+                        date_product=datetime.date.today() # A data é definida aqui
+                    )
+                    produtos_criados += 1
+                
+            messages.success(request, f'{produtos_criados} novos produtos foram inseridos com sucesso.')
+            return redirect('pagina_upload')
+
+        except Exception as e:
+            messages.error(request, f'Ocorreu um erro ao processar as planilhas: {e}')
+            return redirect('pagina_upload')
+
+    return render(request, 'upload_planilha.html')
+

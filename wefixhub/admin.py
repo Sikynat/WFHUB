@@ -28,11 +28,11 @@ class ClientAdmin(admin.ModelAdmin):
         # Salva o objeto no banco de dados
         super().save_model(request, obj, form, change)
 
-# Admin para Product
+# Admin para Product (declaração única e correta)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['product_id', 'product_code', 'product_description', 'product_brand', 'product_value']
-    search_fields = ['product_id', 'product_description', 'product_brand', 'product_code']
-    list_filter = ['status']
+    list_display = ('product_code', 'product_description', 'date_product', 'product_value_sp', 'product_value_es')
+    list_filter = ('date_product',)
+    search_fields = ('product_code', 'product_description')
 
 # Registra os modelos no painel administrativo
 admin.site.register(WfClient, ClientAdmin)
@@ -40,3 +40,4 @@ admin.site.register(Product, ProductAdmin)
 admin.site.register(Pedido)
 admin.site.register(ItemPedido)
 admin.site.register(wefixhub_uf)
+admin.site.register(Endereco)

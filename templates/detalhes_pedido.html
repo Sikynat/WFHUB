@@ -7,9 +7,8 @@
     <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
     <p><strong>Situação do Pedido</strong>: {{ pedido.status }}</p>
 
-
     <hr>
-           <div class="card mb-4">
+    <div class="card mb-4">
         <div class="card-header">
             <h3>Endereço de Envio</h3>
         </div>
@@ -25,36 +24,52 @@
             <tr>
                 <th>Código</th>
                 <th>Descrição</th>
-                <th>Valor Unitário</th>
+                {% if preco_exibido == 'sp' %}
+                    <th>Valor (SP)</th>
+                {% elif preco_exibido == 'es' %}
+                    <th>Valor (ES)</th>
+                {% elif preco_exibido == 'todos' %}
+                    <th>Valor (SP)</th>
+                    <th>Valor (ES)</th>
+                {% endif %}
                 <th>Quantidade</th>
                 <th>Subtotal</th>
             </tr>
         </thead>
         <tbody>
-            {% for item in itens %}
+            {% for item_detalhe in itens_detalhes %}
             <tr>
-                <td>{{ item.produto.product_code }}</td>
-                <td>{{ item.produto.product_description }}</td>
-                <td>R$ {{ item.produto.product_value }}</td>
-                <td>{{ item.quantidade }}</td>
-                <td>R$ {{ item.get_total|floatformat:2 }}</td>
+                <td>{{ item_detalhe.item.produto.product_code }}</td>
+                <td>{{ item_detalhe.item.produto.product_description }}</td>
+                {% if preco_exibido == 'todos' %}
+                    <td>R$ {{ item_detalhe.item.produto.product_value_sp|floatformat:2 }}</td>
+                    <td>R$ {{ item_detalhe.item.produto.product_value_es|floatformat:2 }}</td>
+                {% else %}
+                    <td>R$ {{ item_detalhe.valor_unitario|floatformat:2 }}</td>
+                {% endif %}
+                <td>{{ item_detalhe.item.quantidade }}</td>
+                <td>R$ {{ item_detalhe.valor_total|floatformat:2 }}</td>
             </tr>
             {% endfor %}
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
-                <td><strong>R$ {{ pedido.get_total_geral|floatformat:2 }}</strong></td>
+                {% if preco_exibido == 'todos' %}
+                    <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
+                {% else %}
+                    <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                {% endif %}
+                <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
             </tr>
         </tfoot>
     </table>
     
     {% if user.is_staff %}
-        <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-3">Voltar para o Dashboard</a>
-    {% else %}
-        <a href="{% url 'pedidos' %}" class="btn btn-secondary mt-3">Voltar para o Histórico</a>
-    {% endif %}
-
-    <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel</a>
+    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-3">Voltar para o Dashboard</a>
+    <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel (Admin)</a>
+{% else %}
+    <a href="{% url 'pedidos' %}" class="btn btn-secondary mt-3">Voltar para o Histórico</a>
+    <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel</a>
+{% endif %}
 
 {% endblock %}

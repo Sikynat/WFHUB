@@ -56,6 +56,7 @@ class Endereco(models.Model):
         super().save(*args, **kwargs) # Salva o endereço atual
 
 # Modelo para Produtos
+# Modelo para Produtos
 class Product(models.Model):
     STATUS_CHOICES = [
         ('PENDENTE', 'Pendente'),
@@ -63,12 +64,19 @@ class Product(models.Model):
     ]
 
     product_id = models.AutoField(primary_key=True)
-    product_code = models.CharField(max_length=5, unique=True)
+    product_code = models.CharField(max_length=20, unique=True)
     product_description = models.CharField(max_length=255, blank=True, null=True)
     product_group = models.CharField(max_length=32, blank=True, null=True)
     product_brand = models.CharField(max_length=32, blank=True, null=True)
-    product_value = models.DecimalField(max_digits=6, decimal_places=2)
+    
+    # NOVOS CAMPOS PARA ARMAZENAR OS VALORES
+    product_value_sp = models.DecimalField(max_digits=6, decimal_places=2, null=True)
+    product_value_es = models.DecimalField(max_digits=6, decimal_places=2, null=True)
+    
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
+    
+    # NOVO CAMPO
+    date_product = models.DateField(auto_now_add=True)
 
     class Meta:
         db_table = 'wf_products'
@@ -76,7 +84,7 @@ class Product(models.Model):
         verbose_name_plural = 'Produtos'
 
     def __str__(self):
-        return self.product_description
+        return self.product_description or self.product_code or ''
 
 # Modelo de Pedido
 class Pedido(models.Model):
@@ -102,11 +110,17 @@ class Pedido(models.Model):
 # Modelo de Item do Pedido
 class ItemPedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens')
-    produto = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='itens_do_pedido')
+    produto = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='itens_do_pedido') # Alterado para PROTECT para evitar deleção
     quantidade = models.IntegerField(default=1)
+    
+    # NOVOS CAMPOS PARA CONGELAR O PREÇO
+    valor_unitario_sp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    valor_unitario_es = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return f"{self.quantidade} x {self.produto.product_description} em {self.pedido.id}"
         
     def get_total(self):
-        return self.produto.product_value * self.quantidade
+        # A lógica para o total pode ser atualizada para usar os novos campos
+        # Mas o ideal é fazer o cálculo na view para evitar o problema
+        pass

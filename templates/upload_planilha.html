@@ -1,0 +1,11 @@
+<form method="post" enctype="multipart/form-data" action="{% url 'processar_upload' %}">
+    {% csrf_token %}
+    <h2>Upload das Planilhas</h2>
+    <p>Selecione a planilha de preços do ES:</p>
+    <input type="file" name="planilha_es" accept=".xlsx, .xls">
+    
+    <p>Selecione a planilha de preços de SP:</p>
+    <input type="file" name="planilha_sp" accept=".xlsx, .xls">
+    
+    <button type="submit">Enviar Planilhas</button>
+</form>

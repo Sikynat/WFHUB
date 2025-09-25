@@ -11,7 +11,14 @@
             <tr>
                 <th>Código</th>
                 <th>Descrição</th>
-                <th>Valor Unitário</th>
+                {% if preco_exibido == 'sp' %}
+                    <th>Valor Unitário (SP)</th>
+                {% elif preco_exibido == 'es' %}
+                    <th>Valor Unitário (ES)</th>
+                {% elif preco_exibido == 'todos' %}
+                    <th>Valor Unitário (SP)</th>
+                    <th>Valor Unitário (ES)</th>
+                {% endif %}
                 <th>Quantidade</th>
                 <th>Valor Total</th>
             </tr>
@@ -21,7 +28,12 @@
                 <tr>
                     <td>{{ item.product.product_code }}</td>
                     <td>{{ item.product.product_description }}</td>
-                    <td>R$ {{ item.product.product_value }}</td>
+                    {% if preco_exibido == 'todos' %}
+                        <td>R$ {{ item.product.product_value_sp|floatformat:2 }}</td>
+                        <td>R$ {{ item.product.product_value_es|floatformat:2 }}</td>
+                    {% else %}
+                        <td>R$ {{ item.valor_unitario|floatformat:2 }}</td>
+                    {% endif %}
                     <td>{{ item.quantidade }}</td>
                     <td>R$ {{ item.valor_total|floatformat:2 }}</td>
                 </tr>
@@ -29,13 +41,17 @@
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                {% if preco_exibido == 'todos' %}
+                    <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
+                {% else %}
+                    <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                {% endif %}
                 <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
             </tr>
         </tfoot>
     </table>
     
-    <form action="{% url 'salvar_pedido' %}" method="post">
+    <form action="{% url 'checkout' %}" method="post">
         {% csrf_token %}
         <div class="mb-3">
             <label class="form-label">Selecione o Endereço de Envio:</label>
@@ -64,4 +80,21 @@
         <button type="submit" class="btn btn-success">Confirmar Compra</button>
         <a href="{% url 'carrinho' %}" class="btn btn-secondary">Voltar ao Carrinho</a>
     </form>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const confirmarCompraBtn = document.querySelector('button[type="submit"]');
+
+            if (confirmarCompraBtn) {
+                confirmarCompraBtn.addEventListener('click', () => {
+                    const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
+                    quantidadeInputs.forEach(input => {
+                        localStorage.removeItem(input.id);
+                    });
+                });
+            }
+        });
+    </script>
+
+
 {% endblock %}
