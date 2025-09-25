@@ -4,7 +4,8 @@
 {% block content %}
     <h1>Detalhes do Pedido #{{ pedido.id }}</h1>
     <p><strong>Data da Compra:</strong> {{ pedido.data_criacao }}</p>
-    <p><strong>Data da expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
+    <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
+    <p><strong>Situação do Pedido</strong>: {{ pedido.status }}</p>
 
 
     <hr>

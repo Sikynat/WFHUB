@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import pymysql
+pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -88,8 +90,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'wf_hub',
-        'USER': 'cdadm',
-        'PASSWORD': '33#ba-M-A',
+        'USER': 'root',
+        'PASSWORD': '550202',
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {
@@ -150,6 +152,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # ... outros apps
     'wefixhub', # Deve ser 'clientes', não 'client' ou outro nome
+    
 ]
 
 # Redireciona para a página inicial após o login
