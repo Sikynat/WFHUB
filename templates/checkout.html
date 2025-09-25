@@ -77,7 +77,7 @@
             <input type="date" class="form-control" id="data_envio" name="data_envio">
         </div>
         <hr>
-        <button type="submit" class="btn btn-success">Confirmar Compra</button>
+        <button type="submit" class="btn btn-success" >Confirmar Compra</button>
         <a href="{% url 'carrinho' %}" class="btn btn-secondary">Voltar ao Carrinho</a>
     </form>
 
@@ -94,6 +94,18 @@
                 });
             }
         });
+
+        // limpa cache
+
+        function limparCache() {
+        const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
+        quantidadeInputs.forEach(input => {
+            localStorage.removeItem(input.id);
+        });
+        location.reload();
+    }
+
+
     </script>
 
 

@@ -26,7 +26,7 @@ import datetime
 
 # View para a página inicial com filtros e paginação
 def home(request):
-    # Lógica de filtragem atual
+    # Lógica de filtragem e busca
     codigo = request.GET.get('codigo', None)
     descricao = request.GET.get('descricao', None)
     grupo = request.GET.get('grupo', None)
@@ -43,28 +43,34 @@ def home(request):
         products = products.filter(product_group__icontains=grupo)
     if marca:
         products = products.filter(product_brand__icontains=marca)
-
-    # --- Lógica de PREÇO ADICIONADA ---
+    
+    # Lógica de controle de preço
     preco_exibido = None
     cliente_logado = None
 
     if request.user.is_authenticated:
         if request.user.is_staff:
             preco_exibido = 'todos'
-            try:
-                cliente_logado = request.user.wfclient
-            except WfClient.DoesNotExist:
-                pass
         else:
             try:
                 cliente_logado = request.user.wfclient
                 if cliente_logado.client_state.uf_name == 'SP':
                     preco_exibido = 'sp'
+                    # FILTRO: Remove produtos com valor 0 para SP
+                    products = products.exclude(product_value_sp=0)
                 elif cliente_logado.client_state.uf_name == 'ES':
                     preco_exibido = 'es'
+                    # FILTRO: Remove produtos com valor 0 para ES
+                    products = products.exclude(product_value_es=0)
             except WfClient.DoesNotExist:
-                pass
+                # Se não for cliente de SP ou ES, não exibe produtos
+                products = Product.objects.none()
     
+    # Se o usuário não estiver autenticado, não exibe nenhum produto
+    if not request.user.is_authenticated:
+        products = Product.objects.none()
+    
+    # Paginação
     paginator = Paginator(products, 10) 
     page = request.GET.get('page')
 
@@ -78,7 +84,7 @@ def home(request):
     context = {
         'product_list': product_list,
         'cliente_logado': cliente_logado,
-        'preco_exibido': preco_exibido, # Variável para controlar a exibição no template
+        'preco_exibido': preco_exibido,
     }
             
     return render(request, 'home.html', context)
@@ -909,8 +915,10 @@ def processar_upload(request):
             return redirect('pagina_upload')
 
         try:
-            df_es = pd.read_excel(planilha_es_file, usecols=['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'TABELA'])
-            df_es = df_es.rename(columns={'CÓDIGO': 'product_code', 'DESCRIÇÃO': 'product_description', 'GRUPO': 'product_group', 'TABELA': 'product_value_es'})
+            # Lógica para ler, tratar e juntar as planilhas
+            # ALTERAÇÃO: Incluir a coluna 'MARCA' na leitura da planilha de ES
+            df_es = pd.read_excel(planilha_es_file, usecols=['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'TABELA'])
+            df_es = df_es.rename(columns={'CÓDIGO': 'product_code', 'DESCRIÇÃO': 'product_description', 'GRUPO': 'product_group', 'MARCA': 'product_brand', 'TABELA': 'product_value_es'})
 
             df_sp = pd.read_excel(planilha_sp_file, usecols=['CÓDIGO', 'TABELA'])
             df_sp = df_sp.rename(columns={'CÓDIGO': 'product_code', 'TABELA': 'product_value_sp'})
@@ -922,20 +930,24 @@ def processar_upload(request):
             df_final = df_final.replace({np.nan: None})
 
             with transaction.atomic():
-                produtos_criados = 0
+                produtos_processados = 0
                 for _, row in df_final.iterrows():
-                    Product.objects.create(
+                    # NOVO CÓDIGO: Usar update_or_create para garantir unicidade
+                    Product.objects.update_or_create(
                         product_code=row['product_code'],
-                        product_description=row['product_description'],
-                        product_group=row['product_group'],
-                        product_value_sp=row['product_value_sp'],
-                        product_value_es=row['product_value_es'],
-                        status='PENDENTE',
-                        date_product=datetime.date.today() # A data é definida aqui
+                        defaults={
+                            'product_description': row['product_description'],
+                            'product_group': row['product_group'],
+                            'product_brand': row['product_brand'], # ALTERAÇÃO: Adicionar a marca aqui
+                            'product_value_sp': row['product_value_sp'],
+                            'product_value_es': row['product_value_es'],
+                            'status': 'PENDENTE',
+                            'date_product': datetime.date.today(),
+                        }
                     )
-                    produtos_criados += 1
+                    produtos_processados += 1
                 
-            messages.success(request, f'{produtos_criados} novos produtos foram inseridos com sucesso.')
+            messages.success(request, f'{produtos_processados} produtos processados com sucesso.')
             return redirect('pagina_upload')
 
         except Exception as e:
@@ -943,4 +955,3 @@ def processar_upload(request):
             return redirect('pagina_upload')
 
     return render(request, 'upload_planilha.html')
-
