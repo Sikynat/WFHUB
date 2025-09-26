@@ -19,3 +19,14 @@ class EnderecoForm(forms.ModelForm):
         super(EnderecoForm, self).__init__(*args, **kwargs)
         for field in self.fields:
             self.fields[field].widget.attrs['class'] = 'form-control'
+
+from django import forms
+from .models import WfClient
+
+class GerarPedidoForm(forms.Form):
+    cliente = forms.ModelChoiceField(
+        queryset=WfClient.objects.all().order_by('client_name'),
+        label='Selecione o Cliente',
+        empty_label='---',
+        required=False
+    )

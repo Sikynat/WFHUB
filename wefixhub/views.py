@@ -23,6 +23,7 @@ from django.contrib import messages
 import datetime
 from decimal import Decimal
 import json
+from .forms import GerarPedidoForm
 
 
 # View para a página inicial com filtros e paginação
@@ -1080,3 +1081,53 @@ def pedidos_para_hoje(request):
         'data_hoje': hoje,
     }
     return render(request, 'pedidos/pedidos_hoje.html', context)
+
+@staff_member_required
+def gerar_pedido_manual(request):
+    cliente_selecionado = None
+    preco_exibido = 'todos'
+    product_list = []
+
+    cliente_id = request.GET.get('cliente')
+    
+    # Prepara os parâmetros GET para o template, removendo 'page'
+    # Esta é a parte crucial
+    query_params = request.GET.copy()
+    if 'page' in query_params:
+        query_params.pop('page')
+
+    if cliente_id:
+        cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
+        estado_cliente = cliente_selecionado.client_state.uf_name
+        preco_exibido = estado_cliente.lower()
+        
+        products = Product.objects.all()
+        codigo = request.GET.get('codigo')
+        descricao = request.GET.get('descricao')
+        grupo = request.GET.get('grupo')
+        marca = request.GET.get('marca')
+
+        if codigo:
+            products = products.filter(product_code__icontains=codigo)
+        if descricao:
+            products = products.filter(product_description__icontains=descricao)
+        if grupo:
+            products = products.filter(product_group__icontains=grupo)
+        if marca:
+            products = products.filter(product_brand__icontains=marca)
+
+        paginator = Paginator(products, 10)
+        page_number = request.GET.get('page')
+        product_list = paginator.get_page(page_number)
+    
+    form = GerarPedidoForm(initial={'cliente': cliente_selecionado})
+
+    context = {
+        'titulo': 'Gerar Pedido Manual',
+        'cliente_selecionado': cliente_selecionado,
+        'form_cliente': form,
+        'preco_exibido': preco_exibido,
+        'product_list': product_list,
+        'query_params': query_params, # Passa a string de consulta limpa para o template
+    }
+    return render(request, 'gerar_pedido_manual.html', context)
