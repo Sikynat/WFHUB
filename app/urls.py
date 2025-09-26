@@ -24,4 +24,5 @@ urlpatterns = [
     path('processar_upload/', views.processar_upload, name='processar_upload'),
     path('pedidos/exportar/<int:pedido_id>/', views.exportar_detalhes_pedido_cliente_excel, name='exportar_pedido_cliente_excel'),
     path('gerar-pedido/', views.gerar_pedido, name='gerar_pedido'),
+    path('dashboard/detalhes-admin/<int:pedido_id>/', views.detalhes_pedido_admin, name='detalhes_pedido_admin'),
 ]

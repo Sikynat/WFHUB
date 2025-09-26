@@ -104,7 +104,21 @@ class Pedido(models.Model):
         return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"
 
     def get_total_geral(self):
-        total = sum(item.get_total() for item in self.itens.all())
+        # A lógica agora garante que os valores sejam números antes de somar
+        total = 0
+        for item in self.itens.all():
+            if self.cliente.client_state.uf_name == 'SP':
+                valor = item.valor_unitario_sp
+            elif self.cliente.client_state.uf_name == 'ES':
+                valor = item.valor_unitario_es
+            else:
+                # Caso o estado não seja SP ou ES, usa SP como padrão
+                valor = item.valor_unitario_sp
+            
+            # Garante que o valor não seja nulo antes de multiplicar
+            valor_final = valor if valor is not None else 0
+            total += valor_final * (item.quantidade if item.quantidade is not None else 0)
+            
         return total
 
 # Modelo de Item do Pedido
@@ -121,6 +135,17 @@ class ItemPedido(models.Model):
         return f"{self.quantidade} x {self.produto.product_description} em {self.pedido.id}"
         
     def get_total(self):
-        # A lógica para o total pode ser atualizada para usar os novos campos
-        # Mas o ideal é fazer o cálculo na view para evitar o problema
-        pass
+        # **NOVO CÓDIGO AQUI**
+        # Lógica para o total do item
+        # Garante que o valor não seja nulo
+        valor_sp = self.valor_unitario_sp if self.valor_unitario_sp is not None else 0
+        valor_es = self.valor_unitario_es if self.valor_unitario_es is not None else 0
+
+        if self.pedido.cliente.client_state.uf_name == 'SP':
+            valor = valor_sp
+        elif self.pedido.cliente.client_state.uf_name == 'ES':
+            valor = valor_es
+        else:
+            valor = valor_sp # Valor padrão
+        
+        return valor * self.quantidade

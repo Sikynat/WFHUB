@@ -465,8 +465,11 @@ def detalhes_pedido(request, pedido_id):
 def dashboard_admin(request):
     total_clientes = WfClient.objects.count()
     total_pedidos = Pedido.objects.count()
-    total_vendas_agregadas = ItemPedido.objects.aggregate(total_vendas=Sum('produto__product_value'))
+    
+    # CORREÇÃO: Altere 'product_value' para 'product_value_sp' ou 'product_value_es'
+    total_vendas_agregadas = ItemPedido.objects.aggregate(total_vendas=Sum('produto__product_value_sp'))
     valor_total_vendas = total_vendas_agregadas['total_vendas'] if total_vendas_agregadas['total_vendas'] else 0
+    
     pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
     pedidos_com_total = []
     for pedido in pedidos_recentes_qs:
@@ -1011,3 +1014,44 @@ def gerar_pedido(request):
     
     # Se a requisição não for POST, redireciona de volta
     return redirect('home')
+
+@staff_member_required
+def detalhes_pedido_admin(request, pedido_id):
+    try:
+        # Puxa o pedido pelo ID (sem filtrar por cliente)
+        pedido = get_object_or_404(Pedido, id=pedido_id) 
+        
+        # A lógica para o administrador agora calcula e formata os itens
+        preco_exibido = 'todos'
+        itens_detalhes = []
+        total_geral = 0
+        itens = ItemPedido.objects.filter(pedido=pedido)
+
+        for item in itens:
+            valor_unitario_sp = item.valor_unitario_sp if item.valor_unitario_sp is not None else 0
+            valor_unitario_es = item.valor_unitario_es if item.valor_unitario_es is not None else 0
+            
+            valor_total_item = valor_unitario_sp * item.quantidade
+            total_geral += valor_total_item
+
+            itens_detalhes.append({
+                'item': item,
+                'valor_unitario': valor_unitario_sp, # Usando o valor de SP como padrão
+                'valor_total': valor_total_item,
+                'valor_unitario_sp': valor_unitario_sp,
+                'valor_unitario_es': valor_unitario_es
+            })
+
+        contexto = {
+            'titulo': f"Detalhes do Pedido #{pedido.id}",
+            'pedido': pedido,
+            'itens_detalhes': itens_detalhes, # Usando o nome de variável correto para o template
+            'total_geral': total_geral,
+            'preco_exibido': preco_exibido
+        }
+        
+        return render(request, 'detalhes_pedido.html', contexto)
+
+    except Pedido.DoesNotExist:
+        # Redireciona para o dashboard se o pedido não existir
+        return redirect('dashboard_admin')
