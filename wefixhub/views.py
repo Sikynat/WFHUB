@@ -21,6 +21,7 @@ from .models import Product, WfClient, Endereco, ItemPedido, Pedido
 from django.db import transaction
 from django.contrib import messages
 import datetime
+from decimal import Decimal
 
 
 
@@ -144,58 +145,58 @@ def gerar_pedido(request):
 def carrinho(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
     carrinho_detalhes = []
-    total_geral = 0
-    
-    # Lógica para determinar o valor de preço a ser usado
+    total_geral = Decimal('0.00')
+
     preco_exibido = None
-    if request.user.is_authenticated:
+
+    try:
         if request.user.is_staff:
             preco_exibido = 'todos'
         else:
-            try:
-                cliente_logado = request.user.wfclient
-                if cliente_logado.client_state.uf_name == 'SP':
-                    preco_exibido = 'sp'
-                elif cliente_logado.client_state.uf_name == 'ES':
-                    preco_exibido = 'es'
-            except WfClient.DoesNotExist:
-                pass
+            cliente_logado = request.user.wfclient
+            if cliente_logado.client_state.uf_name == 'SP':
+                preco_exibido = 'sp'
+            elif cliente_logado.client_state.uf_name == 'ES':
+                preco_exibido = 'es'
+    except WfClient.DoesNotExist:
+        pass
 
     for product_id, quantidade in carrinho_da_sessao.items():
         try:
-            product = Product.objects.get(product_id=product_id)
-            
-            # ALTERAÇÃO AQUI: A view do carrinho deve usar o preço atual do produto
-            # já que o pedido ainda não foi gerado. A lógica é a mesma que você já tem.
+            product = get_object_or_404(Product, product_id=product_id)
+
             if preco_exibido == 'sp':
                 valor_unitario = product.product_value_sp
             elif preco_exibido == 'es':
                 valor_unitario = product.product_value_es
             elif preco_exibido == 'todos':
-                valor_unitario = product.product_value_sp # Ou ES, à sua escolha
+                valor_unitario = product.product_value_sp
             else:
-                valor_unitario = 0
+                valor_unitario = Decimal('0.00')
 
             valor_total_item = valor_unitario * quantidade
             total_geral += valor_total_item
-            
+
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
                 'valor_unitario': valor_unitario,
-                'valor_total': valor_total_item
+                'valor_total': valor_total_item,
+                'valor_unitario_formatado': f"R$ {valor_unitario.quantize(Decimal('0.01'))}".replace('.', ','),
+                'valor_total_formatado': f"R$ {valor_total_item.quantize(Decimal('0.01'))}".replace('.', ','),
             })
         except Product.DoesNotExist:
             continue
-    
+
     contexto = {
         'titulo': 'Carrinho de Compras',
         'carrinho_detalhes': carrinho_detalhes,
         'total_geral': total_geral,
-        'preco_exibido': preco_exibido
+        'total_geral_formatado': f"R$ {total_geral.quantize(Decimal('0.01'))}".replace('.', ','),
+        'preco_exibido': preco_exibido,
     }
-    
     return render(request, 'carrinho.html', contexto)
+
 
 # Fim do carrinho
 

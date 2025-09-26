@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Carrinho de Compras{% endblock %}
+{% block title %}Seu Carrinho de Compras{% endblock %}
 
 {% block content %}
     <h1>Seu Carrinho de Compras</h1>
@@ -23,17 +23,17 @@
                         <tr>
                             <td>{{ item.product.product_code }}</td>
                             <td>{{ item.product.product_description }}</td>
-                            <td>R$ {{ item.product.product_value }}</td>
+                            <td class="valor-unitario" data-value="{{ item.valor_unitario }}">{{ item.valor_unitario_formatado }}</td>
                             <td>
                                 <input
                                     type="number"
                                     name="quantidade_{{ item.product.product_id }}"
                                     value="{{ item.quantidade }}"
                                     min="1"
-                                    class="form-control"
+                                    class="form-control quantidade-input"
                                     style="width: 80px;">
                             </td>
-                            <td>R$ {{ item.valor_total|floatformat:2 }}</td>
+                            <td class="subtotal">{{ item.valor_total_formatado }}</td>
                             <td>
                                 <a href="{% url 'remover_item' item.product.product_id %}" class="btn btn-danger btn-sm">Remover</a>
                             </td>
@@ -43,7 +43,7 @@
                 <tfoot>
                     <tr>
                         <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
-                        <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
+                        <td id="grand-total-container"><strong id="grand-total">{{ total_geral_formatado }}</strong></td>
                         <td>
                             <button type="submit" class="btn btn-success">Atualizar</button>
                         </td>
@@ -53,9 +53,50 @@
         </form>
         <a href="{% url 'limpar_carrinho' %}" class="btn btn-warning">Limpar Carrinho</a>
         <a href="{% url 'home' %}" class="btn btn-secondary">Continuar Comprando</a>
-      <a href="{% url 'checkout' %}" class="btn btn-success">Finalizar Pedido</a>
+        <a href="{% url 'checkout' %}" class="btn btn-success">Finalizar Pedido</a>
     {% else %}
         <p class="alert alert-info">Seu carrinho de compras está vazio.</p>
         <a href="{% url 'home' %}" class="btn btn-primary">Voltar para a Loja</a>
     {% endif %}
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const quantidadeInputs = document.querySelectorAll('.quantidade-input');
+        const grandTotalElement = document.getElementById('grand-total');
+
+        function updateTotals(inputElement) {
+            const row = inputElement.closest('tr');
+            
+            // ALTERAÇÃO CRUCIAL AQUI: Substitui a vírgula por ponto antes de converter
+            const valorUnitario = parseFloat(row.querySelector('.valor-unitario').dataset.value.replace(',', '.'));
+            const quantidade = parseFloat(inputElement.value);
+
+            if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
+                const total = valorUnitario * quantidade;
+                row.querySelector('.subtotal').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+            }
+            updateGrandTotal();
+        }
+
+        function updateGrandTotal() {
+            let totalGeral = 0;
+            quantidadeInputs.forEach(input => {
+                const row = input.closest('tr');
+                const subtotalText = row.querySelector('.subtotal').innerText;
+                const subtotal = parseFloat(subtotalText.replace('R$ ', '').replace(',', '.'));
+                if (!isNaN(subtotal)) {
+                    totalGeral += subtotal;
+                }
+            });
+            grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
+        }
+
+        quantidadeInputs.forEach(input => {
+            input.addEventListener('input', function() {
+                updateTotals(this);
+            });
+            updateTotals(input);
+        });
+    });
+</script>
 {% endblock %}
