@@ -82,32 +82,8 @@
         
     </form>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            const confirmarCompraBtn = document.querySelector('button[type="submit"]');
-
-            if (confirmarCompraBtn) {
-                confirmarCompraBtn.addEventListener('click', () => {
-                    const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-                    quantidadeInputs.forEach(input => {
-                        localStorage.removeItem(input.id);
-                    });
-                });
-            }
-        });
-
-        // limpa cache
-
-        function limparCache() {
-        const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-        quantidadeInputs.forEach(input => {
-            localStorage.removeItem(input.id);
-        });
-        location.reload();
-    }
-
-
-    </script>
+ 
+        
 
 
 {% endblock %}

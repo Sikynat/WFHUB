@@ -22,7 +22,7 @@ from django.db import transaction
 from django.contrib import messages
 import datetime
 from decimal import Decimal
-
+import json
 
 
 # View para a página inicial com filtros e paginação
@@ -33,7 +33,7 @@ def home(request):
     grupo = request.GET.get('grupo', None)
     marca = request.GET.get('marca', None)
 
-    # NOVO FILTRO: Apenas produtos com data de hoje
+    # Apenas produtos com data de hoje
     products = Product.objects.filter(date_product=datetime.date.today()).order_by('product_code')
 
     if codigo:
@@ -45,7 +45,6 @@ def home(request):
     if marca:
         products = products.filter(product_brand__icontains=marca)
     
-    # Lógica de controle de preço
     preco_exibido = None
     cliente_logado = None
 
@@ -57,21 +56,21 @@ def home(request):
                 cliente_logado = request.user.wfclient
                 if cliente_logado.client_state.uf_name == 'SP':
                     preco_exibido = 'sp'
-                    # FILTRO: Remove produtos com valor 0 para SP
                     products = products.exclude(product_value_sp=0)
                 elif cliente_logado.client_state.uf_name == 'ES':
                     preco_exibido = 'es'
-                    # FILTRO: Remove produtos com valor 0 para ES
                     products = products.exclude(product_value_es=0)
             except WfClient.DoesNotExist:
-                # Se não for cliente de SP ou ES, não exibe produtos
                 products = Product.objects.none()
     
-    # Se o usuário não estiver autenticado, não exibe nenhum produto
     if not request.user.is_authenticated:
         products = Product.objects.none()
     
-    # Paginação
+    # Prepara os produtos para o template, formatando os valores
+    for product in products:
+        product.valor_sp_formatado = f"{product.product_value_sp.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_sp else "0,00"
+        product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
+    
     paginator = Paginator(products, 10) 
     page = request.GET.get('page')
 
@@ -89,6 +88,8 @@ def home(request):
     }
             
     return render(request, 'home.html', context)
+
+
 """
     # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
@@ -122,18 +123,34 @@ def home(request):
 @login_required
 def gerar_pedido(request):
     if request.method == 'POST':
-        carrinho_da_sessao = {}
-        for key, value in request.POST.items():
-            if key.startswith('quantidade_') and value.isdigit() and int(value) > 0:
-                product_id = key.split('_')[1]
-                quantidade = int(value)
-                carrinho_da_sessao[product_id] = quantidade
+        # Recebe os dados do carrinho enviados via campo hidden
+        cart_data_json = request.POST.get('cart_data', '{}')
         
-        request.session['carrinho'] = carrinho_da_sessao
-        request.session.modified = True
-        
-        return redirect('checkout')
+        try:
+            carrinho_da_sessao = json.loads(cart_data_json)
+            
+            # Filtra produtos com quantidade zero
+            carrinho_filtrado = {
+                product_id: quantidade
+                for product_id, quantidade in carrinho_da_sessao.items()
+                if quantidade > 0
+            }
+            
+            if not carrinho_filtrado:
+                messages.error(request, 'Seu carrinho está vazio.')
+                return redirect('home')
+
+            # Salva o carrinho na sessão
+            request.session['carrinho'] = carrinho_filtrado
+
+            # Redireciona para a página de checkout
+            return redirect('checkout')
+
+        except json.JSONDecodeError:
+            messages.error(request, 'Erro ao processar os dados do carrinho.')
+            return redirect('home')
     
+    # Se a requisição não for POST, redireciona de volta
     return redirect('home')
 
 
@@ -146,7 +163,7 @@ def carrinho(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
     carrinho_detalhes = []
     total_geral = Decimal('0.00')
-
+    
     preco_exibido = None
 
     try:
@@ -164,7 +181,7 @@ def carrinho(request):
     for product_id, quantidade in carrinho_da_sessao.items():
         try:
             product = get_object_or_404(Product, product_id=product_id)
-
+            
             if preco_exibido == 'sp':
                 valor_unitario = product.product_value_sp
             elif preco_exibido == 'es':
@@ -180,7 +197,7 @@ def carrinho(request):
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
-                'valor_unitario': valor_unitario,
+                'valor_unitario': valor_unitario, # Valor numérico para o JavaScript
                 'valor_total': valor_total_item,
                 'valor_unitario_formatado': f"R$ {valor_unitario.quantize(Decimal('0.01'))}".replace('.', ','),
                 'valor_total_formatado': f"R$ {valor_total_item.quantize(Decimal('0.01'))}".replace('.', ','),
@@ -191,12 +208,11 @@ def carrinho(request):
     contexto = {
         'titulo': 'Carrinho de Compras',
         'carrinho_detalhes': carrinho_detalhes,
-        'total_geral': total_geral,
+        'total_geral': total_geral, # Valor numérico para o JavaScript
         'total_geral_formatado': f"R$ {total_geral.quantize(Decimal('0.01'))}".replace('.', ','),
         'preco_exibido': preco_exibido,
     }
     return render(request, 'carrinho.html', contexto)
-
 
 # Fim do carrinho
 
@@ -310,10 +326,12 @@ def checkout(request):
         if 'carrinho' in request.session:
             del request.session['carrinho']
 
-        # CÓDIGO A SER EXECUTADO
-        response = HttpResponse('<script>localStorage.clear(); window.location.href = "/";</script>')
-        return response
+        # CÓDIGO A SER EXECUTADO AGORA
+        # Adiciona a mensagem de sucesso e redireciona para a página inicial
+        messages.success(request, 'Seu pedido foi realizado com sucesso!')
+        return redirect('home')
     
+    # Este é o bloco de código que roda apenas no método GET
     enderecos = Endereco.objects.filter(cliente=cliente_logado)
     contexto = {
         'titulo': 'Confirmação de Compra',
@@ -322,6 +340,7 @@ def checkout(request):
         'enderecos': enderecos,
         'preco_exibido': preco_exibido,
     }
+
     return render(request, 'checkout.html', contexto)
 
 
@@ -959,3 +978,36 @@ def processar_upload(request):
             return redirect('pagina_upload')
 
     return render(request, 'upload_planilha.html')
+
+@login_required
+def gerar_pedido(request):
+    if request.method == 'POST':
+        # Recebe os dados do carrinho enviados via campo hidden
+        cart_data_json = request.POST.get('cart_data', '{}')
+        
+        try:
+            carrinho_da_sessao = json.loads(cart_data_json)
+            
+            # Filtra produtos com quantidade zero
+            carrinho_filtrado = {
+                product_id: quantidade
+                for product_id, quantidade in carrinho_da_sessao.items()
+                if quantidade > 0
+            }
+            
+            if not carrinho_filtrado:
+                messages.error(request, 'Seu carrinho está vazio.')
+                return redirect('home')
+
+            # Salva o carrinho na sessão
+            request.session['carrinho'] = carrinho_filtrado
+
+            # Redireciona para a página de checkout
+            return redirect('checkout')
+
+        except json.JSONDecodeError:
+            messages.error(request, 'Erro ao processar os dados do carrinho.')
+            return redirect('home')
+    
+    # Se a requisição não for POST, redireciona de volta
+    return redirect('home')

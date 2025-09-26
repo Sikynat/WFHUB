@@ -33,8 +33,10 @@
 
     <hr>
     
-    <form action="{% url 'gerar_pedido' %}" method="post">
+    <form id="gerar-pedido-form" action="{% url 'gerar_pedido' %}" method="post">
         {% csrf_token %}
+        <input type="hidden" name="cart_data" id="cart-data-input">
+        
         <table class="table table-striped">
             <thead>
                 <tr>
@@ -62,12 +64,12 @@
                     <td>{{ product.product_group }}</td>
                     <td>{{ product.product_brand }}</td>
                     {% if preco_exibido == 'sp' %}
-                        <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.product_value_sp }}</td>
+                        <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
                     {% elif preco_exibido == 'es' %}
-                        <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.product_value_es }}</td>
+                        <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
                     {% elif preco_exibido == 'todos' %}
-                        <td>{{ product.product_value_sp }}</td>
-                        <td>{{ product.product_value_es }}</td>
+                        <td>{{ product.valor_sp_formatado }}</td>
+                        <td>{{ product.valor_es_formatado }}</td>
                     {% endif %}
                     <td>
                         <input
@@ -78,7 +80,7 @@
                             class="form-control sm">
                     </td>
                     <td>
-                        <span id="total_{{ product.product_id }}">R$ 0.00</span>
+                        <span id="total_{{ product.product_id }}">R$ 0,00</span>
                     </td>
                 </tr>
                 {% empty %}
@@ -90,7 +92,7 @@
             <tfoot>
                 <tr>
                     <td colspan="6" class="text-end"><strong>Total Geral:</strong></td>
-                    <td><strong id="grand-total">R$ 0.00</strong></td>
+                    <td><strong id="grand-total">R$ 0,00</strong></td>
                 </tr>
             </tfoot>
         </table>
@@ -128,26 +130,57 @@
             const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
             const grandTotalElement = document.getElementById('grand-total');
 
-            // 1. Lógica para verificar a mensagem e limpar o cache
-            const messagesDiv = document.querySelector('.messages');
-            if (messagesDiv && messagesDiv.querySelector('.alert-success')) {
-                limparLocalStorage();
-                // Opcional: recarregar a página para garantir que os inputs estejam zerados
-                // location.reload();
+            const messagesContainer = document.querySelector('.mt-3');
+            const successMessage = messagesContainer ? messagesContainer.querySelector('.alert-success') : null;
+
+            if (successMessage) {
+                localStorage.clear();
+            } else {
+                loadAndCalculateTotals();
             }
 
-            // 2. Lógica para carregar os valores do localStorage
+            // Nova função para coletar os dados do localStorage e preencher o campo hidden
+            document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
+                const cartData = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('quantidade_')) {
+                        const savedItem = localStorage.getItem(key);
+                        if (savedItem) {
+                            try {
+                                const itemData = JSON.parse(savedItem);
+                                if (itemData.quantidade > 0) {
+                                    cartData[key.split('_')[1]] = itemData.quantidade;
+                                }
+                            } catch (error) {
+                                console.error('Erro ao processar item do localStorage:', error);
+                            }
+                        }
+                    }
+                }
+                document.getElementById('cart-data-input').value = JSON.stringify(cartData);
+            });
+
+
             function loadAndCalculateTotals() {
                 quantidadeInputs.forEach(input => {
-                    const savedValue = localStorage.getItem(input.id);
-                    if (savedValue !== null && savedValue !== '0') {
-                        input.value = savedValue;
+                    const savedItem = localStorage.getItem(input.id);
+                    if (savedItem) {
+                        try {
+                            const itemData = JSON.parse(savedItem);
+                            if (itemData && itemData.quantidade > 0) {
+                                input.value = itemData.quantidade;
+                            } else {
+                                input.value = 0;
+                            }
+                        } catch (e) {
+                            input.value = 0;
+                        }
                     }
                     updateTotals(input);
                 });
             }
 
-            // 3. Funções de cálculo de totais
             function updateTotals(inputElement) {
                 const row = inputElement.closest('tr');
                 const valorUnitarioElement = row.querySelector('.product-value');
@@ -156,12 +189,12 @@
                     return;
                 }
                 
-                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value);
+                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
                 const quantidade = parseFloat(inputElement.value);
 
                 if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
                     const total = valorUnitario * quantidade;
-                    row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2)}`;
+                    row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
                 }
 
                 updateGrandTotal();
@@ -169,47 +202,45 @@
 
             function updateGrandTotal() {
                 let totalGeral = 0;
-                quantidadeInputs.forEach(input => {
-                    const row = input.closest('tr');
-                    const valorUnitarioElement = row.querySelector('.product-value');
-                    
-                    if (!valorUnitarioElement) {
-                        return;
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('quantidade_')) {
+                        const savedItem = localStorage.getItem(key);
+                        if (savedItem) {
+                            try {
+                                const itemData = JSON.parse(savedItem);
+                                if (!isNaN(itemData.valor) && !isNaN(itemData.quantidade)) {
+                                    totalGeral += itemData.valor * itemData.quantidade;
+                                }
+                            } catch (e) {
+                                // Ignora itens mal formatados
+                            }
+                        }
                     }
-
-                    const valorUnitario = parseFloat(valorUnitarioElement.dataset.value);
-                    const quantidade = parseFloat(input.value);
-                    if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
-                        totalGeral += valorUnitario * quantidade;
-                    }
-                });
-                grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2)}`;
+                }
+                grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
             }
 
-            // 4. Listeners para atualizar os totais
             quantidadeInputs.forEach(input => {
                 input.addEventListener('input', (e) => {
-                    localStorage.setItem(e.target.id, e.target.value);
+                    const row = e.target.closest('tr');
+                    const valorUnitarioElement = row.querySelector('.product-value');
+                    const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
+                    
+                    const itemData = {
+                        quantidade: parseFloat(e.target.value),
+                        valor: valorUnitario
+                    };
+                    localStorage.setItem(e.target.id, JSON.stringify(itemData));
+                    
                     updateTotals(e.target);
                 });
             });
-
-            // Chama a função principal de inicialização
-            loadAndCalculateTotals();
         });
-
-        // Funções globais para o botão "Limpar Carrinho"
+        
         function limparCache() {
-            limparLocalStorage();
+            localStorage.clear();
             location.reload();
-        }
-
-        // Função que realmente limpa o localStorage
-        function limparLocalStorage() {
-            const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-            quantidadeInputs.forEach(input => {
-                localStorage.removeItem(input.id);
-            });
         }
     </script>
 {% endblock %}
