@@ -63,13 +63,15 @@
             </tr>
         </tfoot>
     </table>
-    
-    {% if user.is_staff %}
-    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-3">Voltar para o Dashboard</a>
-    <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel (Admin)</a>
-{% else %}
-    <a href="{% url 'pedidos' %}" class="btn btn-secondary mt-3">Voltar para o Histórico</a>
-    <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel</a>
-{% endif %}
+    <div class="mt-4 mb-4">
+              {% if user.is_staff %}
+                    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-3">Voltar para o Dashboard</a>
+                    <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel (Admin)</a>
+                {% else %}
+                    <a href="{% url 'pedidos' %}" class="btn btn-secondary mt-3">Voltar para o Histórico</a>
+                    <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-primary mt-3">Exportar para Excel</a>
+                {% endif %}
+    </div>
+  
 
 {% endblock %}

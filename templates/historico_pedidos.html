@@ -5,7 +5,8 @@
     <h1>Seus Pedidos</h1>
     <hr>
     {% if pedidos %}
-        <table class="table table-striped">
+    <div class="table-responsive">
+         <table class="table table-striped">
             <thead>
                 <tr>
                     <th>Número do Pedido</th>
@@ -27,6 +28,8 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+       
 
         {% if pedidos.has_other_pages %}
             <nav aria-label="Navegação de Páginas">
