@@ -51,6 +51,9 @@
                          <li>
                             <a class="nav-link btn btn-secondary me-2" href="{% url 'pagina_upload' %}">Fazer Upload de Planilhas</a>
                         </li>
+                        <li>
+                            <a class="nav-link btn btn-secondary me-2" href="{% url 'pedidos_para_hoje' %}">Pedidos de Hoje</a>
+                        </li>
                     {% else %}
                         <li class="nav-item">
                             <a class="nav-link btn btn-success me-2" href="{% url 'carrinho' %}">Ver Carrinho</a>
@@ -66,6 +69,8 @@
                                 <a class="nav-link btn btn-secondary me-2" href="{% url 'editar_perfil' %}">Editar Endereço</a>
                             </li>
                     <li class="nav-item">
+
+                    
                         <form action="{% url 'logout' %}" method="post">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-danger">Sair</button>

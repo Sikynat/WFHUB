@@ -37,65 +37,75 @@
         {% csrf_token %}
         <input type="hidden" name="cart_data" id="cart-data-input">
         <div class="table-responsive">
-                 <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Código do Produto</th>
-                    <th>Descrição do Produto</th>
-                    <th>Grupo</th>
-                    <th>Marca</th>
-                    {% if preco_exibido == 'sp' %}
-                        <th>Valor (SP)</th>
-                    {% elif preco_exibido == 'es' %}
-                        <th>Valor (ES)</th>
-                    {% elif preco_exibido == 'todos' %}
-                        <th>Valor (SP)</th>
-                        <th>Valor (ES)</th>
-                    {% endif %}
-                    <th>Quantidade</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in product_list %}
-                <tr>
-                    <td>{{ product.product_code }}</td>
-                    <td>{{ product.product_description }}</td>
-                    <td>{{ product.product_group }}</td>
-                    <td>{{ product.product_brand }}</td>
-                    {% if preco_exibido == 'sp' %}
-                        <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                    {% elif preco_exibido == 'es' %}
-                        <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
-                    {% elif preco_exibido == 'todos' %}
-                        <td>{{ product.valor_sp_formatado }}</td>
-                        <td>{{ product.valor_es_formatado }}</td>
-                    {% endif %}
-                    <td>
-                        <input
-                            type="number"
-                            name="quantidade_{{ product.product_id }}"
-                            id="quantidade_{{ product.product_id }}"
-                            min="0"
-                            class="form-control sm input-quantidade">
-                    </td>
-                    <td>
-                        <span id="total_{{ product.product_id }}">R$ 0,00</span>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7">Nenhum produto cadastrado.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="6" class="text-end"><strong>Total Geral:</strong></td>
-                    <td><strong id="grand-total">R$ 0,00</strong></td>
-                </tr>
-            </tfoot>
-        </table>
+             <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Código do Produto</th>
+                        <th>Descrição do Produto</th>
+                        <th>Grupo</th>
+                        <th>Marca</th>
+                        {% if preco_exibido == 'sp' %}
+                            <th>Valor (SP)</th>
+                        {% elif preco_exibido == 'es' %}
+                            <th>Valor (ES)</th>
+                        {% elif preco_exibido == 'todos' %}
+                            <th>Valor (SP)</th>
+                            <th>Valor (ES)</th>
+                        {% endif %}
+                        {% if not user.is_staff %}
+                            <th>Quantidade</th>
+                            <th>Total</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in product_list %}
+                    <tr>
+                        <td>{{ product.product_code }}</td>
+                        <td>{{ product.product_description }}</td>
+                        <td>{{ product.product_group }}</td>
+                        <td>{{ product.product_brand }}</td>
+                        {% if preco_exibido == 'sp' %}
+                            <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
+                        {% elif preco_exibido == 'es' %}
+                            <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                        {% elif preco_exibido == 'todos' %}
+                            <td>{{ product.valor_sp_formatado }}</td>
+                            <td>{{ product.valor_es_formatado }}</td>
+                        {% endif %}
+                        {% if not user.is_staff %}
+                        <td>
+                            <input
+                                type="number"
+                                name="quantidade_{{ product.product_id }}"
+                                id="quantidade_{{ product.product_id }}"
+                                min="0"
+                                class="form-control sm input-quantidade">
+                        </td>
+                        <td>
+                            <span id="total_{{ product.product_id }}">R$ 0,00</span>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        {% if not user.is_staff %}
+                             <td colspan="7">Nenhum produto cadastrado.</td>
+                        {% else %}
+                             <td colspan="5">Nenhum produto cadastrado.</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if not user.is_staff %}
+                <tfoot>
+                    <tr>
+                        <td colspan="6" class="text-end"><strong>Total Geral:</strong></td>
+                        <td><strong id="grand-total">R$ 0,00</strong></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
         </div>
        
 

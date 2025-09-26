@@ -26,6 +26,7 @@ import json
 
 
 # View para a página inicial com filtros e paginação
+@login_required
 def home(request):
     # Lógica de filtragem e busca
     codigo = request.GET.get('codigo', None)
@@ -1021,31 +1022,38 @@ def detalhes_pedido_admin(request, pedido_id):
         # Puxa o pedido pelo ID (sem filtrar por cliente)
         pedido = get_object_or_404(Pedido, id=pedido_id) 
         
-        # A lógica para o administrador agora calcula e formata os itens
-        preco_exibido = 'todos'
+        # Obtém o estado do cliente do pedido
+        estado_cliente = pedido.cliente.client_state.uf_name
+
+        # Define qual preço será exibido, com base no estado do cliente
+        # A variável 'preco_exibido' agora não depende se é admin ou não
+        preco_exibido = 'sp' if estado_cliente == 'SP' else 'es'
+
         itens_detalhes = []
         total_geral = 0
         itens = ItemPedido.objects.filter(pedido=pedido)
 
         for item in itens:
-            valor_unitario_sp = item.valor_unitario_sp if item.valor_unitario_sp is not None else 0
-            valor_unitario_es = item.valor_unitario_es if item.valor_unitario_es is not None else 0
+            # Seleciona o valor unitário correto com base no estado do cliente
+            valor_unitario = item.valor_unitario_sp if estado_cliente == 'SP' else item.valor_unitario_es
             
-            valor_total_item = valor_unitario_sp * item.quantidade
+            # Garante que o valor não seja None
+            if valor_unitario is None:
+                valor_unitario = 0
+
+            valor_total_item = valor_unitario * item.quantidade
             total_geral += valor_total_item
 
             itens_detalhes.append({
                 'item': item,
-                'valor_unitario': valor_unitario_sp, # Usando o valor de SP como padrão
+                'valor_unitario': valor_unitario,
                 'valor_total': valor_total_item,
-                'valor_unitario_sp': valor_unitario_sp,
-                'valor_unitario_es': valor_unitario_es
             })
 
         contexto = {
             'titulo': f"Detalhes do Pedido #{pedido.id}",
             'pedido': pedido,
-            'itens_detalhes': itens_detalhes, # Usando o nome de variável correto para o template
+            'itens_detalhes': itens_detalhes,
             'total_geral': total_geral,
             'preco_exibido': preco_exibido
         }
@@ -1055,3 +1063,20 @@ def detalhes_pedido_admin(request, pedido_id):
     except Pedido.DoesNotExist:
         # Redireciona para o dashboard se o pedido não existir
         return redirect('dashboard_admin')
+    
+@staff_member_required
+def pedidos_para_hoje(request):
+    """
+    View que filtra e exibe os pedidos agendados para a data atual.
+    """
+    # Pega a data de hoje, sem a hora
+    hoje = timezone.localdate()
+
+    # Filtra os pedidos onde a data_envio_solicitada é igual à data de hoje
+    pedidos_hoje = Pedido.objects.filter(data_envio_solicitada=hoje)
+
+    context = {
+        'pedidos_hoje': pedidos_hoje,
+        'data_hoje': hoje,
+    }
+    return render(request, 'pedidos/pedidos_hoje.html', context)

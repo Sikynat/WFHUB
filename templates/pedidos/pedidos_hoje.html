@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+
+
+<div class="container mt-5">
+    <h1 class="display-6 fw-bold mb-4">Pedidos para Saída em {{ data_hoje|date:"d/m/Y" }}</h1>
+    
+    {% if pedidos_hoje %}
+        {% for pedido in pedidos_hoje %}
+        <div class="card mb-3 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title">Pedido #{{ pedido.id }}</h5>
+                    <span class="badge bg-{% if pedido.status == 'PENDENTE' %}warning text-dark{% elif pedido.status == 'EM_ENVIO' %}primary{% elif pedido.status == 'ENTREGUE' %}success{% else %}secondary{% endif %}">
+                        {{ pedido.get_status_display }}
+                    </span>
+                </div>
+                <h6 class="card-subtitle mb-2 text-muted">Cliente: {{ pedido.cliente.client_name }}</h6>
+                <p class="card-text mb-1"><strong>Data de Envio Solicitada:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
+                <p class="card-text mb-3"><strong>Endereço:</strong> {{ pedido.endereco }}</p>
+                <a href="{% url 'detalhes_pedido_admin' pedido.id %}" class="btn btn-outline-primary btn-sm">
+                    Ver Detalhes
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info text-center" role="alert">
+            <h4 class="alert-heading">Nenhum Pedido Hoje!</h4>
+            <p class="mb-0">Não há pedidos agendados para saída na data de hoje.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
