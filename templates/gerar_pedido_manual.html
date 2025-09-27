@@ -23,9 +23,8 @@
         <h2>Produtos para Pedido</h2>
 
         <form action="" method="get" class="mb-3">
-            <div class="input-group">
+             <div class="input-group">
                 <input type="hidden" name="cliente" value="{{ cliente_selecionado.client_id }}">
-
                 <input type="text" name="codigo" placeholder="Código" class="form-control" value="{{ request.GET.codigo }}">
                 <input type="text" name="descricao" placeholder="Descrição" class="form-control" value="{{ request.GET.descricao }}">
                 <input type="text" name="grupo" placeholder="Grupo" class="form-control" value="{{ request.GET.grupo }}">
@@ -37,10 +36,34 @@
 
         <hr>
         
-        <form id="gerar-pedido-form" action="{% url 'gerar_pedido' %}" method="post">
+        <form id="gerar-pedido-form" action="{% url 'processar_pedido_manual' %}" method="post">
             {% csrf_token %}
             <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
             <input type="hidden" name="cart_data" id="cart-data-input">
+
+            <div class="card mb-4 mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Detalhes de Envio</h5>
+                    <div class="mb-3">
+                        <label for="endereco_selecionado" class="form-label">Endereço de Entrega:</label>
+                        <select id="endereco_selecionado" name="endereco_selecionado" class="form-control" required>
+                            {% if enderecos %}
+                                <option value="">Selecione um endereço</option>
+                                {% for endereco in enderecos %}
+                                    <option value="{{ endereco.id }}">{{ endereco.logradouro }}, {{ endereco.numero }} - {{ endereco.cidade }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="">Nenhum endereço cadastrado para este cliente.</option>
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="data_envio" class="form-label">Data de Envio Solicitada:</label>
+                        <input type="date" id="data_envio" name="data_envio" class="form-control" required>
+                    </div>
+                </div>
+            </div>
 
             <div class="table-responsive">
                  <table class="table table-striped">
@@ -137,4 +160,122 @@
         <p>Por favor, selecione um cliente para começar a gerar um pedido.</p>
     {% endif %}
 
+   <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
+            const grandTotalElement = document.getElementById('grand-total');
+
+            const messagesContainer = document.querySelector('.mt-3');
+            const successMessage = messagesContainer ? messagesContainer.querySelector('.alert-success') : null;
+
+            if (successMessage) {
+                localStorage.clear();
+            } else {
+                loadAndCalculateTotals();
+            }
+
+            // Nova função para coletar os dados do localStorage e preencher o campo hidden
+            document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
+                const cartData = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('quantidade_')) {
+                        const savedItem = localStorage.getItem(key);
+                        if (savedItem) {
+                            try {
+                                const itemData = JSON.parse(savedItem);
+                                if (itemData.quantidade > 0) {
+                                    cartData[key.split('_')[1]] = itemData.quantidade;
+                                }
+                            } catch (error) {
+                                console.error('Erro ao processar item do localStorage:', error);
+                            }
+                        }
+                    }
+                }
+                document.getElementById('cart-data-input').value = JSON.stringify(cartData);
+            });
+
+
+            function loadAndCalculateTotals() {
+                quantidadeInputs.forEach(input => {
+                    const savedItem = localStorage.getItem(input.id);
+                    if (savedItem) {
+                        try {
+                            const itemData = JSON.parse(savedItem);
+                            if (itemData && itemData.quantidade > 0) {
+                                input.value = itemData.quantidade;
+                            } else {
+                                input.value = 0;
+                            }
+                        } catch (e) {
+                            input.value = 0;
+                        }
+                    }
+                    updateTotals(input);
+                });
+            }
+
+            function updateTotals(inputElement) {
+                const row = inputElement.closest('tr');
+                const valorUnitarioElement = row.querySelector('.product-value');
+
+                if (!valorUnitarioElement) {
+                    return;
+                }
+                
+                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
+                const quantidade = parseFloat(inputElement.value);
+
+                if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
+                    const total = valorUnitario * quantidade;
+                    row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+                }
+
+                updateGrandTotal();
+            }
+
+            function updateGrandTotal() {
+                let totalGeral = 0;
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('quantidade_')) {
+                        const savedItem = localStorage.getItem(key);
+                        if (savedItem) {
+                            try {
+                                const itemData = JSON.parse(savedItem);
+                                if (!isNaN(itemData.valor) && !isNaN(itemData.quantidade)) {
+                                    totalGeral += itemData.valor * itemData.quantidade;
+                                }
+                            } catch (e) {
+                                // Ignora itens mal formatados
+                            }
+                        }
+                    }
+                }
+                grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
+            }
+
+            quantidadeInputs.forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const row = e.target.closest('tr');
+                    const valorUnitarioElement = row.querySelector('.product-value');
+                    const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
+                    
+                    const itemData = {
+                        quantidade: parseFloat(e.target.value),
+                        valor: valorUnitario
+                    };
+                    localStorage.setItem(e.target.id, JSON.stringify(itemData));
+                    
+                    updateTotals(e.target);
+                });
+            });
+        });
+        
+        function limparCache() {
+            localStorage.clear();
+            location.reload();
+        }
+    </script>
 {% endblock %}

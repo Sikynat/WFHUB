@@ -27,4 +27,5 @@ urlpatterns = [
     path('dashboard/detalhes-admin/<int:pedido_id>/', views.detalhes_pedido_admin, name='detalhes_pedido_admin'),
     path('pedidos/hoje/', views.pedidos_para_hoje, name='pedidos_para_hoje'),
     path('gerar-pedido-manual/', views.gerar_pedido_manual, name='gerar_pedido_manual'),
+    path('processar-pedido-manual/', views.processar_pedido_manual, name='processar_pedido_manual'),
 ]

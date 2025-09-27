@@ -126,8 +126,14 @@ def home(request):
 def gerar_pedido(request):
     if request.method == 'POST':
         # Recebe os dados do carrinho enviados via campo hidden
+        # Garante que o valor padrão seja uma string JSON válida
         cart_data_json = request.POST.get('cart_data', '{}')
         
+        # Se a string estiver vazia, redireciona com uma mensagem de erro
+        if not cart_data_json:
+            messages.error(request, 'Erro ao processar os dados do carrinho.')
+            return redirect('home')
+
         try:
             carrinho_da_sessao = json.loads(cart_data_json)
             
@@ -1087,21 +1093,23 @@ def gerar_pedido_manual(request):
     cliente_selecionado = None
     preco_exibido = 'todos'
     product_list = []
-
-    cliente_id = request.GET.get('cliente')
     
-    # Prepara os parâmetros GET para o template, removendo 'page'
-    # Esta é a parte crucial
     query_params = request.GET.copy()
     if 'page' in query_params:
         query_params.pop('page')
 
+    cliente_id = request.GET.get('cliente')
+    enderecos = []
+    
     if cliente_id:
         cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
         estado_cliente = cliente_selecionado.client_state.uf_name
         preco_exibido = estado_cliente.lower()
+        enderecos = Endereco.objects.filter(cliente=cliente_selecionado)
         
-        products = Product.objects.all()
+        hoje = timezone.localdate()
+        products = Product.objects.filter(date_product=hoje).order_by('product_code')
+
         codigo = request.GET.get('codigo')
         descricao = request.GET.get('descricao')
         grupo = request.GET.get('grupo')
@@ -1115,19 +1123,88 @@ def gerar_pedido_manual(request):
             products = products.filter(product_group__icontains=grupo)
         if marca:
             products = products.filter(product_brand__icontains=marca)
-
+        
+        for product in products:
+            if estado_cliente == 'SP':
+                if product.product_value_sp is not None:
+                    product.valor_sp_formatado = f"R$ {product.product_value_sp:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                else:
+                    product.valor_sp_formatado = "N/A"
+            elif estado_cliente == 'ES':
+                if product.product_value_es is not None:
+                    product.valor_es_formatado = f"R$ {product.product_value_es:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                else:
+                    product.valor_es_formatado = "N/A"
+            else:
+                product.valor_formatado = "N/A"
+            
         paginator = Paginator(products, 10)
         page_number = request.GET.get('page')
         product_list = paginator.get_page(page_number)
     
     form = GerarPedidoForm(initial={'cliente': cliente_selecionado})
-
+    
     context = {
         'titulo': 'Gerar Pedido Manual',
         'cliente_selecionado': cliente_selecionado,
         'form_cliente': form,
         'preco_exibido': preco_exibido,
         'product_list': product_list,
-        'query_params': query_params, # Passa a string de consulta limpa para o template
+        'query_params': query_params,
+        'enderecos': enderecos,
     }
     return render(request, 'gerar_pedido_manual.html', context)
+
+@staff_member_required
+def processar_pedido_manual(request):
+    if request.method == 'POST':
+        cliente_id = request.POST.get('cliente_id')
+        cart_data_json = request.POST.get('cart_data')
+        endereco_id = request.POST.get('endereco_selecionado')
+        data_envio = request.POST.get('data_envio')
+
+        # Adiciona esta verificação de segurança no início do bloco try
+        if not endereco_id:
+            messages.error(request, 'Por favor, selecione um endereço válido.')
+            return redirect('gerar_pedido_manual')
+
+        try:
+            cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
+            endereco_selecionado = get_object_or_404(Endereco, id=endereco_id, cliente=cliente_selecionado)
+            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
+
+            cart_data = json.loads(cart_data_json)
+            if not cart_data:
+                messages.error(request, 'Não há itens para gerar o pedido.')
+                return redirect('gerar_pedido_manual')
+
+            with transaction.atomic():
+                pedido_criado = Pedido.objects.create(
+                    cliente=cliente_selecionado,
+                    endereco=endereco_selecionado,
+                    data_envio_solicitada=data_envio,
+                    status='PENDENTE',
+                )
+                
+                for product_id, quantidade in cart_data.items():
+                    product = get_object_or_404(Product, product_id=product_id)
+
+                    ItemPedido.objects.create(
+                        pedido=pedido_criado,
+                        produto=product,
+                        quantidade=quantidade,
+                        valor_unitario_sp=product.product_value_sp,
+                        valor_unitario_es=product.product_value_es,
+                    )
+
+            messages.success(request, f'Pedido #{pedido_criado.id} criado com sucesso para o cliente {cliente_selecionado.client_name}!')
+            return redirect('gerar_pedido_manual')
+        
+        except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError):
+            messages.error(request, 'Dados de cliente, endereço ou data inválidos.')
+            return redirect('gerar_pedido_manual')
+        except json.JSONDecodeError:
+            messages.error(request, 'Erro nos dados do pedido. Tente novamente.')
+            return redirect('gerar_pedido_manual')
+
+    return redirect('gerar_pedido_manual')
