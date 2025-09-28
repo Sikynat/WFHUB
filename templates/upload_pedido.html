@@ -38,6 +38,11 @@
         </div>
         
         <div class="mb-3">
+            {{ upload_form.nota_fiscal.label_tag }}
+            {{ upload_form.nota_fiscal }}
+        </div>
+        
+        <div class="mb-3">
             {{ upload_form.planilha_pedido.label_tag }}
             {{ upload_form.planilha_pedido }}
             <div class="form-text">{{ upload_form.planilha_pedido.help_text }}</div>

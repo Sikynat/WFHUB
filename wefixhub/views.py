@@ -1241,19 +1241,18 @@ def upload_pedido(request):
         cliente_selecionado = form_cliente.cleaned_data['cliente']
     
     if request.method == 'POST':
-        # Busque o cliente a partir do ID no POST
         cliente_id_post = request.POST.get('cliente_id')
         cliente_para_validacao = get_object_or_404(WfClient, pk=cliente_id_post)
         
         form = UploadPedidoForm(request.POST, request.FILES)
-
-        # Adicione os endereços ao queryset do formulário antes da validação
         enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_para_validacao)
         form.fields['endereco_selecionado'].queryset = enderecos_do_cliente
 
         if form.is_valid():
             data_expedicao = form.cleaned_data['data_expedicao']
             endereco_selecionado = form.cleaned_data['endereco_selecionado']
+            frete_option = form.cleaned_data['frete_option']
+            nota_fiscal = form.cleaned_data['nota_fiscal'] # NOVO CAMPO
             planilha_pedido = request.FILES['planilha_pedido']
             
             try:
@@ -1296,6 +1295,8 @@ def upload_pedido(request):
                         endereco=endereco_selecionado,
                         data_criacao=timezone.now(),
                         data_envio_solicitada=data_expedicao,
+                        frete_option=frete_option,
+                        nota_fiscal=nota_fiscal,
                         status='PENDENTE',
                     )
 

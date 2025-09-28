@@ -55,6 +55,11 @@ class UploadPedidoForm(forms.Form):
         label="Opção de Frete",
         required=True
     )
+    nota_fiscal = forms.ChoiceField(
+        choices=Pedido.NOTA_FISCAL_CHOICES,
+        label="Nota Fiscal",
+        required=True
+    )
     planilha_pedido = forms.FileField(
         label="Fazer Upload da Planilha de Pedido",
         help_text="Arquivo .xlsx ou .csv com duas colunas: 'codigo' e 'quantidade'."
