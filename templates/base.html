@@ -34,6 +34,11 @@
 
                 {% if user.is_authenticated %}
                     {% if user.is_staff %}
+                    <li>
+                        <a class="nav-link" href="{% url 'upload_pedido' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Upload de Pedido">
+                         <i class="bi bi-cloud-arrow-up"></i>
+                         </a>
+                    </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'dashboard_admin' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Dashboard">
                                 <i class="bi bi-speedometer"></i>
@@ -109,6 +114,11 @@
                 </div>
             {% endfor %}
         {% endif %}
+
+
+                
+
+
         {% block content %}
         {% endblock %}
     </div>
@@ -118,5 +128,6 @@
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
         const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
     </script>
+    
 </body>
 </html>

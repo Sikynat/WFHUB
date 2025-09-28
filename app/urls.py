@@ -28,4 +28,5 @@ urlpatterns = [
     path('pedidos/hoje/', views.pedidos_para_hoje, name='pedidos_para_hoje'),
     path('gerar-pedido-manual/', views.gerar_pedido_manual, name='gerar_pedido_manual'),
     path('processar-pedido-manual/', views.processar_pedido_manual, name='processar_pedido_manual'),
+     path('upload-pedido/', views.upload_pedido, name='upload_pedido'),
 ]

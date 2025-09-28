@@ -24,6 +24,8 @@ import datetime
 from decimal import Decimal
 import json
 from .forms import GerarPedidoForm
+from .forms import UploadPedidoForm
+import unicodedata
 
 
 # View para a página inicial com filtros e paginação
@@ -1208,3 +1210,119 @@ def processar_pedido_manual(request):
             return redirect('gerar_pedido_manual')
 
     return redirect('gerar_pedido_manual')
+
+
+def normalize_text(text):
+    if text:
+        text = str(text).strip().lower()
+        text = str(unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8'))
+        return text
+    return ''
+# --- FIM DA CORREÇÃO ---
+
+
+@staff_member_required
+def upload_pedido(request):
+    if request.method == 'POST':
+        form = UploadPedidoForm(request.POST, request.FILES)
+        if form.is_valid():
+            cliente = form.cleaned_data['cliente']
+            data_expedicao = form.cleaned_data['data_expedicao']
+            planilha_pedido = request.FILES['planilha_pedido']
+            
+            try:
+                if planilha_pedido.name.endswith('.csv'):
+                    df = pd.read_csv(planilha_pedido)
+                else:
+                    df = pd.read_excel(planilha_pedido)
+
+                expected_codigo_cols = ['codigo', 'código', 'cod']
+                expected_quantidade_cols = ['quantidade', 'qtd', 'qtde']
+
+                df.columns = [normalize_text(col) for col in df.columns]
+                
+                codigo_col_name = None
+                quantidade_col_name = None
+                
+                for col in df.columns:
+                    if col in expected_codigo_cols:
+                        codigo_col_name = col
+                        break
+                
+                for col in df.columns:
+                    if col in expected_quantidade_cols:
+                        quantidade_col_name = col
+                        break
+
+                if not codigo_col_name or not quantidade_col_name:
+                    messages.error(request, "A planilha deve ter colunas 'codigo' (ou similar) e 'quantidade' (ou similar).")
+                    return redirect('upload_pedido')
+
+                regiao = cliente.client_state.uf_name
+                valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
+
+                itens_pedido = []
+                total_geral = 0
+                erros = []
+
+                with transaction.atomic():
+                    novo_pedido = Pedido.objects.create(
+                        cliente=cliente,
+                        data_criacao=timezone.now(),
+                        data_envio_solicitada=data_expedicao,
+                        status='PENDENTE',
+                    )
+
+                    for index, row in df.iterrows():
+                        codigo_produto = str(row[codigo_col_name]).strip()
+                        quantidade = row[quantidade_col_name]
+                        
+                        try:
+                            produto = get_object_or_404(Product, product_code=codigo_produto)
+                            valor_unitario = getattr(produto, valor_field)
+                            
+                            if valor_unitario is not None and valor_unitario > 0:
+                                total_item = valor_unitario * quantidade
+                                total_geral += total_item
+
+                                itens_pedido.append(ItemPedido(
+                                    pedido=novo_pedido,
+                                    produto=produto,
+                                    quantidade=quantidade,
+                                    valor_unitario_sp=produto.product_value_sp,
+                                    valor_unitario_es=produto.product_value_es,
+                                ))
+                            else:
+                                # Adiciona o erro na lista, mas continua o processo
+                                erros.append(f"Produto '{codigo_produto}' foi desconsiderado por ter valor R$ 0,00.")
+
+                        except Product.DoesNotExist:
+                            # Erro crítico: produto não encontrado. Causa o rollback.
+                            erros.append(f"Produto com código '{codigo_produto}' não encontrado.")
+                            raise ValueError("Erro crítico: Produto não encontrado.")
+                        except Exception as e:
+                            # Erro crítico
+                            erros.append(f"Erro ao processar o item '{codigo_produto}': {e}")
+                            raise ValueError("Erro crítico no processamento.")
+                    
+                    if erros:
+                        # Exibe mensagens de erro, mas não cancela a transação se o erro não for crítico
+                        for erro in erros:
+                             messages.warning(request, erro)
+                    
+                    ItemPedido.objects.bulk_create(itens_pedido)
+                    
+                messages.success(request, f"Pedido #{novo_pedido.id} para {cliente.client_name} criado com sucesso.")
+                return redirect('upload_pedido')
+
+            except ValueError as e:
+                # Captura os erros críticos e exibe a mensagem correta
+                messages.error(request, f"Erro ao processar a planilha: {e}")
+                return redirect('upload_pedido')
+            except Exception as e:
+                messages.error(request, f"Erro ao processar a planilha: {e}")
+                
+    else:
+        form = UploadPedidoForm()
+    
+    return render(request, 'upload_pedido.html', {'form': form})

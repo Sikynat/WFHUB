@@ -30,3 +30,19 @@ class GerarPedidoForm(forms.Form):
         empty_label='---',
         required=False
     )
+
+class UploadPedidoForm(forms.Form):
+    cliente = forms.ModelChoiceField(
+        queryset=WfClient.objects.all(),
+        label="Selecione o Cliente",
+        empty_label="---"
+    )
+    data_expedicao = forms.DateField(
+        label="Data de Expedição",
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        required=True
+    )
+    planilha_pedido = forms.FileField(
+        label="Fazer Upload da Planilha de Pedido",
+        help_text="Arquivo .xlsx com duas colunas: 'codigo' e 'quantidade'."
+    )
