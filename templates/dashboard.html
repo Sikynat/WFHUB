@@ -58,6 +58,7 @@
                         <td>{{ pedido.cliente.client_name }}</td>
                          <td>{{ pedido.cliente.client_code }}</td>
                         <td>{{ pedido.data_criacao }}</td>
+                        
                         <td>R$ {{ pedido.total|floatformat:2 }}</td>
                         <td>
                             <a href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>

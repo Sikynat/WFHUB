@@ -24,7 +24,7 @@ import datetime
 from decimal import Decimal
 import json
 from .forms import GerarPedidoForm
-from .forms import UploadPedidoForm
+from .forms import UploadPedidoForm, SelectClientForm
 import unicodedata
 
 
@@ -269,6 +269,27 @@ def checkout(request):
     carrinho_detalhes = []
     total_geral = 0
     preco_exibido = None
+
+    if request.method == 'POST':
+        endereco_id = request.POST.get('endereco_selecionado')
+        data_envio = request.POST.get('data_envio')
+        frete_option = request.POST.get('frete_option') # NOVO CAMPO
+        
+        try:
+            cliente_logado = request.user.wfclient
+            endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=cliente_logado)
+            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
+        except (Endereco.DoesNotExist, ValueError):
+            messages.error(request, 'Endereço ou data de envio inválidos.')
+            return redirect('checkout')
+        
+        with transaction.atomic():
+            pedido = Pedido.objects.create(
+                cliente=cliente_logado,
+                endereco=endereco_selecionado,
+                data_envio_solicitada=data_envio,
+                frete_option=frete_option, # NOVO CAMPO
+            )
 
     try:
         cliente_logado = request.user.wfclient
@@ -1164,8 +1185,8 @@ def processar_pedido_manual(request):
         cart_data_json = request.POST.get('cart_data')
         endereco_id = request.POST.get('endereco_selecionado')
         data_envio = request.POST.get('data_envio')
-
-        # Adiciona esta verificação de segurança no início do bloco try
+        frete_option = request.POST.get('frete_option') # NOVO CAMPO
+        
         if not endereco_id:
             messages.error(request, 'Por favor, selecione um endereço válido.')
             return redirect('gerar_pedido_manual')
@@ -1185,11 +1206,13 @@ def processar_pedido_manual(request):
                     cliente=cliente_selecionado,
                     endereco=endereco_selecionado,
                     data_envio_solicitada=data_envio,
+                    frete_option=frete_option, # NOVO CAMPO
                     status='PENDENTE',
                 )
                 
                 for product_id, quantidade in cart_data.items():
                     product = get_object_or_404(Product, product_id=product_id)
+                    valor_unitario = getattr(product, 'product_value_sp' if cliente_selecionado.client_state.uf_name == 'SP' else 'product_value_es')
 
                     ItemPedido.objects.create(
                         pedido=pedido_criado,
@@ -1202,14 +1225,16 @@ def processar_pedido_manual(request):
             messages.success(request, f'Pedido #{pedido_criado.id} criado com sucesso para o cliente {cliente_selecionado.client_name}!')
             return redirect('gerar_pedido_manual')
         
-        except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError):
-            messages.error(request, 'Dados de cliente, endereço ou data inválidos.')
+        except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError) as e:
+            messages.error(request, f'Dados de cliente, endereço, frete ou data inválidos. Erro: {e}')
             return redirect('gerar_pedido_manual')
         except json.JSONDecodeError:
             messages.error(request, 'Erro nos dados do pedido. Tente novamente.')
             return redirect('gerar_pedido_manual')
 
     return redirect('gerar_pedido_manual')
+        
+
 
 
 def normalize_text(text):
@@ -1223,11 +1248,26 @@ def normalize_text(text):
 
 @staff_member_required
 def upload_pedido(request):
+    cliente_selecionado = None
+    form_cliente = SelectClientForm(request.GET or None)
+
+    if form_cliente.is_valid():
+        cliente_selecionado = form_cliente.cleaned_data['cliente']
+    
     if request.method == 'POST':
+        # Busque o cliente a partir do ID no POST
+        cliente_id_post = request.POST.get('cliente_id')
+        cliente_para_validacao = get_object_or_404(WfClient, pk=cliente_id_post)
+        
         form = UploadPedidoForm(request.POST, request.FILES)
+
+        # Adicione os endereços ao queryset do formulário antes da validação
+        enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_para_validacao)
+        form.fields['endereco_selecionado'].queryset = enderecos_do_cliente
+
         if form.is_valid():
-            cliente = form.cleaned_data['cliente']
             data_expedicao = form.cleaned_data['data_expedicao']
+            endereco_selecionado = form.cleaned_data['endereco_selecionado']
             planilha_pedido = request.FILES['planilha_pedido']
             
             try:
@@ -1258,16 +1298,16 @@ def upload_pedido(request):
                     messages.error(request, "A planilha deve ter colunas 'codigo' (ou similar) e 'quantidade' (ou similar).")
                     return redirect('upload_pedido')
 
-                regiao = cliente.client_state.uf_name
+                regiao = cliente_para_validacao.client_state.uf_name
                 valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
 
                 itens_pedido = []
-                total_geral = 0
                 erros = []
 
                 with transaction.atomic():
                     novo_pedido = Pedido.objects.create(
-                        cliente=cliente,
+                        cliente=cliente_para_validacao,
+                        endereco=endereco_selecionado,
                         data_criacao=timezone.now(),
                         data_envio_solicitada=data_expedicao,
                         status='PENDENTE',
@@ -1282,9 +1322,6 @@ def upload_pedido(request):
                             valor_unitario = getattr(produto, valor_field)
                             
                             if valor_unitario is not None and valor_unitario > 0:
-                                total_item = valor_unitario * quantidade
-                                total_geral += total_item
-
                                 itens_pedido.append(ItemPedido(
                                     pedido=novo_pedido,
                                     produto=produto,
@@ -1293,36 +1330,40 @@ def upload_pedido(request):
                                     valor_unitario_es=produto.product_value_es,
                                 ))
                             else:
-                                # Adiciona o erro na lista, mas continua o processo
                                 erros.append(f"Produto '{codigo_produto}' foi desconsiderado por ter valor R$ 0,00.")
-
                         except Product.DoesNotExist:
-                            # Erro crítico: produto não encontrado. Causa o rollback.
                             erros.append(f"Produto com código '{codigo_produto}' não encontrado.")
-                            raise ValueError("Erro crítico: Produto não encontrado.")
+                            raise ValueError(f"Erro crítico: Produto '{codigo_produto}' não encontrado.")
                         except Exception as e:
-                            # Erro crítico
                             erros.append(f"Erro ao processar o item '{codigo_produto}': {e}")
-                            raise ValueError("Erro crítico no processamento.")
+                            raise ValueError(f"Erro crítico: {e}")
                     
                     if erros:
-                        # Exibe mensagens de erro, mas não cancela a transação se o erro não for crítico
                         for erro in erros:
                              messages.warning(request, erro)
                     
                     ItemPedido.objects.bulk_create(itens_pedido)
                     
-                messages.success(request, f"Pedido #{novo_pedido.id} para {cliente.client_name} criado com sucesso.")
+                messages.success(request, f"Pedido #{novo_pedido.id} para {cliente_para_validacao.client_name} criado com sucesso.")
                 return redirect('upload_pedido')
 
             except ValueError as e:
-                # Captura os erros críticos e exibe a mensagem correta
-                messages.error(request, f"Erro ao processar a planilha: {e}")
-                return redirect('upload_pedido')
-            except Exception as e:
                 messages.error(request, f"Erro ao processar a planilha: {e}")
                 
+            except Exception as e:
+                messages.error(request, f"Erro ao processar a planilha: {e}")
     else:
-        form = UploadPedidoForm()
+        form = SelectClientForm(request.GET or None)
     
-    return render(request, 'upload_pedido.html', {'form': form})
+    context = {
+        'form_cliente': form,
+        'cliente_selecionado': cliente_selecionado,
+    }
+
+    if cliente_selecionado:
+        enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_selecionado)
+        upload_form = UploadPedidoForm()
+        upload_form.fields['endereco_selecionado'].queryset = enderecos_do_cliente
+        context['upload_form'] = upload_form
+    
+    return render(request, 'upload_pedido.html', context)

@@ -1,6 +1,6 @@
 # wefixhub/forms.py
 from django import forms
-from .models import Endereco, WfClient, wefixhub_uf
+from .models import Endereco, WfClient, wefixhub_uf, Pedido
 
 class WfClientForm(forms.ModelForm):
     class Meta:
@@ -31,18 +31,31 @@ class GerarPedidoForm(forms.Form):
         required=False
     )
 
-class UploadPedidoForm(forms.Form):
+
+class SelectClientForm(forms.Form):
     cliente = forms.ModelChoiceField(
         queryset=WfClient.objects.all(),
         label="Selecione o Cliente",
         empty_label="---"
     )
+
+class UploadPedidoForm(forms.Form):
     data_expedicao = forms.DateField(
         label="Data de Expedição",
         widget=forms.DateInput(attrs={'type': 'date'}),
         required=True
     )
+    endereco_selecionado = forms.ModelChoiceField(
+        queryset=Endereco.objects.none(),
+        label="Endereço de Entrega",
+        required=True
+    )
+    frete_option = forms.ChoiceField(
+        choices=Pedido.FRETE_CHOICES,
+        label="Opção de Frete",
+        required=True
+    )
     planilha_pedido = forms.FileField(
         label="Fazer Upload da Planilha de Pedido",
-        help_text="Arquivo .xlsx com duas colunas: 'codigo' e 'quantidade'."
+        help_text="Arquivo .xlsx ou .csv com duas colunas: 'codigo' e 'quantidade'."
     )

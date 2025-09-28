@@ -6,6 +6,8 @@
     <p><strong>Data da Compra:</strong> {{ pedido.data_criacao }}</p>
     <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
     <p><strong>Situação do Pedido</strong>: {{ pedido.status }}</p>
+    <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
+        
 
     <hr>
     <div class="card mb-4">
