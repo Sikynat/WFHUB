@@ -7,7 +7,7 @@
     <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
     <p><strong>Situação do Pedido</strong>: {{ pedido.status }}</p>
     <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
-        
+    <p><strong>Opção de Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</p>
 
     <hr>
     <div class="card mb-4">
@@ -88,6 +88,8 @@
                 <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
                 <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
                 <p><strong>Endereço de Entrega:</strong> {{ pedido.endereco.logradouro }}, {{ pedido.endereco.numero }} - {{ pedido.endereco.cidade }} (CEP: {{ pedido.endereco.cep }})</p>
+                <p><strong>Opção de Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</p>
+
         </div>
     </div>
 

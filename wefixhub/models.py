@@ -102,6 +102,11 @@ class Pedido(models.Model):
         ('TRANSPORTADORA', 'Transportadora'),
     ]
     
+    NOTA_FISCAL_CHOICES = [
+        ('COM', 'Com Nota Fiscal'),
+        ('SEM', 'Sem Nota Fiscal'),
+    ]
+
     
     cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos_cliente')
     data_criacao = models.DateTimeField(auto_now_add=True)
@@ -109,6 +114,8 @@ class Pedido(models.Model):
     data_envio_solicitada = models.DateField(null=True, blank=True)
     endereco = models.ForeignKey(Endereco, on_delete=models.PROTECT, null=True, related_name='pedidos_endereco')
     frete_option = models.CharField(max_length=20, choices=FRETE_CHOICES, default='CORREIOS', null=True, blank=True)
+    nota_fiscal = models.CharField(max_length=3, choices=NOTA_FISCAL_CHOICES, default='SEM', null=True, blank=True)
+
 
     def __str__(self):
         return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"

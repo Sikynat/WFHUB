@@ -267,29 +267,9 @@ def checkout(request):
         return redirect('home')
 
     carrinho_detalhes = []
-    total_geral = 0
+    total_geral = Decimal('0.00')
     preco_exibido = None
-
-    if request.method == 'POST':
-        endereco_id = request.POST.get('endereco_selecionado')
-        data_envio = request.POST.get('data_envio')
-        frete_option = request.POST.get('frete_option') # NOVO CAMPO
-        
-        try:
-            cliente_logado = request.user.wfclient
-            endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=cliente_logado)
-            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
-        except (Endereco.DoesNotExist, ValueError):
-            messages.error(request, 'Endereço ou data de envio inválidos.')
-            return redirect('checkout')
-        
-        with transaction.atomic():
-            pedido = Pedido.objects.create(
-                cliente=cliente_logado,
-                endereco=endereco_selecionado,
-                data_envio_solicitada=data_envio,
-                frete_option=frete_option, # NOVO CAMPO
-            )
+    cliente_logado = None
 
     try:
         cliente_logado = request.user.wfclient
@@ -330,6 +310,8 @@ def checkout(request):
     if request.method == 'POST':
         endereco_id = request.POST.get('endereco_selecionado')
         data_envio = request.POST.get('data_envio')
+        frete_option = request.POST.get('frete_option')
+        nota_fiscal = request.POST.get('nota_fiscal') # NOVO CAMPO
         
         try:
             endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=cliente_logado)
@@ -343,6 +325,8 @@ def checkout(request):
                 cliente=cliente_logado,
                 endereco=endereco_selecionado,
                 data_envio_solicitada=data_envio,
+                frete_option=frete_option,
+                nota_fiscal=nota_fiscal, # NOVO CAMPO
             )
             
             for item in carrinho_detalhes:
@@ -357,8 +341,6 @@ def checkout(request):
         if 'carrinho' in request.session:
             del request.session['carrinho']
 
-        # CÓDIGO A SER EXECUTADO AGORA
-        # Adiciona a mensagem de sucesso e redireciona para a página inicial
         messages.success(request, 'Seu pedido foi realizado com sucesso!')
         return redirect('home')
     
@@ -1114,21 +1096,27 @@ def pedidos_para_hoje(request):
 @staff_member_required
 def gerar_pedido_manual(request):
     cliente_selecionado = None
-    preco_exibido = 'todos'
+    form_cliente = SelectClientForm(request.GET or None)
     product_list = []
-    
     query_params = request.GET.copy()
+    preco_exibido = 'todos'
+    
     if 'page' in query_params:
         query_params.pop('page')
 
-    cliente_id = request.GET.get('cliente')
-    enderecos = []
+    if form_cliente.is_valid():
+        cliente_selecionado = form_cliente.cleaned_data['cliente']
+
+    context = {
+        'form_cliente': form_cliente,
+        'cliente_selecionado': cliente_selecionado,
+        'initial_data': {},
+        'query_params': query_params,
+        'preco_exibido': preco_exibido,
+    }
     
-    if cliente_id:
-        cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
-        estado_cliente = cliente_selecionado.client_state.uf_name
-        preco_exibido = estado_cliente.lower()
-        enderecos = Endereco.objects.filter(cliente=cliente_selecionado)
+    if cliente_selecionado:
+        enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_selecionado)
         
         hoje = timezone.localdate()
         products = Product.objects.filter(date_product=hoje).order_by('product_code')
@@ -1147,6 +1135,9 @@ def gerar_pedido_manual(request):
         if marca:
             products = products.filter(product_brand__icontains=marca)
         
+        estado_cliente = cliente_selecionado.client_state.uf_name
+        preco_exibido = estado_cliente.lower()
+
         for product in products:
             if estado_cliente == 'SP':
                 if product.product_value_sp is not None:
@@ -1164,28 +1155,23 @@ def gerar_pedido_manual(request):
         paginator = Paginator(products, 10)
         page_number = request.GET.get('page')
         product_list = paginator.get_page(page_number)
+
+        context.update({
+            'enderecos': enderecos_do_cliente,
+            'preco_exibido': preco_exibido,
+            'product_list': product_list,
+        })
     
-    form = GerarPedidoForm(initial={'cliente': cliente_selecionado})
-    
-    context = {
-        'titulo': 'Gerar Pedido Manual',
-        'cliente_selecionado': cliente_selecionado,
-        'form_cliente': form,
-        'preco_exibido': preco_exibido,
-        'product_list': product_list,
-        'query_params': query_params,
-        'enderecos': enderecos,
-    }
     return render(request, 'gerar_pedido_manual.html', context)
 
-@staff_member_required
 def processar_pedido_manual(request):
     if request.method == 'POST':
         cliente_id = request.POST.get('cliente_id')
         cart_data_json = request.POST.get('cart_data')
         endereco_id = request.POST.get('endereco_selecionado')
         data_envio = request.POST.get('data_envio')
-        frete_option = request.POST.get('frete_option') # NOVO CAMPO
+        frete_option = request.POST.get('frete_option')
+        nota_fiscal = request.POST.get('nota_fiscal') # NOVO CAMPO
         
         if not endereco_id:
             messages.error(request, 'Por favor, selecione um endereço válido.')
@@ -1206,7 +1192,8 @@ def processar_pedido_manual(request):
                     cliente=cliente_selecionado,
                     endereco=endereco_selecionado,
                     data_envio_solicitada=data_envio,
-                    frete_option=frete_option, # NOVO CAMPO
+                    frete_option=frete_option,
+                    nota_fiscal=nota_fiscal, # NOVO CAMPO
                     status='PENDENTE',
                 )
                 
@@ -1233,7 +1220,6 @@ def processar_pedido_manual(request):
             return redirect('gerar_pedido_manual')
 
     return redirect('gerar_pedido_manual')
-        
 
 
 
@@ -1246,7 +1232,7 @@ def normalize_text(text):
 # --- FIM DA CORREÇÃO ---
 
 
-staff_member_required
+@staff_member_required
 def upload_pedido(request):
     cliente_selecionado = None
     form_cliente = SelectClientForm(request.GET or None)
@@ -1255,18 +1241,19 @@ def upload_pedido(request):
         cliente_selecionado = form_cliente.cleaned_data['cliente']
     
     if request.method == 'POST':
+        # Busque o cliente a partir do ID no POST
         cliente_id_post = request.POST.get('cliente_id')
         cliente_para_validacao = get_object_or_404(WfClient, pk=cliente_id_post)
         
         form = UploadPedidoForm(request.POST, request.FILES)
 
+        # Adicione os endereços ao queryset do formulário antes da validação
         enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_para_validacao)
         form.fields['endereco_selecionado'].queryset = enderecos_do_cliente
 
         if form.is_valid():
             data_expedicao = form.cleaned_data['data_expedicao']
             endereco_selecionado = form.cleaned_data['endereco_selecionado']
-            frete_option = form.cleaned_data['frete_option']
             planilha_pedido = request.FILES['planilha_pedido']
             
             try:
@@ -1309,7 +1296,6 @@ def upload_pedido(request):
                         endereco=endereco_selecionado,
                         data_criacao=timezone.now(),
                         data_envio_solicitada=data_expedicao,
-                        frete_option=frete_option,
                         status='PENDENTE',
                     )
 
