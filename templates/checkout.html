@@ -52,6 +52,16 @@
                 </table>
     </div>
     
+            <div>
+                <div class="alert alert-info" role="alert">
+                    <p class="mb-0"><strong>Atenção ao Prazo de Entrega:</strong></p>
+                    <ul class="mb-0">
+                    <li>Pedidos para São Paulo: até 1 dia útil para entrega.</li>
+                    <li>Pedidos para Espírito Santo: até 2 dias úteis para entrega.</li>
+                    <li>Envios no mesmo dia **não são garantidos** e dependem da demanda.</li>
+                </ul>
+        </div>
+    </div>
     
     <form action="{% url 'checkout' %}" method="post">
         {% csrf_token %}

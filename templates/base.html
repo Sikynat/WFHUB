@@ -12,6 +12,25 @@
 <body>
 
      <style>
+
+        body {
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+                margin: 0;
+            }
+
+            main {
+                flex-grow: 1; /* Faz o conteúdo principal ocupar todo o espaço restante */
+            }
+
+            .site-footer {
+                background-color: #333; /* Cor de fundo escura */
+                color: #fff; /* Cor do texto branca */
+                text-align: center; /* Alinha o texto ao centro */
+                padding: 20px; /* Espaçamento interno */
+                margin-top: auto; /* Garante que o footer fique no final da página */
+            }
         .input-quantidade {
             max-width: 80px; /* Altere este valor para o tamanho desejado */
             text-align: center;
@@ -118,6 +137,7 @@
 
                 
 
+   
 
         {% block content %}
         {% endblock %}
@@ -128,6 +148,12 @@
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
         const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
     </script>
+
     
+  <footer class="site-footer">
+        <p>&copy; 2025 Charles Monteiro Todos os direitos reservados.</p>
+    </footer>    
 </body>
+
+
 </html>
