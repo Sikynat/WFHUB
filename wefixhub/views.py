@@ -1317,7 +1317,7 @@ def upload_pedido(request):
                                     valor_unitario_es=produto.product_value_es,
                                 ))
                             else:
-                                erros.append(f"Produto '{codigo_produto}' foi desconsiderado por ter valor R$ 0,00.")
+                                erros.append(f"Produto '{codigo_produto}' foi desconsiderado por estar em falta no estoque")
                         except Product.DoesNotExist:
                             erros.append(f"Produto com código '{codigo_produto}' não encontrado.")
                             raise ValueError(f"Erro crítico: Produto '{codigo_produto}' não encontrado.")
