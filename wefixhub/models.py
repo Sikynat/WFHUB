@@ -34,7 +34,7 @@ class WfClient(models.Model):
         verbose_name_plural = 'Clientes'
 
     def __str__(self):
-        return self.client_name
+         return f"{self.client_name} ({self.client_code})"
         
 # Modelo para Endereços
 class Endereco(models.Model):

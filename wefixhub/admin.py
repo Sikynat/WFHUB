@@ -10,8 +10,8 @@ class ClientAdmin(admin.ModelAdmin):
     # Oculta o campo 'user' do formulário de adição/edição
     exclude = ('user',)
     
-    # Exibição na lista de clientes
-    list_display = ['client_is_active', 'client_id', 'client_code', 'client_name', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date']
+    # Exibição na lista de clientes, usando o método 'nome_com_codigo'
+    list_display = ['client_is_active', 'client_id', 'client_code', 'nome_com_codigo', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date']
     
     # Campos de busca
     search_fields = ['client_name', 'client_code', 'client_cnpj']
@@ -33,7 +33,7 @@ class ClientAdmin(admin.ModelAdmin):
             
         # Salva o objeto no banco de dados
         super().save_model(request, obj, form, change)
-    
+
     def editar_cliente(self, request, queryset):
         # Ação que redireciona para a página de edição de um único item
         if queryset.count() == 1:
@@ -45,6 +45,13 @@ class ClientAdmin(admin.ModelAdmin):
             self.message_user(request, "Por favor, selecione apenas um cliente para editar.", level='WARNING')
 
     editar_cliente.short_description = "Editar cliente selecionado"
+    
+    # Novo método para exibir o nome com o código
+    def nome_com_codigo(self, obj):
+        return f"{obj.client_name} ({obj.client_code})"
+    
+    # Define o nome da coluna no painel de admin
+    nome_com_codigo.short_description = "Nome do Cliente"
 
 # Admin para Product (declaração única e correta)
 class ProductAdmin(admin.ModelAdmin):
