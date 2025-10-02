@@ -180,7 +180,7 @@
         <p>Por favor, selecione um cliente para começar a gerar um pedido.</p>
     {% endif %}
 
-   <script>
+    <script>
         document.addEventListener('DOMContentLoaded', (event) => {
             const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
             const grandTotalElement = document.getElementById('grand-total');
@@ -193,6 +193,28 @@
             } else {
                 loadAndCalculateTotals();
             }
+
+            // --- NOVO CÓDIGO MAIS SEGURO PARA PRÉ-SELECIONAR AS PREFERÊNCIAS DO CLIENTE ---
+            const freteSelect = document.getElementById('frete_option');
+            const notaFiscalSelect = document.getElementById('nota_fiscal');
+            const enderecoSelect = document.getElementById('endereco_selecionado'); // Adicione esta linha
+
+            // Verifica se o cliente está selecionado e pré-seleciona as opções
+            {% if cliente_selecionado %}
+                {% if cliente_selecionado.frete_preferencia %}
+                    freteSelect.value = "{{ cliente_selecionado.frete_preferencia }}";
+                {% endif %}
+                {% if cliente_selecionado.nota_fiscal_preferencia %}
+                    notaFiscalSelect.value = "{{ cliente_selecionado.nota_fiscal_preferencia }}";
+                {% endif %}
+                // NOVO CÓDIGO AQUI
+                {% if initial_data.endereco_padrao_id %}
+                    if (enderecoSelect) {
+                        enderecoSelect.value = "{{ initial_data.endereco_padrao_id }}";
+                    }
+                {% endif %}
+            {% endif %}
+            // --- FIM DO NOVO CÓDIGO ---
 
             // Nova função para coletar os dados do localStorage e preencher o campo hidden
             document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {

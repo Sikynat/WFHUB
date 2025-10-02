@@ -15,18 +15,41 @@ class wefixhub_uf (models.Model):
         return self.uf_name
 
 # Modelo para Clientes
+# Seu arquivo models.py
+
+# ... (seus outros modelos e imports)
+
+# Modelo para Clientes
 class WfClient(models.Model):
+    # Opções de frete (copiadas do Pedido)
+    FRETE_CHOICES = [
+        ('SEDEX', 'Sedex'),
+        ('CORREIOS', 'Correios'),
+        ('ONIBUS', 'Ônibus'),
+        ('TRANSPORTADORA', 'Transportadora'),
+    ]
+
+    # Opções de nota fiscal (copiadas do Pedido)
+    NOTA_FISCAL_CHOICES = [
+        ('COM', 'Com Nota Fiscal'),
+        ('SEM', 'Sem Nota Fiscal'),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True)
     client_id = models.AutoField(primary_key=True)
-    client_code = models.CharField(max_length=20, unique=True) # Alterado para CharField
+    client_code = models.CharField(max_length=20, unique=True)
     client_name = models.CharField(max_length=128)
     client_cnpj = models.CharField(max_length=14, unique=True)
     client_adress = models.CharField(max_length=255)
     client_city = models.CharField(max_length=100)
-    client_state = models.ForeignKey(wefixhub_uf,on_delete=models.PROTECT, related_name='state_uf')
+    client_state = models.ForeignKey(wefixhub_uf, on_delete=models.PROTECT, related_name='state_uf')
     client_state_subscription = models.CharField(max_length=14, blank=True, null=True)
     client_date = models.DateField(blank=True, null=True)
     client_is_active = models.BooleanField(default=False)
+    
+    # NOVOS CAMPOS PARA SALVAR AS PREFERÊNCIAS
+    frete_preferencia = models.CharField(max_length=20, choices=FRETE_CHOICES, default='CORREIOS', null=True, blank=True)
+    nota_fiscal_preferencia = models.CharField(max_length=3, choices=NOTA_FISCAL_CHOICES, default='SEM', null=True, blank=True)
 
     class Meta:
         db_table = 'wf_client'

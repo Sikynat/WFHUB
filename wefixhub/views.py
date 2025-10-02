@@ -1101,16 +1101,28 @@ def gerar_pedido_manual(request):
     query_params = request.GET.copy()
     preco_exibido = 'todos'
     
+    # Dicionário para armazenar dados iniciais para o template
+    initial_data = {}
+
     if 'page' in query_params:
         query_params.pop('page')
 
     if form_cliente.is_valid():
         cliente_selecionado = form_cliente.cleaned_data['cliente']
+        # Se um cliente for selecionado, pega as preferências dele
+        if cliente_selecionado:
+            initial_data['frete_preferencia'] = cliente_selecionado.frete_preferencia
+            initial_data['nota_fiscal_preferencia'] = cliente_selecionado.nota_fiscal_preferencia
+        # NOVO CÓDIGO: Busca o endereço padrão e adiciona ao initial_data
+            endereco_padrao = Endereco.objects.filter(cliente=cliente_selecionado, is_default=True).first()
+            if endereco_padrao:
+                initial_data['endereco_padrao_id'] = endereco_padrao.id
+
 
     context = {
         'form_cliente': form_cliente,
         'cliente_selecionado': cliente_selecionado,
-        'initial_data': {},
+        'initial_data': initial_data, # Adiciona o dicionário com os dados iniciais
         'query_params': query_params,
         'preco_exibido': preco_exibido,
     }
@@ -1232,14 +1244,28 @@ def normalize_text(text):
 # --- FIM DA CORREÇÃO ---
 
 
+# Sua view views.py
+
+# Seu arquivo views.py
+
 @staff_member_required
 def upload_pedido(request):
     cliente_selecionado = None
     form_cliente = SelectClientForm(request.GET or None)
+    initial_data = {}
 
     if form_cliente.is_valid():
         cliente_selecionado = form_cliente.cleaned_data['cliente']
-    
+        if cliente_selecionado:
+            initial_data['frete_preferencia'] = cliente_selecionado.frete_preferencia
+            initial_data['nota_fiscal_preferencia'] = cliente_selecionado.nota_fiscal_preferencia
+
+            # NOVO CÓDIGO: Busca o endereço padrão e adiciona ao initial_data
+            endereco_padrao = Endereco.objects.filter(cliente=cliente_selecionado, is_default=True).first()
+            if endereco_padrao:
+                initial_data['endereco_padrao_id'] = endereco_padrao.id
+
+
     if request.method == 'POST':
         cliente_id_post = request.POST.get('cliente_id')
         cliente_para_validacao = get_object_or_404(WfClient, pk=cliente_id_post)
@@ -1252,7 +1278,7 @@ def upload_pedido(request):
             data_expedicao = form.cleaned_data['data_expedicao']
             endereco_selecionado = form.cleaned_data['endereco_selecionado']
             frete_option = form.cleaned_data['frete_option']
-            nota_fiscal = form.cleaned_data['nota_fiscal'] # NOVO CAMPO
+            nota_fiscal = form.cleaned_data['nota_fiscal']
             planilha_pedido = request.FILES['planilha_pedido']
             
             try:
@@ -1302,8 +1328,19 @@ def upload_pedido(request):
 
                     for index, row in df.iterrows():
                         codigo_produto = str(row[codigo_col_name]).strip()
-                        quantidade = row[quantidade_col_name]
                         
+                        # --- NOVO CÓDIGO AQUI ---
+                        quantidade_raw = row[quantidade_col_name]
+                        if pd.isnull(quantidade_raw) or not isinstance(quantidade_raw, (int, float)):
+                            quantidade = 0
+                        else:
+                            quantidade = int(quantidade_raw)
+                        
+                        if quantidade == 0:
+                            erros.append(f"Produto '{codigo_produto}' foi desconsiderado, pois a quantidade é zero ou inválida.")
+                            continue
+                        # --- FIM DO NOVO CÓDIGO ---
+
                         try:
                             produto = get_object_or_404(Product, product_code=codigo_produto)
                             valor_unitario = getattr(produto, valor_field)
@@ -1345,6 +1382,7 @@ def upload_pedido(request):
     context = {
         'form_cliente': form,
         'cliente_selecionado': cliente_selecionado,
+        'initial_data': initial_data,
     }
 
     if cliente_selecionado:

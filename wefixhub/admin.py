@@ -11,13 +11,34 @@ class ClientAdmin(admin.ModelAdmin):
     exclude = ('user',)
     
     # Exibição na lista de clientes, usando o método 'nome_com_codigo'
-    list_display = ['client_is_active', 'client_id', 'client_code', 'nome_com_codigo', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date']
+    list_display = ['client_is_active', 'client_id', 'client_code', 'nome_com_codigo', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date', 'frete_preferencia', 'nota_fiscal_preferencia']
     
     # Campos de busca
     search_fields = ['client_name', 'client_code', 'client_cnpj']
     
     # Adiciona a ação de edição
     actions = ['editar_cliente']
+
+    # Organiza os campos no formulário de edição do cliente
+    fieldsets = (
+        (None, {
+            'fields': (
+                'client_code',
+                'client_name',
+                'client_cnpj',
+                'client_adress',
+                'client_city',
+                'client_state',
+                'client_state_subscription',
+                'client_date',
+                'client_is_active'
+            )
+        }),
+        ('Preferências do Pedido', {
+            'fields': ('frete_preferencia', 'nota_fiscal_preferencia'),
+            'description': 'Configure as opções padrão para este cliente.',
+        }),
+    )
 
     def save_model(self, request, obj, form, change):
         # Se for um novo cliente (não uma edição)
