@@ -26,6 +26,7 @@ import json
 from .forms import GerarPedidoForm
 from .forms import UploadPedidoForm, SelectClientForm
 import unicodedata
+from django.urls import reverse
 
 
 # View para a página inicial com filtros e paginação
@@ -75,7 +76,7 @@ def home(request):
         product.valor_sp_formatado = f"{product.product_value_sp.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_sp else "0,00"
         product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
     
-    paginator = Paginator(products, 10) 
+    paginator = Paginator(products, 30) 
     page = request.GET.get('page')
 
     try:
@@ -1164,7 +1165,7 @@ def gerar_pedido_manual(request):
             else:
                 product.valor_formatado = "N/A"
             
-        paginator = Paginator(products, 10)
+        paginator = Paginator(products, 30)
         page_number = request.GET.get('page')
         product_list = paginator.get_page(page_number)
 
@@ -1176,6 +1177,7 @@ def gerar_pedido_manual(request):
     
     return render(request, 'gerar_pedido_manual.html', context)
 
+
 def processar_pedido_manual(request):
     if request.method == 'POST':
         cliente_id = request.POST.get('cliente_id')
@@ -1183,7 +1185,7 @@ def processar_pedido_manual(request):
         endereco_id = request.POST.get('endereco_selecionado')
         data_envio = request.POST.get('data_envio')
         frete_option = request.POST.get('frete_option')
-        nota_fiscal = request.POST.get('nota_fiscal') # NOVO CAMPO
+        nota_fiscal = request.POST.get('nota_fiscal')
         
         if not endereco_id:
             messages.error(request, 'Por favor, selecione um endereço válido.')
@@ -1205,7 +1207,7 @@ def processar_pedido_manual(request):
                     endereco=endereco_selecionado,
                     data_envio_solicitada=data_envio,
                     frete_option=frete_option,
-                    nota_fiscal=nota_fiscal, # NOVO CAMPO
+                    nota_fiscal=nota_fiscal,
                     status='PENDENTE',
                 )
                 
@@ -1222,7 +1224,9 @@ def processar_pedido_manual(request):
                     )
 
             messages.success(request, f'Pedido #{pedido_criado.id} criado com sucesso para o cliente {cliente_selecionado.client_name}!')
-            return redirect('gerar_pedido_manual')
+            
+            # ALTERAÇÃO AQUI: Use reverse para construir a URL corretamente.
+            return redirect(reverse('gerar_pedido_manual') + '?pedido_gerado=sucesso')
         
         except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError) as e:
             messages.error(request, f'Dados de cliente, endereço, frete ou data inválidos. Erro: {e}')
@@ -1232,7 +1236,6 @@ def processar_pedido_manual(request):
             return redirect('gerar_pedido_manual')
 
     return redirect('gerar_pedido_manual')
-
 
 
 def normalize_text(text):

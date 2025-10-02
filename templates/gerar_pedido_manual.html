@@ -2,6 +2,15 @@
 {% block title %}Gerar Pedido Manual{% endblock %}
 
 {% block content %}
+
+    <style>
+        .infobott {
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+    </style>
+
+
     <h1>Gerar Pedido Manual</h1>
 
     <div class="card mb-4">
@@ -36,11 +45,99 @@
 
         <hr>
         
+        <div class="table-responsive">
+             <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Código do Produto</th>
+                        <th>Descrição do Produto</th>
+                        <th>Grupo</th>
+                        <th>Marca</th>
+                        <th>Valor ({{ preco_exibido|upper }})</th>
+                        <th>Quantidade</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in product_list %}
+                    <tr>
+                        <td>{{ product.product_code }}</td>
+                        <td>{{ product.product_description }}</td>
+                        <td>{{ product.product_group }}</td>
+                        <td>{{ product.product_brand }}</td>
+                        {% if preco_exibido == 'sp' %}
+                            <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
+                        {% elif preco_exibido == 'es' %}
+                            <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                        {% endif %}
+                        <td>
+                            <input
+                                type="number"
+                                name="quantidade_{{ product.product_id }}"
+                                id="quantidade_{{ product.product_id }}"
+                                min="0"
+                                class="form-control sm input-quantidade">
+                        </td>
+                        <td>
+                            <span id="total_{{ product.product_id }}">R$ 0,00</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">Nenhum produto cadastrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="6" class="text-end"><strong>Total Geral:</strong></td>
+                        <td><strong id="grand-total">R$ 0,00</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        {% if product_list.has_other_pages %}
+    <nav aria-label="Navegação da página">
+        <ul class="pagination justify-content-center">
+            
+            {% if product_list.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ query_params.urlencode }}&page=1">Primeira</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.previous_page_number }}">Anterior</a>
+                </li>
+            {% endif %}
+
+            {% for i in product_list.paginator.page_range %}
+                {% if product_list.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                {% elif i > product_list.number|add:'-3' and i < product_list.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{{ query_params.urlencode }}&page={{ i }}">{{ i }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if product_list.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.next_page_number }}">Próxima</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.paginator.num_pages }}">Última</a>
+                </li>
+            {% endif %}
+
+        </ul>
+    </nav>
+{% endif %}
+
         <form id="gerar-pedido-form" action="{% url 'processar_pedido_manual' %}" method="post">
             {% csrf_token %}
             <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
             <input type="hidden" name="cart_data" id="cart-data-input">
-
+            
             <div class="card mb-4 mt-4">
                 <div class="card-body">
                     <h5 class="card-title">Detalhes de Envio</h5>
@@ -82,125 +179,34 @@
                         <option value="SEM">Sem Nota Fiscal</option>
                     </select>
                 </div>
-
                 </div>
             </div>
-
-            <div class="table-responsive">
-                 <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>Código do Produto</th>
-                            <th>Descrição do Produto</th>
-                            <th>Grupo</th>
-                            <th>Marca</th>
-                            <th>Valor ({{ preco_exibido|upper }})</th>
-                            <th>Quantidade</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for product in product_list %}
-                        <tr>
-                            <td>{{ product.product_code }}</td>
-                            <td>{{ product.product_description }}</td>
-                            <td>{{ product.product_group }}</td>
-                            <td>{{ product.product_brand }}</td>
-                            {% if preco_exibido == 'sp' %}
-                                <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                            {% elif preco_exibido == 'es' %}
-                                <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
-                            {% endif %}
-                            <td>
-                                <input
-                                    type="number"
-                                    name="quantidade_{{ product.product_id }}"
-                                    id="quantidade_{{ product.product_id }}"
-                                    min="0"
-                                    class="form-control sm input-quantidade">
-                            </td>
-                            <td>
-                                <span id="total_{{ product.product_id }}">R$ 0,00</span>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7">Nenhum produto cadastrado.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="6" class="text-end"><strong>Total Geral:</strong></td>
-                            <td><strong id="grand-total">R$ 0,00</strong></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-
             <button type="submit" class="btn btn-primary">Gerar Pedido</button>
             <a href="#" class="btn btn-warning" onclick="limparCache()">Limpar Carrinho</a>
         </form>
 
-        {% if product_list.has_other_pages %}
-    <nav aria-label="Navegação da página">
-        <ul class="pagination justify-content-center">
-            
-            {% if product_list.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page=1">Primeira</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.previous_page_number }}">Anterior</a>
-                </li>
-            {% endif %}
-
-            {% for i in product_list.paginator.page_range %}
-                {% if product_list.number == i %}
-                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
-                {% elif i > product_list.number|add:'-3' and i < product_list.number|add:'3' %}
-                    <li class="page-item">
-                        <a class="page-link" href="?{{ query_params.urlencode }}&page={{ i }}">{{ i }}</a>
-                    </li>
-                {% endif %}
-            {% endfor %}
-
-            {% if product_list.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.next_page_number }}">Próxima</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.paginator.num_pages }}">Última</a>
-                </li>
-            {% endif %}
-
-        </ul>
-    </nav>
-{% endif %}
-    {% else %}
+        {% else %}
         <p>Por favor, selecione um cliente para começar a gerar um pedido.</p>
     {% endif %}
+
+    <p class="infobott">Verifique as informações antes de confirmar o pedido!</p>
 
     <script>
         document.addEventListener('DOMContentLoaded', (event) => {
             const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
             const grandTotalElement = document.getElementById('grand-total');
 
-            const messagesContainer = document.querySelector('.mt-3');
-            const successMessage = messagesContainer ? messagesContainer.querySelector('.alert-success') : null;
-
-            if (successMessage) {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('pedido_gerado') === 'sucesso') {
                 localStorage.clear();
-            } else {
-                loadAndCalculateTotals();
             }
 
-            // --- NOVO CÓDIGO MAIS SEGURO PARA PRÉ-SELECIONAR AS PREFERÊNCIAS DO CLIENTE ---
+            loadAndCalculateTotals();
+
+            // --- CÓDIGO PARA PRÉ-SELECIONAR PREFERÊNCIAS DO CLIENTE ---
             const freteSelect = document.getElementById('frete_option');
             const notaFiscalSelect = document.getElementById('nota_fiscal');
-            const enderecoSelect = document.getElementById('endereco_selecionado'); // Adicione esta linha
-
-            // Verifica se o cliente está selecionado e pré-seleciona as opções
+            const enderecoSelect = document.getElementById('endereco_selecionado');
             {% if cliente_selecionado %}
                 {% if cliente_selecionado.frete_preferencia %}
                     freteSelect.value = "{{ cliente_selecionado.frete_preferencia }}";
@@ -208,16 +214,14 @@
                 {% if cliente_selecionado.nota_fiscal_preferencia %}
                     notaFiscalSelect.value = "{{ cliente_selecionado.nota_fiscal_preferencia }}";
                 {% endif %}
-                // NOVO CÓDIGO AQUI
                 {% if initial_data.endereco_padrao_id %}
                     if (enderecoSelect) {
                         enderecoSelect.value = "{{ initial_data.endereco_padrao_id }}";
                     }
                 {% endif %}
             {% endif %}
-            // --- FIM DO NOVO CÓDIGO ---
+            // --- FIM DO CÓDIGO DE PRÉ-SELEÇÃO ---
 
-            // Nova função para coletar os dados do localStorage e preencher o campo hidden
             document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
                 const cartData = {};
                 for (let i = 0; i < localStorage.length; i++) {
