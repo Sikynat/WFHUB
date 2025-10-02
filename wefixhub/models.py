@@ -27,6 +27,7 @@ class WfClient(models.Model):
         ('CORREIOS', 'Correios'),
         ('ONIBUS', 'Ônibus'),
         ('TRANSPORTADORA', 'Transportadora'),
+         ('RETIRADA', 'Retirada'), # Nova opção
     ]
 
     # Opções de nota fiscal (copiadas do Pedido)
@@ -123,6 +124,7 @@ class Pedido(models.Model):
         ('CORREIOS', 'Correios'),
         ('ONIBUS', 'Ônibus'),
         ('TRANSPORTADORA', 'Transportadora'),
+        ('RETIRADA', 'Retirada'), # Nova opção
     ]
     
     NOTA_FISCAL_CHOICES = [
