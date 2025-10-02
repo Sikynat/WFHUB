@@ -680,8 +680,11 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     except Pedido.DoesNotExist:
         return redirect('dashboard_admin')
 
+   # Formate a data para o padrão 'dd-mm-aaaa'
+    data_formatada = pedido.data_criacao.strftime('%d-%m-%Y')
+
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.cliente.client_code}_{data_formatada}.xlsx"'
 
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
@@ -746,8 +749,10 @@ def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
         # Se o pedido não existir ou não pertencer ao cliente, retorna um erro 404
         return redirect('pedidos')
 
+    data_formatada = pedido.data_criacao.strftime('%d-%m-%Y')
+
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.cliente.client_code}_{data_formatada}.xlsx"'
 
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
