@@ -6,99 +6,105 @@
     <hr>
     <h3>Resumo do Pedido</h3>
     <div class="table-responsive">
-            <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Descrição</th>
-                            {% if preco_exibido == 'sp' %}
-                                <th>Valor Unitário (SP)</th>
-                            {% elif preco_exibido == 'es' %}
-                                <th>Valor Unitário (ES)</th>
-                            {% elif preco_exibido == 'todos' %}
-                                <th>Valor Unitário (SP)</th>
-                                <th>Valor Unitário (ES)</th>
-                            {% endif %}
-                            <th>Quantidade</th>
-                            <th>Valor Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in carrinho_detalhes %}
-                            <tr>
-                                <td>{{ item.product.product_code }}</td>
-                                <td>{{ item.product.product_description }}</td>
-                                {% if preco_exibido == 'todos' %}
-                                    <td>R$ {{ item.product.product_value_sp|floatformat:2 }}</td>
-                                    <td>R$ {{ item.product.product_value_es|floatformat:2 }}</td>
-                                {% else %}
-                                    <td>R$ {{ item.valor_unitario|floatformat:2 }}</td>
-                                {% endif %}
-                                <td>{{ item.quantidade }}</td>
-                                <td>R$ {{ item.valor_total|floatformat:2 }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            {% if preco_exibido == 'todos' %}
-                                <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
-                            {% else %}
-                                <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
-                            {% endif %}
-                            <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
-                        </tr>
-                    </tfoot>
-                </table>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descrição</th>
+                    {% if preco_exibido == 'sp' %}
+                        <th>Valor Unitário (SP)</th>
+                    {% elif preco_exibido == 'es' %}
+                        <th>Valor Unitário (ES)</th>
+                    {% elif preco_exibido == 'todos' %}
+                        <th>Valor Unitário (SP)</th>
+                        <th>Valor Unitário (ES)</th>
+                    {% endif %}
+                    <th>Quantidade</th>
+                    <th>Valor Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in carrinho_detalhes %}
+                    <tr>
+                        <td>{{ item.product.product_code }}</td>
+                        <td>{{ item.product.product_description }}</td>
+                        {% if preco_exibido == 'todos' %}
+                            <td>R$ {{ item.product.product_value_sp|floatformat:2 }}</td>
+                            <td>R$ {{ item.product.product_value_es|floatformat:2 }}</td>
+                        {% else %}
+                            <td>R$ {{ item.valor_unitario|floatformat:2 }}</td>
+                        {% endif %}
+                        <td>{{ item.quantidade }}</td>
+                        <td>R$ {{ item.valor_total|floatformat:2 }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    {% if preco_exibido == 'todos' %}
+                        <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
+                    {% else %}
+                        <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                    {% endif %}
+                    <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
     </div>
     
-            <div>
-                <div class="alert alert-info" role="alert">
-                    <p class="mb-0"><strong>Atenção ao Prazo de Entrega:</strong></p>
-                    <ul class="mb-0">
-                    <li>Pedidos para São Paulo: até 1 dia útil para entrega.</li>
-                    <li>Pedidos para Espírito Santo: até 2 dias úteis para entrega.</li>
-                    <li>Envios no mesmo dia **não são garantidos** e dependem da demanda.</li>
-                </ul>
+    <div>
+        <div class="alert alert-info" role="alert">
+            <p class="mb-0"><strong>Atenção ao Prazo de Entrega:</strong></p>
+            <ul class="mb-0">
+                <li>Pedidos para São Paulo: até 1 dia útil para entrega.</li>
+                <li>Pedidos para Espírito Santo: até 2 dias úteis para entrega.</li>
+                <li>Envios no mesmo dia **não são garantidos** e dependem da demanda.</li>
+            </ul>
         </div>
     </div>
     
     <form action="{% url 'checkout' %}" method="post">
         {% csrf_token %}
+        
         <div class="mb-3">
-            <label class="form-label">Selecione o Endereço de Envio:</label>
-            {% if enderecos %}
-                {% for endereco in enderecos %}
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="endereco_selecionado" id="endereco_{{ endereco.id }}" value="{{ endereco.id }}" {% if endereco.is_default %}checked{% endif %}>
-                        <label class="form-check-label" for="endereco_{{ endereco.id }}">
-                            {{ endereco.logradouro }}, {{ endereco.numero }} - {{ endereco.cidade }} (CEP: {{ endereco.cep }})
-                            {% if endereco.is_default %}
-                                <span class="badge bg-success ms-2">Padrão</span>
-                            {% endif %}
-                        </label>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <p class="alert alert-warning mt-2">Você precisa cadastrar um endereço em seu perfil.</p>
-                <a href="{% url 'editar_perfil' %}" class="btn btn-warning">Cadastrar Endereço</a>
-            {% endif %}
+            <label for="frete_option" class="form-label">Opção de Frete:</label>
+            <select id="frete_option" name="frete_option" class="form-control" required>
+                <option value="">Selecione uma opção de frete</option>
+                <option value="SEDEX">Sedex</option>
+                <option value="CORREIOS">Correios</option>
+                <option value="ONIBUS">Ônibus</option>
+                <option value="TRANSPORTADORA">Transportadora</option>
+            </select>
         </div>
+        
+        <div id="endereco-field">
+            <div class="mb-3">
+                <label class="form-label">Selecione o Endereço de Envio:</label>
+                {% if enderecos %}
+                    {% for endereco in enderecos %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="endereco_selecionado" id="endereco_{{ endereco.id }}" value="{{ endereco.id }}" {% if endereco.is_default %}checked{% endif %}>
+                            <label class="form-check-label" for="endereco_{{ endereco.id }}">
+                                {{ endereco.logradouro }}, {{ endereco.numero }} - {{ endereco.cidade }} (CEP: {{ endereco.cep }})
+                                {% if endereco.is_default %}
+                                    <span class="badge bg-success ms-2">Padrão</span>
+                                {% endif %}
+                            </label>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="alert alert-warning mt-2">Você precisa cadastrar um endereço em seu perfil.</p>
+                    <a href="{% url 'editar_perfil' %}" class="btn btn-warning">Cadastrar Endereço</a>
+                {% endif %}
+            </div>
+        </div>
+
         <div class="mb-3">
             <label for="data_envio" class="form-label">Data de Envio Solicitada:</label>
             <input type="date" class="form-control" id="data_envio" name="data_envio">
         </div>
+        
         <div class="mb-3">
-                <label for="frete_option" class="form-label">Opção de Frete:</label>
-                    <select id="frete_option" name="frete_option" class="form-control" required>
-                        <option value="">Selecione uma opção de frete</option>
-                        <option value="SEDEX">Sedex</option>
-                        <option value="CORREIOS">Correios</option>
-                        <option value="ONIBUS">Ônibus</option>
-                        <option value="TRANSPORTADORA">Transportadora</option>
-                    </select>
-            </div>
-            <div class="mb-3">
             <label for="nota_fiscal" class="form-label">Opção de Nota Fiscal:</label>
             <select id="nota_fiscal" name="nota_fiscal" class="form-control" required>
                 <option value="">Selecione uma opção</option>
@@ -106,13 +112,31 @@
                 <option value="SEM">Sem Nota Fiscal</option>
             </select>
         </div>
+        
         <div class="mt-3 mb-3">
             <hr>
             <button type="submit" class="btn btn-success" >Confirmar Compra</button>
             <a href="{% url 'carrinho' %}" class="btn btn-secondary">Editar Compra</a>
         </div>
-      
-        
     </form>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const freteSelect = document.getElementById('frete_option');
+            const enderecoField = document.getElementById('endereco-field');
+    
+            const toggleEnderecoField = () => {
+                if (freteSelect.value === 'ONIBUS') {
+                    enderecoField.style.display = 'none';
+                } else {
+                    enderecoField.style.display = 'block';
+                }
+            };
+    
+            // Chama a função ao carregar a página e ao mudar a seleção
+            toggleEnderecoField();
+            freteSelect.addEventListener('change', toggleEnderecoField);
+        });
+    </script>
 
 {% endblock %}

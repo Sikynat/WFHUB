@@ -1,100 +1,147 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Fazer Upload de Pedido{% endblock %}
 
 {% block content %}
-    <style>
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
 
-        .paddingform {
-            margin-bottom: 50px;
-            margin-top: 30px;
+            <div class="card shadow-lg p-4">
+                <div class="card-body">
+                    <h1 class="text-center mb-5 display-4 fw-bold text-dark">Upload de Pedido</h1>
+                    
+                    <h4 class="card-title fw-semibold text-secondary mb-3"><i class="bi bi-person-fill me-2"></i>Selecione o Cliente</h4>
+                    <form id="cliente-form" method="get" class="mb-4">
+                        <div class="input-group">
+                            {{ form_cliente.cliente }}
+                            <button type="submit" class="btn btn-primary px-4">Confirmar</button>
+                        </div>
+                    </form>
+
+                    {% if cliente_selecionado %}
+                        <div class="alert alert-success bg-success-subtle text-success py-3" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+                                <span>Cliente selecionado: <strong class="fw-bold">{{ cliente_selecionado.client_name }}</strong> (Código: {{ cliente_selecionado.client_code }})</span>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+                        
+                        <h4 class="card-title fw-semibold text-secondary mb-4"><i class="bi bi-cloud-arrow-up-fill me-2"></i>Envie a Planilha</h4>
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
+                            
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-6">
+                                    <label for="{{ upload_form.data_expedicao.id_for_label }}" class="form-label fw-bold">Data de Expedição</label>
+                                    {{ upload_form.data_expedicao }}
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label for="{{ upload_form.nota_fiscal.id_for_label }}" class="form-label fw-bold">Nota Fiscal</label>
+                                    {{ upload_form.nota_fiscal }}
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label for="{{ upload_form.frete_option.id_for_label }}" class="form-label fw-bold">Opção de Frete</label>
+                                    {{ upload_form.frete_option }}
+                                </div>
+                                
+                                <div class="col-md-6" id="endereco-field">
+                                    <label for="{{ upload_form.endereco_selecionado.id_for_label }}" class="form-label fw-bold">Endereço de Entrega</label>
+                                    {{ upload_form.endereco_selecionado }}
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4">
+                            <div class="row">
+                                <div class="col-12">
+                                    <label for="{{ upload_form.planilha_pedido.id_for_label }}" class="form-label fw-bold">Fazer Upload da Planilha de Pedido</label>
+                                    {{ upload_form.planilha_pedido }}
+                                    <div class="form-text text-muted">Arquivo .xlsx ou .csv com as colunas "código" e "quantidade".</div>
+                                </div>
+                            </div>
+
+                            <div class="mt-5 text-center">
+                                <button type="submit" class="btn btn-success btn-lg px-5"><i class="bi bi-check-circle me-2"></i>Processar Pedido</button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if cliente_selecionado %}
+        const freteSelect = document.getElementById('id_frete_option');
+        const enderecoField = document.getElementById('endereco-field');
+        const notaFiscalSelect = document.getElementById('id_nota_fiscal');
+        const dataExpedicaoInput = document.getElementById('id_data_expedicao');
+
+        function toggleEnderecoVisibility() {
+            const freteValue = freteSelect.value;
+            if (freteValue.toLowerCase() === 'onibus' || freteValue.toLowerCase() === 'retirada') {
+                enderecoField.style.display = 'none';
+            } else {
+                enderecoField.style.display = 'block';
+            }
         }
 
-    </style>
-
-    <h1>Fazer Upload de Pedido</h1>
-
-    <div class="card p-4 mt-4">
-        <h5 class="card-title">Passo 1: Selecione o Cliente</h5>
-        <form method="get" class="d-flex align-items-end">
-            {{ form_cliente.cliente }}
-            <button type="submit" class="btn btn-primary ms-2">Selecionar</button>
-        </form>
-    </div>
-
-    {% if cliente_selecionado %}
-        <p class="mt-4">
-            Cliente selecionado: 
-            <strong>{{ cliente_selecionado.client_name }} (Código: {{ cliente_selecionado.client_code }})</strong>
-        </p>
+        if (freteSelect && enderecoField) {
+            if ("{{ cliente_selecionado.frete_preferencia }}") {
+                freteSelect.value = "{{ cliente_selecionado.frete_preferencia }}";
+            }
+            toggleEnderecoVisibility();
+            freteSelect.addEventListener('change', toggleEnderecoVisibility);
+        }
         
-        <div class="card p-4 mt-4">
-            <h5 class="card-title ">Passo 2: Envie a Planilha</h5>
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
-                
-                <div class="mb-3">
-                    {{ upload_form.endereco_selecionado.label_tag }}
-                    {{ upload_form.endereco_selecionado }}
-                </div>
-                
-                <div class="mb-3">
-                    {{ upload_form.data_expedicao.label_tag }}
-                    {{ upload_form.data_expedicao }}
-                </div>
-                
-                <div class="mb-3">
-                    {{ upload_form.frete_option.label_tag }}
-                    {{ upload_form.frete_option }}
-                </div>
-                
-                <div class="mb-3">
-                    {{ upload_form.nota_fiscal.label_tag }}
-                    {{ upload_form.nota_fiscal }}
-                </div>
-                
-                <div class="mb-3">
-                    {{ upload_form.planilha_pedido.label_tag }}
-                    {{ upload_form.planilha_pedido }}
-                    <div class="form-text">{{ upload_form.planilha_pedido.help_text }}</div>
-                </div>
+        if (notaFiscalSelect && "{{ cliente_selecionado.nota_fiscal_preferencia }}") {
+            notaFiscalSelect.value = "{{ cliente_selecionado.nota_fiscal_preferencia }}";
+        }
 
-                <button type="submit" class="btn btn-primary">Processar Pedido</button>
-                <p class="mt-3 text-muted">A planilha deve conter as colunas "codigo" e "quantidade".</p>
-            </form>
-        </div>
+        const enderecoSelect = document.getElementById('id_endereco_selecionado');
+        {% if initial_data.endereco_padrao_id %}
+        if (enderecoSelect) {
+            enderecoSelect.value = "{{ initial_data.endereco_padrao_id }}";
+        }
+        {% endif %}
 
-        <div class="paddingform">
-            <p>Verifique as informações antes de confirmar</p>
-        </div>
-    {% endif %}
+        if (dataExpedicaoInput && !dataExpedicaoInput.value) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            dataExpedicaoInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+        {% endif %}
+    });
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Este script só será executado se um cliente estiver selecionado
-            {% if cliente_selecionado %}
-                
-                const freteSelect = document.getElementById('id_frete_option');
-                const notaFiscalSelect = document.getElementById('id_nota_fiscal');
-                const enderecoSelect = document.getElementById('id_endereco_selecionado'); // Adicione esta linha
+    document.addEventListener('DOMContentLoaded', function() {
+        const enderecoSelect = document.getElementById('id_endereco_selecionado');
+        if (enderecoSelect) {
+            $(enderecoSelect).select2({
+                theme: "bootstrap-5",
+                placeholder: "Selecione ou digite um endereço",
+                allowClear: true
+            });
+        }
+        
+        const clienteSelect = document.getElementById('id_cliente');
+        if (clienteSelect) {
+            $(clienteSelect).select2({
+                theme: "bootstrap-5",
+                placeholder: "Selecione um cliente",
+                allowClear: true
+            });
+        }
+    });
+</script>
 
-                if (freteSelect) {
-                    freteSelect.value = "{{ cliente_selecionado.frete_preferencia }}";
-                }
-
-                if (notaFiscalSelect) {
-                    notaFiscalSelect.value = "{{ cliente_selecionado.nota_fiscal_preferencia }}";
-                }
-
-                // NOVO CÓDIGO AQUI
-                {% if initial_data.endereco_padrao_id %}
-                    if (enderecoSelect) {
-                        enderecoSelect.value = "{{ initial_data.endereco_padrao_id }}";
-                    }
-                {% endif %}
-                // FIM DO NOVO CÓDIGO
-            {% endif %}
-        });
-    </script>
 {% endblock %}

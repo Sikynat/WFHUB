@@ -1,4 +1,3 @@
-# wefixhub/forms.py
 from django import forms
 from .models import Endereco, WfClient, wefixhub_uf, Pedido
 
@@ -20,9 +19,6 @@ class EnderecoForm(forms.ModelForm):
         for field in self.fields:
             self.fields[field].widget.attrs['class'] = 'form-control'
 
-from django import forms
-from .models import WfClient
-
 class GerarPedidoForm(forms.Form):
     cliente = forms.ModelChoiceField(
         queryset=WfClient.objects.all().order_by('client_name'),
@@ -31,36 +27,40 @@ class GerarPedidoForm(forms.Form):
         required=False
     )
 
-
 class SelectClientForm(forms.Form):
     cliente = forms.ModelChoiceField(
         queryset=WfClient.objects.all(),
         label="Selecione o Cliente",
-        empty_label="---"
+        empty_label="---",
+        widget=forms.Select(attrs={'class': 'form-select form-control'})
     )
 
 class UploadPedidoForm(forms.Form):
     data_expedicao = forms.DateField(
         label="Data de Expedição",
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
         required=True
     )
     endereco_selecionado = forms.ModelChoiceField(
         queryset=Endereco.objects.none(),
         label="Endereço de Entrega",
-        required=True
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
     frete_option = forms.ChoiceField(
         choices=Pedido.FRETE_CHOICES,
         label="Opção de Frete",
-        required=True
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
     nota_fiscal = forms.ChoiceField(
         choices=Pedido.NOTA_FISCAL_CHOICES,
         label="Nota Fiscal",
-        required=True
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
     planilha_pedido = forms.FileField(
         label="Fazer Upload da Planilha de Pedido",
-        help_text="Arquivo .xlsx ou .csv com duas colunas: 'codigo' e 'quantidade'."
+        help_text="Arquivo .xlsx ou .csv com duas colunas: 'codigo' e 'quantidade'.",
+        widget=forms.FileInput(attrs={'class': 'form-control'})
     )

@@ -49,15 +49,19 @@
         {% endif %}
     </div>
 
-    <hr>
-    <div class="card mb-4">
-        <div class="card-header">
-            <h3>Endereço de Envio</h3>
+    
+    
+    {% if pedido.frete_option != 'ONIBUS' and pedido.frete_option != 'RETIRADA' %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3>Endereço de Envio</h3>
+            </div>
+            <div class="card-body">
+                <p>{{ pedido.endereco.logradouro }}, {{ pedido.endereco.bairro }}, {{ pedido.endereco.numero }} {{ pedido.endereco.cidade }} - {{ pedido.endereco.estado }} (CEP: {{ pedido.endereco.cep }})</p>
+            </div>
         </div>
-        <div class="card-body">
-            <p>{{ pedido.endereco.logradouro }}, {{ pedido.endereco.bairro }}, {{ pedido.endereco.numero }} {{ pedido.endereco.cidade }} - {{ pedido.endereco.estado }} (CEP: {{ pedido.endereco.cep }})</p>
-        </div>
-    </div>
+    {% endif %}
+    
     <hr>
     
     <h2>Itens do Pedido</h2>
