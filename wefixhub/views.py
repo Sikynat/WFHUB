@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, F
 from django.db.models.functions import ExtractMonth
 from .models import Product, Pedido, ItemPedido, WfClient
 from django.http import HttpResponse
@@ -480,8 +480,11 @@ def dashboard_admin(request):
     total_clientes = WfClient.objects.count()
     total_pedidos = Pedido.objects.count()
     
-    # CORREÇÃO: Altere 'product_value' para 'product_value_sp' ou 'product_value_es'
-    total_vendas_agregadas = ItemPedido.objects.aggregate(total_vendas=Sum('produto__product_value_sp'))
+    # 💡 CORREÇÃO: Calcule o subtotal de cada item e depois some.
+    total_vendas_agregadas = ItemPedido.objects.annotate(
+        subtotal=F('quantidade') * F('produto__product_value_sp')
+    ).aggregate(total_vendas=Sum('subtotal'))
+    
     valor_total_vendas = total_vendas_agregadas['total_vendas'] if total_vendas_agregadas['total_vendas'] else 0
     
     pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
