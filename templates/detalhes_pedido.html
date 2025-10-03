@@ -9,6 +9,46 @@
     <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
     <p><strong>Opção de Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</p>
 
+    <div class="row mb-4">
+        {% if user.is_staff %}
+            <div class="col-md-6 d-flex align-items-center mb-2">
+                <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary">Voltar para o Dashboard</a>
+                <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary ms-2">Exportar para Excel (Admin)</a>
+                <a target="_blank" class="btn btn-success ms-2" href="https://wa.me/5516991273974?text=*Dados%20do%20Pedido*%0A%0A*Codigo%20Interno:*%20{{ pedido.id }}%0A*Código%20do%20Cliente:*%20{{ pedido.cliente.client_code }}%0A*Razão%20Social:*%20{{ pedido.cliente.client_name }}%0A*Data%20da%20Expedição:*%20{{ pedido.data_envio_solicitada|date:"d/m/Y" }}%0A*Opção%20de%20Frete:*%20{{ pedido.get_frete_option_display }}%0A*Endereço%20de%20Entrega:*%20{{ pedido.endereco.logradouro }},%20{{ pedido.endereco.bairro }},%20{{ pedido.endereco.numero }}%20{{ pedido.endereco.cidade }}%20-%20{{ pedido.endereco.estado }}%20(CEP:%20{{ pedido.endereco.cep }})%0A*Opção%20de%20Nota%20Fiscal:*%20{{ pedido.get_nota_fiscal_display }} ">Enviar Para Whatsapp</a>
+            </div>
+
+            <div class="col-md-6 d-flex flex-column mb-2">
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseForm" aria-expanded="false" aria-controls="collapseForm">
+                        Upload de Orçamento
+                    </button>
+                    {% if pedido.orcamento_pdf %}
+                        <a href="{{ pedido.orcamento_pdf.url }}" class="btn btn-info ms-2" target="_blank">Baixar Orçamento (PDF)</a>
+                    {% endif %}
+                </div>
+                
+                <div class="collapse mt-2" id="collapseForm">
+                    <form action="{% url 'upload_orcamento_pdf' pedido.id %}" method="post" enctype="multipart/form-data" class="d-flex">
+                        {% csrf_token %}
+                        <div class="input-group">
+                            <input type="file" name="orcamento_pdf_file" class="form-control" id="inputGroupFile04" aria-describedby="inputGroupFileAddon04" aria-label="Upload">
+                            <button class="btn btn-outline-secondary" type="submit" id="inputGroupFileAddon04">Enviar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        {% else %}
+            <div class="col-md-12 d-flex justify-content-start align-items-center mb-2">
+                <a href="{% url 'pedidos' %}" class="btn btn-secondary">Voltar para o Histórico</a>
+                <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-primary ms-2">Exportar para Excel</a>
+                {% if pedido.orcamento_pdf %}
+                    <a href="{{ pedido.orcamento_pdf.url }}" class="btn btn-info ms-2" target="_blank">Baixar Orçamento (PDF)</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+
     <hr>
     <div class="card mb-4">
         <div class="card-header">
@@ -65,35 +105,4 @@
             </tr>
         </tfoot>
     </table>
-   <div class="mt-4 mb-4 d-flex">
-            {% if user.is_staff %}
-                <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary">Voltar para o Dashboard</a>
-                <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary ms-2">Exportar para Excel (Admin)</a>
-                <a target="_blank" class="btn btn-success ms-2" href="https://wa.me/5516991273974?text=*Dados%20do%20Pedido*%0A%0A*Codigo%20Interno:*%20{{ pedido.id }}%0A*Código%20do%20Cliente:*%20{{ pedido.cliente.client_code }}%0A*Razão%20Social:*%20{{ pedido.cliente.client_name }}%0A*Data%20da%20Expedição:*%20{{ pedido.data_envio_solicitada|date:"d/m/Y" }}%0A*Opção%20de%20Frete:*%20{{ pedido.get_frete_option_display }}%0A*Endereço%20de%20Entrega:*%20{{ pedido.endereco.logradouro }},%20{{ pedido.endereco.bairro }},%20{{ pedido.endereco.numero }}%20{{ pedido.endereco.cidade }}%20-%20{{ pedido.endereco.estado }}%20(CEP:%20{{ pedido.endereco.cep }})%0A*Opção%20de%20Nota%20Fiscal:*%20{{ pedido.get_nota_fiscal_display }} ">Enviar Para Whatsapp</a>
-            {% else %}
-                <a href="{% url 'pedidos' %}" class="btn btn-secondary">Voltar para o Histórico</a>
-                <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-primary ms-2">Exportar para Excel</a>
-            {% endif %}
-</div>
-    </div>
-
-    <hr>
-
-  <!--  <div class="card mb-4">
-        <div class="card-header">
-            <h3>Encaminhe essa mensagem ao vendedor 22, junto da planilha </h3>
-        </div>
-       <div class="card-body">
-                <p><strong>Codigo Interno:</strong> {{ pedido.id }}</p>
-                <p><strong>Código do Cliente:</strong> {{ pedido.cliente.client_code }}</p>
-                <p><strong>Razão Social:</strong> {{ pedido.cliente.client_name }}</p>
-                <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
-                <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
-                <p><strong>Endereço de Entrega:</strong> {{ pedido.endereco.logradouro }}, {{ pedido.endereco.bairro }}, {{ pedido.endereco.numero }} {{ pedido.endereco.cidade }} - {{ pedido.endereco.estado }} (CEP: {{ pedido.endereco.cep }})</p>
-                <p><strong>Opção de Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</p>
-
-        </div> -->
-      
-    </div>
-
 {% endblock %}

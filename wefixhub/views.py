@@ -27,6 +27,9 @@ from .forms import GerarPedidoForm
 from .forms import UploadPedidoForm, SelectClientForm
 import unicodedata
 from django.urls import reverse
+import os
+from django.conf import settings
+
 
 
 # View para a página inicial com filtros e paginação
@@ -1403,3 +1406,45 @@ def upload_pedido(request):
         context['upload_form'] = upload_form
     
     return render(request, 'upload_pedido.html', context)
+
+@staff_member_required
+def upload_orcamento_pdf(request, pedido_id):
+    if request.method == 'POST':
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+        orcamento_file = request.FILES.get('orcamento_pdf_file')
+
+        if orcamento_file:
+            # 1. Pega o código do cliente, o ID do pedido e a data atual
+            client_code = pedido.cliente.client_code
+            id_do_pedido = pedido.id # Acessa o ID do pedido
+            hoje = timezone.localdate().strftime('%d-%m-%Y')
+            
+            # 2. Define o novo nome e o caminho completo para salvar o arquivo
+            novo_nome = f'orcamento_{client_code}_{id_do_pedido}_{hoje}.pdf'
+            caminho_orcamentos = os.path.join(settings.MEDIA_ROOT, 'orcamentos')
+            caminho_completo = os.path.join(caminho_orcamentos, novo_nome)
+
+            # Garante que o diretório de destino exista
+            if not os.path.exists(caminho_orcamentos):
+                os.makedirs(caminho_orcamentos)
+
+            # 3. Salva o arquivo manualmente
+            try:
+                with open(caminho_completo, 'wb+') as destination:
+                    for chunk in orcamento_file.chunks():
+                        destination.write(chunk)
+            except IOError as e:
+                messages.error(request, f'Erro ao salvar o arquivo: {e}')
+                return redirect(reverse('detalhes_pedido_admin', args=[pedido_id]))
+            
+            # 4. Salva o caminho do arquivo no modelo, relativo à pasta MEDIA_ROOT
+            pedido.orcamento_pdf.name = os.path.join('orcamentos', novo_nome)
+            pedido.save()
+
+            messages.success(request, f'Orçamento PDF "{novo_nome}" enviado com sucesso!')
+        else:
+            messages.error(request, 'Nenhum arquivo foi selecionado.')
+            
+        return redirect(reverse('detalhes_pedido_admin', args=[pedido_id]))
+
+    return redirect('dashboard_admin')

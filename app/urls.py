@@ -1,6 +1,9 @@
 from django.contrib import admin
 from django.urls import path, include
 from wefixhub import views
+from django.conf.urls.static import static
+from django.conf import settings  # Importe settings
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,9 +27,14 @@ urlpatterns = [
     path('processar_upload/', views.processar_upload, name='processar_upload'),
     path('pedidos/exportar/<int:pedido_id>/', views.exportar_detalhes_pedido_cliente_excel, name='exportar_pedido_cliente_excel'),
     path('gerar-pedido/', views.gerar_pedido, name='gerar_pedido'),
-    path('dashboard/detalhes-admin/<int:pedido_id>/', views.detalhes_pedido_admin, name='detalhes_pedido_admin'),
+    #path('dashboard/detalhes-admin/<int:pedido_id>/', views.detalhes_pedido_admin, name='detalhes_pedido_admin'),
     path('pedidos/hoje/', views.pedidos_para_hoje, name='pedidos_para_hoje'),
     path('gerar-pedido-manual/', views.gerar_pedido_manual, name='gerar_pedido_manual'),
     path('processar-pedido-manual/', views.processar_pedido_manual, name='processar_pedido_manual'),
-     path('upload-pedido/', views.upload_pedido, name='upload_pedido'),
+    path('upload-pedido/', views.upload_pedido, name='upload_pedido'),
+    #path('admin/pedidos/<int:pedido_id>/upload-orcamento/', views.upload_orcamento_pdf, name='upload_orcamento_pdf'),
 ]
+
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

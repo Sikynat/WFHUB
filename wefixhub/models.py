@@ -140,6 +140,7 @@ class Pedido(models.Model):
     endereco = models.ForeignKey(Endereco, on_delete=models.PROTECT, null=True, related_name='pedidos_endereco')
     frete_option = models.CharField(max_length=20, choices=FRETE_CHOICES, default='CORREIOS', null=True, blank=True)
     nota_fiscal = models.CharField(max_length=3, choices=NOTA_FISCAL_CHOICES, default='SEM', null=True, blank=True)
+    orcamento_pdf = models.FileField(upload_to='orcamentos/', blank=True, null=True)
 
 
     def __str__(self):
