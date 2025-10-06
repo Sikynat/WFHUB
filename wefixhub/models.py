@@ -169,30 +169,39 @@ class Pedido(models.Model):
 # Modelo de Item do Pedido
 class ItemPedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens')
-    produto = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='itens_do_pedido') # Alterado para PROTECT para evitar deleção
+    produto = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='itens_do_pedido')
     quantidade = models.IntegerField(default=1)
     
-    # NOVOS CAMPOS PARA CONGELAR O PREÇO
+    # Campos para congelar o preço no momento da criação do pedido
     valor_unitario_sp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     valor_unitario_es = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
-    valor_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    # O campo valor_unitario pode ser removido pois os valores são armazenados acima
+    # valor_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 
     def __str__(self):
         return f"{self.quantidade} x {self.produto.product_description} em {self.pedido.id}"
-        
-    def get_total(self):
-        # **NOVO CÓDIGO AQUI**
-        # Lógica para o total do item
-        # Garante que o valor não seja nulo
-        valor_sp = self.valor_unitario_sp if self.valor_unitario_sp is not None else 0
-        valor_es = self.valor_unitario_es if self.valor_unitario_es is not None else 0
 
-        if self.pedido.cliente.client_state.uf_name == 'SP':
-            valor = valor_sp
-        elif self.pedido.cliente.client_state.uf_name == 'ES':
-            valor = valor_es
-        else:
-            valor = valor_sp # Valor padrão
-        
-        return valor * self.quantidade
+    def get_total(self):
+        """
+        Calcula o subtotal do item do pedido com base no estado do cliente.
+        """
+        # Verifica se o pedido e o cliente existem antes de acessar
+        if self.pedido and self.pedido.cliente and self.pedido.cliente.client_state:
+            uf = self.pedido.cliente.client_state.uf_name
+            
+            if uf == 'SP':
+                valor = self.valor_unitario_sp
+            elif uf == 'ES':
+                valor = self.valor_unitario_es
+            else:
+                # Retorna zero ou o valor padrão, caso o estado não seja SP ou ES
+                valor = self.valor_unitario_sp if self.valor_unitario_sp is not None else Decimal('0.00')
+
+            # Garante que o valor e a quantidade não sejam nulos antes de multiplicar
+            valor_final = valor if valor is not None else Decimal('0.00')
+            quantidade_final = self.quantidade if self.quantidade is not None else 0
+            
+            return valor_final * quantidade_final
+            
+        return Decimal('0.00') 

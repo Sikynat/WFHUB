@@ -31,7 +31,9 @@ import os
 from django.conf import settings
 from urllib.parse import quote
 from django.shortcuts import get_object_or_404, redirect
-
+from io import BytesIO
+import requests
+import xlsxwriter
 #from unidecode import unidecode 
 
 
@@ -604,50 +606,6 @@ def exportar_detalhes_pedido_excel(request, pedido_id):
     workbook.save(response)
     return response
 
-@staff_member_required
-def exportar_detalhes_pedido_admin_excel(request, pedido_id):
-    try:
-        pedido = get_object_or_404(Pedido, id=pedido_id)
-    except Pedido.DoesNotExist:
-        return redirect('dashboard_admin')
-    
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.id}.xlsx"'
-    
-    workbook = openpyxl.Workbook()
-    worksheet = workbook.active
-    worksheet.title = f"Pedido #{pedido.id}"
-    
-    # Colunas agora mostram apenas o preço de SP
-    columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal (Base SP)']
-    
-    row_num = 1
-    for col_num, column_title in enumerate(columns, 1):
-        worksheet.cell(row=row_num, column=col_num, value=column_title)
-    
-    itens = ItemPedido.objects.filter(pedido=pedido)
-    total_geral = 0
-    
-    for item in itens:
-        row_num += 1
-        
-        # Usa o valor de SP para o cálculo do subtotal
-        valor_unitario = item.produto.product_value_sp
-        subtotal = valor_unitario * item.quantidade
-        total_geral += subtotal
-        
-        worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
-        worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
-        worksheet.cell(row=row_num, column=3, value=item.quantidade)
-        worksheet.cell(row=row_num, column=4, value=valor_unitario)
-        worksheet.cell(row=row_num, column=5, value=subtotal)
-        
-    row_num += 1
-    worksheet.cell(row=row_num, column=4, value="Total Geral:")
-    worksheet.cell(row=row_num, column=5, value=total_geral)
-    
-    workbook.save(response)
-    return response
 
 @staff_member_required
 def detalhes_pedido_admin(request, pedido_id):
@@ -686,12 +644,12 @@ def detalhes_pedido_admin(request, pedido_id):
 def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     try:
         pedido = get_object_or_404(Pedido, id=pedido_id)
-        cliente = pedido.cliente # Pega o cliente do pedido
+        cliente = pedido.cliente 
         uf_cliente = cliente.client_state.uf_name
     except Pedido.DoesNotExist:
         return redirect('dashboard_admin')
 
-   # Formate a data para o padrão 'dd-mm-aaaa'
+    # Formata a data para o padrão 'dd-mm-aaaa'
     data_formatada = pedido.data_criacao.strftime('%d-%m-%Y')
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -704,14 +662,14 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     # Define as colunas dinamicamente com base no estado do cliente
     if uf_cliente == 'SP':
         columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
-        valor_key = 'product_value_sp'
+        valor_key = 'valor_unitario_sp' # <-- Alterado para o campo do ItemPedido
     elif uf_cliente == 'ES':
         columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
-        valor_key = 'product_value_es'
+        valor_key = 'valor_unitario_es' # <-- Alterado para o campo do ItemPedido
     else:
         # Padrão caso o estado não seja SP ou ES
         columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
-        valor_key = None # ou um valor padrão
+        valor_key = 'valor_unitario_sp' # <-- Padrão para SP
 
     row_num = 1
     for col_num, column_title in enumerate(columns, 1):
@@ -723,10 +681,11 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     for item in itens:
         row_num += 1
 
-        # Acessa o valor do produto dinamicamente
-        if valor_key:
-            valor_unitario = getattr(item.produto, valor_key, 0)
-        else:
+        # ✅ Acessa o valor do item de pedido, não do produto
+        valor_unitario = getattr(item, valor_key)
+        
+        # Garante que o valor não seja None
+        if valor_unitario is None:
             valor_unitario = 0
 
         subtotal = valor_unitario * item.quantidade
@@ -746,6 +705,7 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     return response
 
 # Exportar para o cliente
+
 @login_required
 def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
     try:
@@ -772,13 +732,13 @@ def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
     # Define as colunas dinamicamente com base no estado do cliente
     if uf_cliente == 'SP':
         columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
-        valor_key = 'product_value_sp'
+        valor_key = 'valor_unitario_sp'  # ✅ Alterado para o campo do ItemPedido
     elif uf_cliente == 'ES':
         columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
-        valor_key = 'product_value_es'
+        valor_key = 'valor_unitario_es'  # ✅ Alterado para o campo do ItemPedido
     else:
         columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
-        valor_key = None
+        valor_key = 'valor_unitario_sp'  # Padrão para SP
 
     row_num = 1
     for col_num, column_title in enumerate(columns, 1):
@@ -790,12 +750,11 @@ def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
     for item in itens:
         row_num += 1
 
-        if valor_key:
-            valor_unitario = getattr(item.produto, valor_key, 0)
-        else:
+        # ✅ Acessa o valor do item de pedido, não do produto
+        valor_unitario = getattr(item, valor_key)
+        if valor_unitario is None:
             valor_unitario = 0
 
-        # CÁLCULO DIRETO DO SUBTOTAL
         subtotal = valor_unitario * item.quantidade
         total_geral += subtotal
 
@@ -811,10 +770,6 @@ def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
 
     workbook.save(response)
     return response
-
-
-
-
 
 
 @staff_member_required
@@ -1500,9 +1455,105 @@ def upload_orcamento_pdf(request, pedido_id):
 
     return redirect('dashboard_admin')
 
+
+def exportar_detalhes_pedido_publico_excel(request, pedido_id):
+    """
+    Exporta os detalhes de um pedido para uma planilha Excel.
+    A planilha é personalizada para o estado do cliente.
+    """
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    itens_pedido = ItemPedido.objects.filter(pedido=pedido).select_related('produto')
+    
+    # Obtém o estado do cliente para definir a lógica de exportação
+    uf_cliente = pedido.cliente.client_state.uf_name
+
+    # Define as colunas e a chave de valor dinamicamente
+    if uf_cliente == 'SP':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        valor_key = 'valor_unitario_sp'
+    elif uf_cliente == 'ES':
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        valor_key = 'valor_unitario_es'
+    else:
+        # Padrão caso o estado não seja SP ou ES
+        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        valor_key = 'valor_unitario_sp'
+
+    # Criação do DataFrame com os dados dos itens
+    data = []
+    for item in itens_pedido:
+        # Acessa o valor do item de pedido usando a chave definida
+        valor_unitario = getattr(item, valor_key)
+        if valor_unitario is None:
+            valor_unitario = 0
+            
+        # Adiciona os dados à lista
+        data.append({
+            'Código': item.produto.product_code,
+            'Descrição': item.produto.product_description,
+            'Quantidade': item.quantidade,
+            # Usa o valor da chave definida dinamicamente
+            'Valor Unitário': float(valor_unitario),
+            'Subtotal': float(item.get_total())
+        })
+        
+    df = pd.DataFrame(data)
+
+    # Criação da resposta HTTP
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Renomeia a coluna 'Valor Unitário' para o nome correto
+        df = df.rename(columns={'Valor Unitário': columns[3]})
+        df = df[columns] # Reordena as colunas
+        df.to_excel(writer, index=False, sheet_name='Itens do Pedido')
+
+    output.seek(0)
+    filename = f"pedido_{pedido.id}_itens.xlsx"
+    
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    
+    return response
+
+
+
+
+def encurtar_url(long_url):
+    """
+    Encurta uma URL usando a API da TinyURL.
+    """
+    api_url = f"http://tinyurl.com/api-create.php?url={long_url}"
+    try:
+        response = requests.get(api_url, timeout=10)
+        if response.status_code == 200:
+            return response.text
+    except requests.RequestException:
+        pass
+    return long_url
+
+
+
+
+
+
+
+
+
+
 @staff_member_required
 def enviar_whatsapp(request, pedido_id):
     pedido = get_object_or_404(Pedido, id=pedido_id)
+
+    # Construir o link de download público da planilha
+    link_download_excel = request.build_absolute_uri(
+        reverse('exportar_detalhes_pedido_publico_excel', args=[pedido.id])
+    )
+
+    # Encurtar a URL
+    link_encurtado = encurtar_url(link_download_excel)
 
     # Informações básicas do pedido
     mensagem_base = (
@@ -1527,11 +1578,13 @@ def enviar_whatsapp(request, pedido_id):
     else:
         endereco_texto = ""
 
-    # Conclui a mensagem com a opção de nota fiscal
+    # Conclui a mensagem com a opção de nota fiscal e adiciona o link de download encurtado
     mensagem_final = (
         f"{mensagem_base}"
         f"{endereco_texto}"
-        f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}"
+        f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}\n\n"
+        f"*Download da Planilha de Itens:*\n"
+        f"{link_encurtado}"
     )
 
     # ✅ Use a função 'quote' para codificar a URL

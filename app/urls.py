@@ -36,7 +36,7 @@ urlpatterns = [
     path('processar-pedido-manual/', views.processar_pedido_manual, name='processar_pedido_manual'),
     path('upload-pedido/', views.upload_pedido, name='upload_pedido'),
     path('pedidos/<int:pedido_id>/whatsapp/', views.enviar_whatsapp, name='enviar_whatsapp'),
-
+    path('exportar_publico/excel/<int:pedido_id>/', views.exportar_detalhes_pedido_publico_excel, name='exportar_detalhes_pedido_publico_excel'),
     # Note que a URL para o upload de orçamento está comentada.
 ]
 
