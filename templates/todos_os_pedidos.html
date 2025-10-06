@@ -39,7 +39,11 @@
                             </form>
                         </td>
                         <td>
-                            <a href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
+                            {% if request.user.is_staff %}
+                                <a href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
+                            {% else %}
+                                <a href="{% url 'detalhes_pedido_cliente' pedido.id %}">Ver Detalhes</a>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}

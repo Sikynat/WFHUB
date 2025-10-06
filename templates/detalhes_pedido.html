@@ -4,10 +4,12 @@
 {% block content %}
     <h1>Detalhes do Pedido #{{ pedido.id }}</h1>
     <p><strong>Data da Compra:</strong> {{ pedido.data_criacao }}</p>
+    <p><strong>Código do Cliente:</strong> {{ pedido.cliente.client_code }}</p>
     <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
     <p><strong>Situação do Pedido</strong>: {{ pedido.status }}</p>
     <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
     <p><strong>Opção de Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</p>
+    
     {% if user.is_staff %}
     <p><strong>Criado por:</strong> {{ pedido.criado_por.username }}</p>
     {% endif %}

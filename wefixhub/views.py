@@ -35,6 +35,7 @@ from io import BytesIO
 import requests
 import xlsxwriter
 from datetime import date
+from django.db.models import OuterRef, Subquery, Max
 #from unidecode import unidecode 
 
 
@@ -48,10 +49,15 @@ def home(request):
     grupo = request.GET.get('grupo', None)
     marca = request.GET.get('marca', None)
 
-    data_hoje = datetime.date.today()
+    # Obter o registro mais recente para cada produto, independentemente da data.
+    # Esta abordagem é compatível com todos os bancos de dados.
+    latest_dates = Product.objects.filter(
+        product_code=OuterRef('product_code')
+    ).order_by('-date_product').values('date_product')[:1]
 
-    # Apenas produtos com data de hoje
-    products = Product.objects.filter(date_product=datetime.date.today()).order_by('product_code')
+    products = Product.objects.filter(
+        date_product=Subquery(latest_dates)
+    )
 
     if codigo:
         products = products.filter(product_code__icontains=codigo)
@@ -102,12 +108,11 @@ def home(request):
         'product_list': product_list,
         'cliente_logado': cliente_logado,
         'preco_exibido': preco_exibido,
-        'data_hoje': data_hoje,
+        # A data exibida será a do último produto atualizado
+        'data_hoje': products[0].date_product if products else datetime.date.today(),
     }
             
     return render(request, 'home.html', context)
-
-
 """
     # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
@@ -435,6 +440,62 @@ def historico_pedidos(request):
     return render(request, 'historico_pedidos.html', contexto)
 
 #Inicio detalhes pedido
+
+@login_required
+def detalhes_pedido(request, pedido_id):
+    try:
+        # Acesso ao cliente logado
+        cliente_logado = request.user.wfclient
+    except WfClient.DoesNotExist:
+        messages.error(request, "Erro: Usuário não tem um cliente associado.")
+        return redirect('home')
+
+    # Garante que o usuário logado só possa ver o próprio pedido, a menos que seja um admin.
+    # A lógica aqui é mais robusta. Admins podem ver qualquer pedido.
+    if request.user.is_staff:
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+    else:
+        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
+
+    # Obtém o estado do cliente do pedido para saber qual preço exibir
+    estado_cliente = pedido.cliente.client_state.uf_name
+
+    # Define qual preço será exibido
+    preco_exibido = 'sp' if estado_cliente == 'SP' else 'es'
+
+    itens_detalhes = []
+    total_geral = Decimal('0.00')
+    itens = ItemPedido.objects.filter(pedido=pedido)
+
+    for item in itens:
+        # Seleciona o valor unitário correto com base no estado do cliente
+        if preco_exibido == 'sp':
+            valor_unitario = item.valor_unitario_sp
+        else:
+            valor_unitario = item.valor_unitario_es
+
+        # Garante que o valor não seja None
+        if valor_unitario is None:
+            valor_unitario = Decimal('0.00')
+
+        valor_total_item = valor_unitario * item.quantidade
+        total_geral += valor_total_item
+
+        itens_detalhes.append({
+            'item': item,
+            'valor_unitario': valor_unitario,
+            'valor_total': valor_total_item,
+        })
+
+    contexto = {
+        'titulo': f"Detalhes do Pedido #{pedido.id}",
+        'pedido': pedido,
+        'itens_detalhes': itens_detalhes,
+        'total_geral': total_geral,
+        'preco_exibido': preco_exibido
+    }
+
+    return render(request, 'detalhes_pedido.html', contexto)
 
 @staff_member_required
 def detalhes_pedido_admin(request, pedido_id):
