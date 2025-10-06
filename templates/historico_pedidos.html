@@ -2,6 +2,7 @@
 {% block title %}Histórico de Pedidos{% endblock %}
 
 {% block content %}
+    {% load format_tags %}
     <h1>Seus Pedidos</h1>
     <hr>
     {% if pedidos %}
@@ -10,10 +11,10 @@
             <thead>
                 <tr>
                     <th>Número do Pedido</th>
-                    <th>Situção do Pedido</th>
+                    <th>Situação do Pedido</th>
                     <th>Data</th>
                     <th>Data de Envio</th>
-                    <th>Detalhes</th>
+                    <th>Valor Total</th> <th>Detalhes</th>
                 </tr>
             </thead>
             <tbody>
@@ -23,7 +24,7 @@
                         <td>{{ pedido.status }}</td>
                         <td>{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
                         <td>{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</td>
-                        <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
+                        <td>R$ {{ pedido.get_total_geral|format_br }}</td> <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
                     </tr>
                 {% endfor %}
             </tbody>

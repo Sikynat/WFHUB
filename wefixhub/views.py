@@ -36,6 +36,12 @@ import requests
 import xlsxwriter
 from datetime import date
 from django.db.models import OuterRef, Subquery, Max
+from django import template
+from django.conf import settings
+from django.utils import formats
+import locale
+
+
 #from unidecode import unidecode 
 
 
@@ -424,21 +430,22 @@ def historico_pedidos(request):
     pedidos_qs = Pedido.objects.filter(cliente=cliente_logado).order_by('-data_criacao')
 
     # Lógica de Paginação
-    paginator = Paginator(pedidos_qs, 10) # 10 pedidos por página para o cliente
+    paginator = Paginator(pedidos_qs, 10)
     page = request.GET.get('page')
 
     try:
-        pedidos = paginator.page(page)
+        pedidos_page = paginator.page(page)
     except PageNotAnInteger:
-        pedidos = paginator.page(1)
+        pedidos_page = paginator.page(1)
     except EmptyPage:
-        pedidos = paginator.page(paginator.num_pages)
+        pedidos_page = paginator.page(paginator.num_pages)
 
+    # A view agora só passa a QuerySet paginada para o template
     contexto = {
-        'pedidos': pedidos,
+        'pedidos': pedidos_page, # Passamos o objeto paginado diretamente
+        'titulo': 'Histórico de Pedidos',
     }
     return render(request, 'historico_pedidos.html', contexto)
-
 #Inicio detalhes pedido
 
 @login_required
@@ -547,35 +554,57 @@ def detalhes_pedido_admin(request, pedido_id):
 
 # Fim detalhes pedido
 
+# Configuração do locale para o formato brasileiro
+locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+
 @staff_member_required
 def dashboard_admin(request):
     total_clientes = WfClient.objects.count()
     total_pedidos = Pedido.objects.count()
-    
-    # 💡 CORREÇÃO: Calcule o subtotal de cada item e depois some.
+    pedidos_pendentes = Pedido.objects.filter(status='PENDENTE').count()
+    pedidos_concluidos = Pedido.objects.filter(status='FINALIZADO').count()
+    pedidos_orcamento = Pedido.objects.filter(status='ORCAMENTO').count()
+    pedidos_adc = Pedido.objects.filter(status='FINANCEIRO').count()
+    pedidos_separacao = Pedido.objects.filter(status='SEPARACAO').count()
+    pedidos_expedicao = Pedido.objects.filter(status='EXPEDICAO').count()
+
+    # Agrega o total de vendas
     total_vendas_agregadas = ItemPedido.objects.annotate(
         subtotal=F('quantidade') * F('produto__product_value_sp')
     ).aggregate(total_vendas=Sum('subtotal'))
     
-    valor_total_vendas = total_vendas_agregadas['total_vendas'] if total_vendas_agregadas['total_vendas'] else 0
+    # Pega o valor, tratando o caso em que não há vendas
+    valor_total_vendas_decimal = total_vendas_agregadas['total_vendas'] or Decimal('0.00')
+    
+    # Formata o valor para o padrão brasileiro
+    valor_total_vendas_formatado = locale.currency(valor_total_vendas_decimal, grouping=True, symbol='R$ ')
     
     pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
     pedidos_com_total = []
     for pedido in pedidos_recentes_qs:
+        total_pedido = pedido.get_total_geral() or Decimal('0.00')
         pedidos_com_total.append({
             'id': pedido.id,
             'cliente': pedido.cliente,
             'data_criacao': pedido.data_criacao,
-            'total': pedido.get_total_geral()
+            'total': locale.currency(total_pedido, grouping=True, symbol='R$ ')
         })
+    
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': total_clientes,
         'total_pedidos': total_pedidos,
-        'total_vendas': valor_total_vendas,
-        'pedidos_recentes': pedidos_com_total
+        'total_vendas': valor_total_vendas_formatado,
+        'pedidos_recentes': pedidos_com_total,
+        'pedidos_pendentes': pedidos_pendentes,
+        'pedidos_concluidos': pedidos_concluidos,
+        'pedidos_orcamento': pedidos_orcamento,
+        'pedidos_adc': pedidos_adc,
+        'pedidos_separacao': pedidos_separacao,
+        'pedidos_expedicao': pedidos_expedicao,
     }
     return render(request, 'dashboard.html', contexto)
+
 
 # View para exportação de pedidos
 @staff_member_required
@@ -839,22 +868,41 @@ def todos_os_pedidos(request):
     pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
 
     # Lógica de Paginação
-    paginator = Paginator(pedidos_qs, 20) # 20 pedidos por página
+    paginator = Paginator(pedidos_qs, 20)
     page = request.GET.get('page')
 
     try:
-        pedidos = paginator.page(page)
+        pedidos_paginados = paginator.page(page)
     except PageNotAnInteger:
-        pedidos = paginator.page(1)
+        pedidos_paginados = paginator.page(1)
     except EmptyPage:
-        pedidos = paginator.page(paginator.num_pages)
+        pedidos_paginados = paginator.page(paginator.num_pages)
+    
+    # Lista para armazenar os pedidos com os valores já formatados
+    pedidos_formatados = []
+    
+    for pedido in pedidos_paginados:
+        # Garante que o valor total é um Decimal para evitar erros
+        total_geral = pedido.get_total_geral() or Decimal('0.00')
+
+        # Cria um novo dicionário com os dados do pedido e o valor total formatado
+        pedidos_formatados.append({
+            'id': pedido.id,
+            'cliente': pedido.cliente,
+            'client_code': pedido.cliente.client_code,
+            'data_criacao': pedido.data_criacao,
+            'data_envio_solicitada': pedido.data_envio_solicitada,
+            'status': pedido.status,
+            'is_staff': request.user.is_staff,
+            'total_formatado': formats.localize(total_geral),
+        })
 
     contexto = {
         'titulo': 'Todos os Pedidos',
-        'pedidos': pedidos,
+        'pedidos': pedidos_formatados,
+        'paginator_info': pedidos_paginados, # Passa as informações de paginação
     }
     return render(request, 'todos_os_pedidos.html', contexto)
-
 
 
 from django.db import models
@@ -867,9 +915,14 @@ class PedidoStatus(models.Model):
     # Opções de status do pedido
     STATUS_CHOICES = [
         ('PENDENTE', 'Pendente'),
-        ('SOLICITADO', 'Solicitado'),
-        ('EM_ENVIO', 'Em Envio'),
         ('ENTREGUE', 'Entregue'),
+        ('EM_ENVIO', 'Em Envio'),
+        # novos
+        ('ORCAMENTO', 'Orçamento'),
+        ('FINANCEIRO', 'Analise De Credito'),
+        ('SEPARACAO', 'Separação'),
+        ('EXPEDICAO', 'Expedição'),
+        ('FINALIZADO', 'Finalizado'),
     ]
 
     cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
@@ -885,17 +938,14 @@ class PedidoStatus(models.Model):
     
 @staff_member_required
 def atualizar_status_pedido(request, pedido_id):
-    # NOVO: Adicione estas duas linhas para depuração
-
-    #print(request.POST) 
-   # print(f"Pedido ID: {pedido_id}")
-    
     if request.method == 'POST':
         pedido = get_object_or_404(Pedido, id=pedido_id)
         novo_status = request.POST.get('status')
-        if novo_status in ['PENDENTE', 'SOLICITADO', 'EM_ENVIO', 'ENTREGUE']:
+        # CORREÇÃO AQUI: Atualize a lista de status permitidos
+        if novo_status in ['PENDENTE', 'ORCAMENTO', 'FINANCEIRO', 'SEPARACAO', 'EXPEDICAO', 'FINALIZADO']:
             pedido.status = novo_status
             pedido.save()
+            messages.success(request, f'Status do Pedido #{pedido.id} alterado para {novo_status} com sucesso!')
     return redirect('todos_os_pedidos')
 
 @login_required

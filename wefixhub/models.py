@@ -114,8 +114,14 @@ class Product(models.Model):
 class Pedido(models.Model):
     STATUS_CHOICES = [
         ('PENDENTE', 'Pendente'),
-        ('EM_ENVIO', 'Em Envio'),
         ('ENTREGUE', 'Entregue'),
+        ('EM_ENVIO', 'Em Envio'),
+        #novos
+        ('ORCAMENTO', 'Orçamento'),
+        ('FINANCEIRO', 'Analise De Credito'),
+        ('SEPARACAO', 'Separação'),
+        ('EXPEDICAO', 'Expedição'),
+        ('FINALIZADO', 'Finalizado'),
     ]
 
      # NOVO: Opções de frete

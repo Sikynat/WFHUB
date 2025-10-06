@@ -2,36 +2,154 @@
 {% block title %}{{ titulo }}{% endblock %}
 
 {% block content %}
+{% load format_tags %}
+
     <h1>Dashboard Administrativo</h1>
     <hr>
+<style>
+    /* Estilo para o corpo da página */
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background-color: #ffffff;
+    }
 
+    /* Estilo para o cartão plano */
+    .flat-card {
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 25px;
+        text-align: center;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    .flat-card:hover {
+        transform: scale(1.02);
+    }
+
+    /* Cor do texto do título dentro do cartão */
+    .flat-card h5 {
+        font-weight: 500;
+        margin-bottom: 10px;
+        color: #ffffff; /* Título do cartão em branco */
+    }
+
+    /* Cor do número dentro do cartão */
+    .flat-card h1 {
+        font-weight: 700;
+        font-size: 2.5em;
+        color: #ffffff; /* Número do cartão em branco */
+    }
+
+    /* Definição das cores para os cards principais */
+    .flat-info { background-color: #3498db; }
+    .flat-success { background-color: #2ecc71; }
+    .flat-primary { background-color: #9b59b6; }
+
+    /* Estilo para a seção de relatório */
+    .report-section {
+        margin-top: 40px;
+    }
     
+    .report-section > h1 {
+        font-size: 2.2em;
+        font-weight: 600;
+        color: #333; /* Título da seção em #333 */
+        margin-bottom: 30px;
+    }
+
+    /* Definição das cores para os cards de status */
+    .flat-danger { background-color: #e74c3c; }
+    .flat-warning { background-color: #f39c12; }
+    .flat-status-info { background-color: #3498db; }
+    .flat-status-primary { background-color: #8e44ad; }
+    .flat-dark { background-color: #2c3e50; }
+    .flat-status-success { background-color: #27ae60; }
+
+      /* Estilos personalizados para a tabela */
+    .modern-table {
+        border-collapse: separate;
+        border-spacing: 0 10px; /* Adiciona espaçamento entre as linhas */
+    }
+
+    /* Estilo para as células da tabela */
+    .modern-table td,
+    .modern-table th {
+        padding: 15px 12px; /* Aumenta o espaçamento interno */
+        border-bottom: 1px solid #dee2e6; /* Borda sutil no rodapé */
+    }
+
+    /* Estilo para as linhas alternadas */
+    .modern-table tbody tr:nth-child(even) {
+        background-color: #f8f9fa; /* Cor de fundo para linhas pares */
+    }
+</style>
+
+<div class="container mt-5">
     <div class="row">
         <div class="col-md-4">
-            <div class="card text-center text-white bg-info mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">Total de Clientes</h5>
-                    <h1 class="card-text">{{ total_clientes }}</h1>
-                </div>
+            <div class="flat-card flat-info">
+                <h5>Total de Clientes</h5>
+                <h1>{{ total_clientes }}</h1>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card text-center text-white bg-success mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">Total de Pedidos</h5>
-                    <h1 class="card-text">{{ total_pedidos }}</h1>
-                </div>
+            <div class="flat-card flat-success">
+                <h5>Total de Pedidos</h5>
+                <h1>{{ total_pedidos }}</h1>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card text-center text-white bg-primary mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">Total de Vendas</h5>
-                    <h1 class="card-text">R$ {{ total_vendas|floatformat:2 }}</h1>
+            <div class="flat-card flat-primary">
+                <h5>Total de Vendas</h5>
+                <h1> {{ total_vendas|format_br }}</h1>
+            </div>
+        </div>
+    </div>
+    
+    <hr class="my-5">
+
+    <div class="report-section">
+        <h1 class="text-center">Relatório de Pedidos</h1>
+        <div class="row">
+            <div class="col-md-3">
+                <div class="flat-card flat-danger">
+                    <h5>Pendentes</h5>
+                    <h1>{{ pedidos_pendentes }}</h1>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="flat-card flat-warning">
+                    <h5>Em Orçamento</h5>
+                    <h1>{{ pedidos_orcamento }}</h1>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="flat-card flat-status-info">
+                    <h5>Análise de Crédito</h5>
+                    <h1>{{ pedidos_adc }}</h1>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="flat-card flat-status-primary">
+                    <h5>Em Separação</h5>
+                    <h1>{{ pedidos_separacao }}</h1>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="flat-card flat-dark">
+                    <h5>Na Expedição</h5>
+                    <h1>{{ pedidos_expedicao }}</h1>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="flat-card flat-status-success">
+                    <h5>Concluídos</h5>
+                    <h1>{{ pedidos_concluidos }}</h1>
                 </div>
             </div>
         </div>
     </div>
+</div>
     <hr>
 
     <h2>Pedidos Recentes</h2>
@@ -40,33 +158,32 @@
     </div>
 
     {% if pedidos_recentes %}
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>ID do Pedido</th>
-                    <th>Cliente</th>
-                    <th>Código</th>
-                    <th>Data</th>
-                    <th>Valor Total</th>
-                    <th>Detalhes</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for pedido in pedidos_recentes %}
-                    <tr>
-                        <td>{{ pedido.id }}</td>
-                        <td>{{ pedido.cliente.client_name }}</td>
-                         <td>{{ pedido.cliente.client_code }}</td>
-                        <td>{{ pedido.data_criacao }}</td>
-                        
-                        <td>R$ {{ pedido.total|floatformat:2 }}</td>
-                        <td>
-                            <a href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+       <table class="table table-borderless table-hover modern-table">
+    <thead>
+        <tr>
+            <th>ID do Pedido</th>
+            <th>Cliente</th>
+            <th>Código</th>
+            <th>Data e Hora</th>
+            <th>Valor Total</th>
+            <th>Detalhes</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for pedido in pedidos_recentes %}
+            <tr>
+                <td>{{ pedido.id }}</td>
+                <td>{{ pedido.cliente.client_name }}</td>
+                <td>{{ pedido.cliente.client_code }}</td>
+                <td>{{ pedido.data_criacao }}</td>
+                <td> {{ pedido.total|format_br }}</td>
+                <td>
+                    <a class="btn btn-primary" href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
     {% else %}
         <p class="alert alert-info">Nenhum pedido recente encontrado.</p>
     {% endif %}

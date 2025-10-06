@@ -125,9 +125,8 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'pt-br'
 
 TIME_ZONE = 'America/Sao_Paulo'
-
+USE_L10N = True  # Verifique se esta linha está presente
 USE_I18N = True
-
 USE_TZ = True
 
 
