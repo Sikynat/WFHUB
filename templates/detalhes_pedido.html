@@ -8,13 +8,17 @@
     <p><strong>Situação do Pedido</strong>: {{ pedido.status }}</p>
     <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
     <p><strong>Opção de Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</p>
-
+    {% if user.is_staff %}
+    <p><strong>Criado por:</strong> {{ pedido.criado_por.username }}</p>
+    {% endif %}
     <div class="row mb-4">
         {% if user.is_staff %}
             <div class="col-md-6 d-flex align-items-center mb-2">
                 <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary">Voltar para o Dashboard</a>
                 <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-primary ms-2">Exportar para Excel (Admin)</a>
-                <a target="_blank" class="btn btn-success ms-2" href="https://wa.me/5516991273974?text=*Dados%20do%20Pedido*%0A%0A*Codigo%20Interno:*%20{{ pedido.id }}%0A*Código%20do%20Cliente:*%20{{ pedido.cliente.client_code }}%0A*Razão%20Social:*%20{{ pedido.cliente.client_name }}%0A*Data%20da%20Expedição:*%20{{ pedido.data_envio_solicitada|date:"d/m/Y" }}%0A*Opção%20de%20Frete:*%20{{ pedido.get_frete_option_display }}%0A*Endereço%20de%20Entrega:*%20{{ pedido.endereco.logradouro }},%20{{ pedido.endereco.bairro }},%20{{ pedido.endereco.numero }}%20{{ pedido.endereco.cidade }}%20-%20{{ pedido.endereco.estado }}%20(CEP:%20{{ pedido.endereco.cep }})%0A*Opção%20de%20Nota%20Fiscal:*%20{{ pedido.get_nota_fiscal_display }} ">Enviar Para Whatsapp</a>
+                <a target="_blank" class="btn btn-success ms-2" href="{% url 'enviar_whatsapp' pedido.id %}">
+                    Enviar Para Whatsapp
+                </a>
             </div>
 
             <div class="col-md-6 d-flex flex-column mb-2">

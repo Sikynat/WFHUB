@@ -29,6 +29,9 @@ import unicodedata
 from django.urls import reverse
 import os
 from django.conf import settings
+from urllib.parse import quote
+from django.shortcuts import get_object_or_404, redirect
+
 #from unidecode import unidecode 
 
 
@@ -41,6 +44,8 @@ def home(request):
     descricao = request.GET.get('descricao', None)
     grupo = request.GET.get('grupo', None)
     marca = request.GET.get('marca', None)
+
+    data_hoje = datetime.date.today()
 
     # Apenas produtos com data de hoje
     products = Product.objects.filter(date_product=datetime.date.today()).order_by('product_code')
@@ -94,6 +99,7 @@ def home(request):
         'product_list': product_list,
         'cliente_logado': cliente_logado,
         'preco_exibido': preco_exibido,
+        'data_hoje': data_hoje,
     }
             
     return render(request, 'home.html', context)
@@ -427,59 +433,47 @@ def historico_pedidos(request):
 
 #Inicio detalhes pedido
 
-@login_required
-def detalhes_pedido(request, pedido_id):
+@staff_member_required
+def detalhes_pedido_admin(request, pedido_id):
     try:
-        cliente_logado = request.user.wfclient
-        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
+        # Puxa o pedido pelo ID (sem filtrar por cliente)
+        pedido = get_object_or_404(Pedido, id=pedido_id) 
         
-        # Lógica de controle de preço
-        preco_exibido = None
-        if request.user.is_staff:
-            preco_exibido = 'todos'
-        elif cliente_logado.client_state.uf_name == 'SP':
-            preco_exibido = 'sp'
-        elif cliente_logado.client_state.uf_name == 'ES':
-            preco_exibido = 'es'
+        # Obtém o estado do cliente do pedido para saber qual preço exibir
+        estado_cliente = pedido.cliente.client_state.uf_name
 
+        # Define qual preço será exibido
+        preco_exibido = None
+        if estado_cliente == 'SP':
+            preco_exibido = 'sp'
+        elif estado_cliente == 'ES':
+            preco_exibido = 'es'
+        else:
+            preco_exibido = 'sp' # Define um padrão para outros estados
+        
         itens_detalhes = []
-        total_geral = 0
         itens = ItemPedido.objects.filter(pedido=pedido)
 
         for item in itens:
-            if preco_exibido == 'sp':
-                valor_unitario = item.valor_unitario_sp
-            elif preco_exibido == 'es':
-                valor_unitario = item.valor_unitario_es
-            elif preco_exibido == 'todos':
-                valor_unitario_sp = item.valor_unitario_sp
-                valor_unitario_es = item.valor_unitario_es
-                valor_unitario = valor_unitario_sp
-            else:
-                valor_unitario = 0
-            
-            valor_total_item = valor_unitario * item.quantidade
-            total_geral += valor_total_item
-
             itens_detalhes.append({
                 'item': item,
-                'valor_unitario': valor_unitario,
-                'valor_total': valor_total_item,
-                'valor_unitario_sp': item.valor_unitario_sp,
-                'valor_unitario_es': item.valor_unitario_es
+                'valor_unitario': item.valor_unitario, # Usa o valor que já está no banco de dados
+                'valor_total': item.valor_unitario * item.quantidade,
             })
 
         contexto = {
             'titulo': f"Detalhes do Pedido #{pedido.id}",
             'pedido': pedido,
             'itens_detalhes': itens_detalhes,
-            'total_geral': total_geral,
+            'total_geral': pedido.valor_total, # ✅ Usa o valor que já foi salvo no pedido
             'preco_exibido': preco_exibido
         }
         
-        # Redireciona para a home
         return render(request, 'detalhes_pedido.html', contexto)
-    
+
+    except Pedido.DoesNotExist:
+        messages.error(request, "Erro: Pedido não encontrado.")
+        return redirect('todos_os_pedidos')
     except WfClient.DoesNotExist:
         messages.error(request, "Erro: Cliente não encontrado.")
         return redirect('pedidos')
@@ -1116,6 +1110,7 @@ def pedidos_para_hoje(request):
     }
     return render(request, 'pedidos/pedidos_hoje.html', context)
 
+
 @staff_member_required
 def gerar_pedido_manual(request):
     cliente_selecionado = None
@@ -1199,7 +1194,7 @@ def gerar_pedido_manual(request):
     
     return render(request, 'gerar_pedido_manual.html', context)
 
-
+@staff_member_required
 def processar_pedido_manual(request):
     if request.method == 'POST':
         cliente_id = request.POST.get('cliente_id')
@@ -1208,31 +1203,27 @@ def processar_pedido_manual(request):
         data_envio = request.POST.get('data_envio')
         frete_option = request.POST.get('frete_option')
         nota_fiscal = request.POST.get('nota_fiscal')
+        usuario_logado = request.user
 
-        # 💡 MUDANÇA AQUI: Lógica de validação condicional para o endereço
+        # Lógica de validação do endereço ajustada
+        fretes_sem_endereco = ['ONIBUS', 'RETIRADA']
         endereco_selecionado = None
-        if frete_option != 'ONIBUS':
+        
+        if frete_option not in fretes_sem_endereco:
             if not endereco_id:
                 messages.error(request, 'Por favor, selecione um endereço válido.')
                 return redirect('gerar_pedido_manual')
-
             try:
-                cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
-                endereco_selecionado = get_object_or_404(Endereco, id=endereco_id, cliente=cliente_selecionado)
-            except (WfClient.DoesNotExist, Endereco.DoesNotExist):
-                messages.error(request, 'Dados de cliente ou endereço inválidos.')
+                endereco_selecionado = get_object_or_404(Endereco, id=endereco_id)
+            except Endereco.DoesNotExist:
+                messages.error(request, 'Endereço inválido.')
                 return redirect('gerar_pedido_manual')
-        else:
-             # Se o frete for ÔNIBUS, apenas busca o cliente
-            try:
-                cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
-            except WfClient.DoesNotExist:
-                 messages.error(request, 'Cliente inválido.')
-                 return redirect('gerar_pedido_manual')
 
         try:
+            cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
             data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
             cart_data = json.loads(cart_data_json)
+
             if not cart_data:
                 messages.error(request, 'Não há itens para gerar o pedido.')
                 return redirect('gerar_pedido_manual')
@@ -1245,20 +1236,61 @@ def processar_pedido_manual(request):
                     frete_option=frete_option,
                     nota_fiscal=nota_fiscal,
                     status='PENDENTE',
+                    criado_por=usuario_logado,
+                    valor_total=Decimal('0.00')
                 )
-
+                
                 for product_id, quantidade in cart_data.items():
-                    # ... (criação dos ItemPedido) ...
-                    pass # O resto da sua lógica de criação de itens
+                    try:
+                        produto = get_object_or_404(Product, product_id=product_id)
+                        
+                        # Lógica para salvar o valor no campo correto
+                        if cliente_selecionado.client_state.uf_name == 'SP':
+                            ItemPedido.objects.create(
+                                pedido=pedido_criado,
+                                produto=produto,
+                                quantidade=quantidade,
+                                valor_unitario_sp=produto.product_value_sp,
+                                valor_unitario_es=None
+                            )
+                        elif cliente_selecionado.client_state.uf_name == 'ES':
+                            ItemPedido.objects.create(
+                                pedido=pedido_criado,
+                                produto=produto,
+                                quantidade=quantidade,
+                                valor_unitario_sp=None,
+                                valor_unitario_es=produto.product_value_es
+                            )
+                        else:
+                            messages.warning(request, f'Produto {produto.product_code} não pôde ser adicionado ao pedido. Estado do cliente inválido.')
+                            continue
+                    except Product.DoesNotExist:
+                        messages.warning(request, f'Produto com ID {product_id} não encontrado e foi ignorado.')
+                        continue
+
+                # Cálculo e atualização do Valor Total
+                total_pedido = ItemPedido.objects.filter(pedido=pedido_criado).aggregate(
+                    total_sp=Sum(F('quantidade') * F('valor_unitario_sp')),
+                    total_es=Sum(F('quantidade') * F('valor_unitario_es'))
+                )
+                
+                valor_final_do_pedido = total_pedido['total_sp'] if total_pedido['total_sp'] is not None else total_pedido['total_es']
+                
+                pedido_criado.valor_total = valor_final_do_pedido if valor_final_do_pedido is not None else Decimal('0.00')
+                pedido_criado.save()
 
             messages.success(request, f'Pedido #{pedido_criado.id} criado com sucesso para o cliente {cliente_selecionado.client_name}!')
             return redirect(reverse('gerar_pedido_manual') + '?pedido_gerado=sucesso')
 
-        except (ValueError, json.JSONDecodeError) as e:
-            messages.error(request, f'Erro nos dados do pedido. Erro: {e}')
+        except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError) as e:
+            messages.error(request, f'Dados de cliente, endereço, frete ou data inválidos. Erro: {e}')
+            return redirect('gerar_pedido_manual')
+        except json.JSONDecodeError:
+            messages.error(request, 'Erro nos dados do pedido. Tente novamente.')
             return redirect('gerar_pedido_manual')
 
     return redirect('gerar_pedido_manual')
+
 
 
 def normalize_text(text):
@@ -1306,6 +1338,9 @@ def upload_pedido(request):
             frete_option = form.cleaned_data['frete_option']
             endereco_selecionado = form.cleaned_data.get('endereco_selecionado', None)
             
+            # Capturar o usuário logado
+            usuario_logado = request.user 
+
             if frete_option.upper() not in ['ONIBUS', 'RETIRADA'] and not endereco_selecionado:
                 messages.error(request, "O campo de endereço é obrigatório para a opção de frete selecionada.")
                 upload_form = form
@@ -1320,6 +1355,7 @@ def upload_pedido(request):
                             frete_option=frete_option,
                             nota_fiscal=form.cleaned_data['nota_fiscal'],
                             status='PENDENTE',
+                            criado_por=usuario_logado,
                         )
 
                         planilha_pedido = request.FILES['planilha_pedido']
@@ -1422,7 +1458,6 @@ def upload_pedido(request):
     
     return render(request, 'upload_pedido.html', context)
 
-
 @staff_member_required
 def upload_orcamento_pdf(request, pedido_id):
     if request.method == 'POST':
@@ -1464,3 +1499,42 @@ def upload_orcamento_pdf(request, pedido_id):
         return redirect(reverse('detalhes_pedido_admin', args=[pedido_id]))
 
     return redirect('dashboard_admin')
+
+@staff_member_required
+def enviar_whatsapp(request, pedido_id):
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+
+    # Informações básicas do pedido
+    mensagem_base = (
+        f"*Dados do Pedido*\n\n"
+        f"*Codigo Interno:* {pedido.id}\n"
+        f"*Código do Cliente:* {pedido.cliente.client_code}\n"
+        f"*Razão Social:* {pedido.cliente.client_name}\n"
+        f"*Data da Expedição:* {pedido.data_envio_solicitada.strftime('%d/%m/%Y')}\n"
+        f"*Opção de Frete:* {pedido.get_frete_option_display()}\n"
+    )
+
+    # Adiciona o endereço de entrega apenas se não for ÔNIBUS ou RETIRADA
+    fretes_com_endereco = ['SEDEX', 'CORREIOS', 'TRANSPORTADORA']
+    endereco_texto = ""
+    if pedido.frete_option in fretes_com_endereco and pedido.endereco:
+        endereco = pedido.endereco
+        endereco_texto = (
+            f"*Endereço de Entrega:* "
+            f"{endereco.logradouro}, {endereco.bairro}, {endereco.numero} "
+            f"{endereco.cidade} - {endereco.estado} (CEP: {endereco.cep})\n"
+        )
+    else:
+        endereco_texto = ""
+
+    # Conclui a mensagem com a opção de nota fiscal
+    mensagem_final = (
+        f"{mensagem_base}"
+        f"{endereco_texto}"
+        f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}"
+    )
+
+    # ✅ Use a função 'quote' para codificar a URL
+    link_whatsapp = f"https://wa.me/5516991273974?text={quote(mensagem_final)}"
+
+    return redirect(link_whatsapp)

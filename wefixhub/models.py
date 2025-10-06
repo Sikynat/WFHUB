@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-
+from decimal import Decimal
 # Modelo para UF
 class wefixhub_uf (models.Model):
     uf_id = models.AutoField(primary_key=True)
@@ -141,6 +141,8 @@ class Pedido(models.Model):
     frete_option = models.CharField(max_length=20, choices=FRETE_CHOICES, default='CORREIOS', null=True, blank=True)
     nota_fiscal = models.CharField(max_length=3, choices=NOTA_FISCAL_CHOICES, default='SEM', null=True, blank=True)
     orcamento_pdf = models.FileField(upload_to='orcamentos/', blank=True, null=True)
+    valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    criado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_criados')
 
 
     def __str__(self):
@@ -173,6 +175,8 @@ class ItemPedido(models.Model):
     # NOVOS CAMPOS PARA CONGELAR O PREÇO
     valor_unitario_sp = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     valor_unitario_es = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+
+    valor_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 
     def __str__(self):
         return f"{self.quantidade} x {self.produto.product_description} em {self.pedido.id}"
