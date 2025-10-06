@@ -34,6 +34,7 @@ from django.shortcuts import get_object_or_404, redirect
 from io import BytesIO
 import requests
 import xlsxwriter
+from datetime import date
 #from unidecode import unidecode 
 
 
@@ -1481,34 +1482,46 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
 
     # Criação do DataFrame com os dados dos itens
     data = []
+    total_geral = 0 # ✅ Inicializa o total geral
+
     for item in itens_pedido:
         # Acessa o valor do item de pedido usando a chave definida
         valor_unitario = getattr(item, valor_key)
         if valor_unitario is None:
             valor_unitario = 0
             
+        subtotal = float(item.get_total()) # ✅ Calcula o subtotal
+
         # Adiciona os dados à lista
         data.append({
             'Código': item.produto.product_code,
             'Descrição': item.produto.product_description,
             'Quantidade': item.quantidade,
-            # Usa o valor da chave definida dinamicamente
             'Valor Unitário': float(valor_unitario),
-            'Subtotal': float(item.get_total())
+            'Subtotal': subtotal
         })
         
+        total_geral += subtotal # ✅ Soma ao total geral
+
     df = pd.DataFrame(data)
+
+    # ✅ Renomeia a coluna 'Valor Unitário' para o nome correto
+    df = df.rename(columns={'Valor Unitário': columns[3]})
+    df = df[columns] # Reordena as colunas
+
+    # ✅ Adiciona a linha de total ao final do DataFrame
+    df.loc[len(df)] = ['', '', '', 'Total Geral:', total_geral]
 
     # Criação da resposta HTTP
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # Renomeia a coluna 'Valor Unitário' para o nome correto
-        df = df.rename(columns={'Valor Unitário': columns[3]})
-        df = df[columns] # Reordena as colunas
         df.to_excel(writer, index=False, sheet_name='Itens do Pedido')
 
     output.seek(0)
-    filename = f"pedido_{pedido.id}_itens.xlsx"
+
+    # ✅ Renomeia o arquivo com as novas informações
+    data_hoje = date.today().strftime('%d-%m-%Y')
+    filename = f"pedido_{pedido.cliente.client_code}_{data_hoje}.xlsx"
     
     response = HttpResponse(
         output.getvalue(),
