@@ -38,7 +38,7 @@ class WfClient(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True)
     client_id = models.AutoField(primary_key=True)
-    client_code = models.CharField(max_length=20, unique=True)
+    client_code = models.IntegerField(unique=True)
     client_name = models.CharField(max_length=128)
     client_cnpj = models.CharField(max_length=14, unique=True)
     client_adress = models.CharField(max_length=255)
@@ -122,6 +122,7 @@ class Pedido(models.Model):
         ('SEPARACAO', 'Separação'),
         ('EXPEDICAO', 'Expedição'),
         ('FINALIZADO', 'Finalizado'),
+        ('CANCELADO', 'Cancelado'),
     ]
 
      # NOVO: Opções de frete

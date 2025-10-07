@@ -22,6 +22,7 @@ from django.db import transaction
 from django.contrib import messages
 import datetime
 from decimal import Decimal
+from fpdf import FPDF
 import json
 from .forms import GerarPedidoForm
 from .forms import UploadPedidoForm, SelectClientForm
@@ -40,7 +41,9 @@ from django import template
 from django.conf import settings
 from django.utils import formats
 import locale
-
+from django.db.models.functions import Cast
+from django.db.models import IntegerField
+from django.contrib import messages
 
 #from unidecode import unidecode 
 
@@ -923,6 +926,7 @@ class PedidoStatus(models.Model):
         ('SEPARACAO', 'Separação'),
         ('EXPEDICAO', 'Expedição'),
         ('FINALIZADO', 'Finalizado'),
+        ('CANCELADO', 'Cancelado'),
     ]
 
     cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
@@ -942,7 +946,7 @@ def atualizar_status_pedido(request, pedido_id):
         pedido = get_object_or_404(Pedido, id=pedido_id)
         novo_status = request.POST.get('status')
         # CORREÇÃO AQUI: Atualize a lista de status permitidos
-        if novo_status in ['PENDENTE', 'ORCAMENTO', 'FINANCEIRO', 'SEPARACAO', 'EXPEDICAO', 'FINALIZADO']:
+        if novo_status in ['PENDENTE', 'ORCAMENTO', 'FINANCEIRO', 'SEPARACAO', 'EXPEDICAO', 'FINALIZADO', 'CANCELADO']:
             pedido.status = novo_status
             pedido.save()
             messages.success(request, f'Status do Pedido #{pedido.id} alterado para {novo_status} com sucesso!')
@@ -1361,11 +1365,11 @@ def processar_pedido_manual(request):
 
 
 def normalize_text(text):
-    if text:
-        text = str(text).strip().lower()
-        text = str(unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8'))
-        return text
-    return ''
+    """Normaliza o texto, remove acentos, e converte para minúsculas."""
+    if not isinstance(text, str):
+        return ""
+    text = text.lower().strip()
+    return ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
 # --- FIM DA CORREÇÃO ---
 
 
@@ -1377,8 +1381,11 @@ def normalize_text(text):
 
 # ... (todos os seus imports)
 
+
+
 @staff_member_required
 def upload_pedido(request):
+    clientes_ordenados = WfClient.objects.all().order_by('client_code')
     cliente_selecionado = None
     form_cliente = SelectClientForm(request.GET or None)
     initial_data = {}
@@ -1405,7 +1412,6 @@ def upload_pedido(request):
             frete_option = form.cleaned_data['frete_option']
             endereco_selecionado = form.cleaned_data.get('endereco_selecionado', None)
             
-            # Capturar o usuário logado
             usuario_logado = request.user 
 
             if frete_option.upper() not in ['ONIBUS', 'RETIRADA'] and not endereco_selecionado:
@@ -1414,17 +1420,6 @@ def upload_pedido(request):
             else:
                 try:
                     with transaction.atomic():
-                        novo_pedido = Pedido.objects.create(
-                            cliente=cliente_para_validacao,
-                            endereco=endereco_selecionado,
-                            data_criacao=timezone.now(),
-                            data_envio_solicitada=form.cleaned_data['data_expedicao'],
-                            frete_option=frete_option,
-                            nota_fiscal=form.cleaned_data['nota_fiscal'],
-                            status='PENDENTE',
-                            criado_por=usuario_logado,
-                        )
-
                         planilha_pedido = request.FILES['planilha_pedido']
                         if planilha_pedido.name.endswith('.csv'):
                             df = pd.read_csv(planilha_pedido)
@@ -1458,6 +1453,7 @@ def upload_pedido(request):
 
                         itens_pedido = []
                         erros = []
+                        total_valor_pedido = Decimal('0.0')
 
                         for index, row in df.iterrows():
                             codigo_produto = str(row[codigo_col_name]).strip()
@@ -1476,15 +1472,16 @@ def upload_pedido(request):
                                 valor_unitario = getattr(produto, valor_field)
                                 
                                 if valor_unitario is not None and valor_unitario > 0:
+                                    total_valor_pedido += valor_unitario * Decimal(quantidade)
                                     itens_pedido.append(ItemPedido(
-                                        pedido=novo_pedido,
+                                        pedido=None,
                                         produto=produto,
                                         quantidade=quantidade,
                                         valor_unitario_sp=produto.product_value_sp,
                                         valor_unitario_es=produto.product_value_es,
                                     ))
                                 else:
-                                    erros.append(f"Produto '{codigo_produto}' foi desconsiderado por estar em falta no estoque")
+                                    erros.append(f"Produto '{codigo_produto}' foi desconsiderado, pois não se encontra disponível no estoque.")
                             except Product.DoesNotExist:
                                 erros.append(f"Produto com código '{codigo_produto}' não encontrado.")
                                 raise ValueError(f"Erro crítico: Produto '{codigo_produto}' não encontrado.")
@@ -1492,14 +1489,45 @@ def upload_pedido(request):
                                 erros.append(f"Erro ao processar o item '{codigo_produto}': {e}")
                                 raise ValueError(f"Erro crítico: {e}")
                         
-                        if erros:
-                            for erro in erros:
-                                messages.warning(request, erro)
-                        
+                        if total_valor_pedido <= 0:
+                            messages.error(request, "O valor total do pedido é R$0,00. Nenhum pedido foi criado.")
+                            raise ValueError("Valor do pedido é zero. Conseidere verificar as outras abas do pedido e separar manualmente antes de enviar.")
+
+                        novo_pedido = Pedido.objects.create(
+                            cliente=cliente_para_validacao,
+                            endereco=endereco_selecionado,
+                            data_criacao=timezone.now(),
+                            data_envio_solicitada=form.cleaned_data['data_expedicao'],
+                            frete_option=frete_option,
+                            nota_fiscal=form.cleaned_data['nota_fiscal'],
+                            status='PENDENTE',
+                            criado_por=usuario_logado,
+                            valor_total=total_valor_pedido,
+                        )
+
+                        for item in itens_pedido:
+                            item.pedido = novo_pedido
+
                         ItemPedido.objects.bulk_create(itens_pedido)
                         
-                    messages.success(request, f"Pedido #{novo_pedido.id} para {cliente_para_validacao.client_name} criado com sucesso.")
-                    return redirect('upload_pedido')
+                        messages.success(request, f"Pedido #{novo_pedido.id} para {cliente_para_validacao.client_name} criado com sucesso.")
+                        
+                        # Se há erros, retorna uma resposta especial para forçar o download e o reload
+                          # --- Alteração para o nome do arquivo ---
+                        if erros:
+                            erros_str = "\n".join(erros)
+                            
+                            # Formata a data para a string desejada (ex: 2025-10-07)
+                            data_formatada = novo_pedido.data_criacao.strftime('%Y-%m-%d')
+                            
+                            # Cria o nome do arquivo personalizado
+                            nome_arquivo = f"erros_pedido_{cliente_para_validacao.client_code}_{novo_pedido.id}_{data_formatada}.txt"
+                            
+                            response = HttpResponse(erros_str, content_type='text/plain')
+                            response['Content-Disposition'] = f"attachment; filename=\"{nome_arquivo}\""
+                            return response
+                        else:
+                            return redirect('upload_pedido')
                     
                 except ValueError as e:
                     messages.error(request, f"Erro ao processar a planilha: {e}")
@@ -1524,6 +1552,7 @@ def upload_pedido(request):
     }
     
     return render(request, 'upload_pedido.html', context)
+
 
 @staff_member_required
 def upload_orcamento_pdf(request, pedido_id):
