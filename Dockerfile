@@ -32,7 +32,8 @@ ENV MYSQLUSER="dummy"
 ENV MYSQLPASSWORD="dummy"
 ENV MYSQLHOST="localhost"
 ENV MYSQLPORT="3306"
-ENV DEBUG="False" # Adicionar DEBUG=False para simular o ambiente de produção
+# Adicionar DEBUG=False para simular o ambiente de produção
+ENV DEBUG="False" 
 
 # Coleta todos os arquivos estáticos para o diretório STATIC_ROOT
 RUN python manage.py collectstatic --noinput
