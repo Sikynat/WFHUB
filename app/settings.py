@@ -82,6 +82,13 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Tenta carregar a DATABASE_URL. Se não existir, o valor será None (vazio).
 DATABASE_URL = config('DATABASE_URL', default=None)
 
+# ...
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
+
+# Adicione esta linha abaixo
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', cast=Csv())
+# ...
+
 # Se a DATABASE_URL foi encontrada, use-a.
 if DATABASE_URL:
     DATABASES = {
@@ -99,7 +106,7 @@ else:
             'PORT': config('MYSQLPORT', cast=int),
         }
     }
-    
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
