@@ -11,7 +11,7 @@ class ClientAdmin(admin.ModelAdmin):
     exclude = ('user',)
     
     # Exibição na lista de clientes, usando o método 'nome_com_codigo'
-    list_display = ['client_is_active', 'client_id', 'client_code', 'nome_com_codigo', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date', 'frete_preferencia', 'nota_fiscal_preferencia']
+    list_display = ['client_is_active', 'client_id', 'client_code', 'nome_com_codigo', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date', 'frete_preferencia', 'nota_fiscal_preferencia', 'observacao_preferencia',]
     
     # Campos de busca
     search_fields = ['client_name', 'client_code', 'client_cnpj']
@@ -32,10 +32,11 @@ class ClientAdmin(admin.ModelAdmin):
                 'client_state_subscription',
                 'client_date',
                 'client_is_active'
+                
             )
         }),
         ('Preferências do Pedido', {
-            'fields': ('frete_preferencia', 'nota_fiscal_preferencia'),
+            'fields': ('frete_preferencia', 'nota_fiscal_preferencia', 'observacao_preferencia'),
             'description': 'Configure as opções padrão para este cliente.',
         }),
     )

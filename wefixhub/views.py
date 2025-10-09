@@ -340,7 +340,7 @@ def checkout(request):
         data_envio = request.POST.get('data_envio')
         frete_option = request.POST.get('frete_option')
         nota_fiscal = request.POST.get('nota_fiscal')
-        
+        observacao = request.POST.get('observacao') # <-- ADICIONE ESTA LINHA
         # 💡 Validação condicional do endereço
         endereco_selecionado = None
         if frete_option != 'ONIBUS':
@@ -367,6 +367,7 @@ def checkout(request):
                 data_envio_solicitada=data_envio,
                 frete_option=frete_option,
                 nota_fiscal=nota_fiscal,
+                observacao=observacao, # <-- ADICIONE ESTA LINHA
             )
             
             for item in carrinho_detalhes:
@@ -1275,7 +1276,8 @@ def processar_pedido_manual(request):
         frete_option = request.POST.get('frete_option')
         nota_fiscal = request.POST.get('nota_fiscal')
         usuario_logado = request.user
-
+        observacao = request.POST.get('observacao') # <-- ADICIONE ESTA LINHA
+        
         # Lógica de validação do endereço ajustada
         fretes_sem_endereco = ['ONIBUS', 'RETIRADA']
         endereco_selecionado = None
@@ -1308,7 +1310,9 @@ def processar_pedido_manual(request):
                     nota_fiscal=nota_fiscal,
                     status='PENDENTE',
                     criado_por=usuario_logado,
-                    valor_total=Decimal('0.00')
+                    valor_total=Decimal('0.00'),
+                    observacao=observacao # <-- ADICIONE ESTA LINHA
+
                 )
                 
                 for product_id, quantidade in cart_data.items():
@@ -1383,6 +1387,7 @@ def normalize_text(text):
 
 
 
+
 @staff_member_required
 def upload_pedido(request):
     clientes_ordenados = WfClient.objects.all().order_by('client_code')
@@ -1396,6 +1401,7 @@ def upload_pedido(request):
         if cliente_selecionado:
             initial_data['frete_preferencia'] = cliente_selecionado.frete_preferencia
             initial_data['nota_fiscal_preferencia'] = cliente_selecionado.nota_fiscal_preferencia
+            initial_data['observacao_preferencia'] = cliente_selecionado.observacao_preferencia
             endereco_padrao = Endereco.objects.filter(cliente=cliente_selecionado, is_default=True).first()
             if endereco_padrao:
                 initial_data['endereco_padrao_id'] = endereco_padrao.id
@@ -1411,7 +1417,8 @@ def upload_pedido(request):
         if form.is_valid():
             frete_option = form.cleaned_data['frete_option']
             endereco_selecionado = form.cleaned_data.get('endereco_selecionado', None)
-            
+            observacao = form.cleaned_data['observacao_preferencia']
+
             usuario_logado = request.user 
 
             if frete_option.upper() not in ['ONIBUS', 'RETIRADA'] and not endereco_selecionado:
@@ -1468,7 +1475,7 @@ def upload_pedido(request):
                                 continue
 
                             try:
-                                produto = get_object_or_404(Product, product_code=codigo_produto)
+                                produto = Product.objects.get(product_code=codigo_produto) # Alterado de get_object_or_404 para .get()
                                 valor_unitario = getattr(produto, valor_field)
                                 
                                 if valor_unitario is not None and valor_unitario > 0:
@@ -1483,15 +1490,16 @@ def upload_pedido(request):
                                 else:
                                     erros.append(f"Produto '{codigo_produto}' foi desconsiderado, pois não se encontra disponível no estoque.")
                             except Product.DoesNotExist:
+                                # ✅ Adiciona o erro à lista e continua o loop
                                 erros.append(f"Produto com código '{codigo_produto}' não encontrado.")
-                                raise ValueError(f"Erro crítico: Produto '{codigo_produto}' não encontrado.")
+                                continue
                             except Exception as e:
                                 erros.append(f"Erro ao processar o item '{codigo_produto}': {e}")
                                 raise ValueError(f"Erro crítico: {e}")
                         
-                        if total_valor_pedido <= 0:
-                            messages.error(request, "O valor total do pedido é R$0,00. Nenhum pedido foi criado.")
-                            raise ValueError("Valor do pedido é zero. Conseidere verificar as outras abas do pedido e separar manualmente antes de enviar.")
+                        if not itens_pedido: # Verifica se a lista de itens está vazia antes de criar o pedido
+                            messages.error(request, "Não há produtos válidos para criar um pedido.")
+                            raise ValueError("Nenhum produto válido encontrado.")
 
                         novo_pedido = Pedido.objects.create(
                             cliente=cliente_para_validacao,
@@ -1503,6 +1511,7 @@ def upload_pedido(request):
                             status='PENDENTE',
                             criado_por=usuario_logado,
                             valor_total=total_valor_pedido,
+                            observacao=observacao,
                         )
 
                         for item in itens_pedido:
@@ -1512,22 +1521,15 @@ def upload_pedido(request):
                         
                         messages.success(request, f"Pedido #{novo_pedido.id} para {cliente_para_validacao.client_name} criado com sucesso.")
                         
-                        # Se há erros, retorna uma resposta especial para forçar o download e o reload
-                          # --- Alteração para o nome do arquivo ---
                         if erros:
                             erros_str = "\n".join(erros)
-                            
-                            # Formata a data para a string desejada (ex: 2025-10-07)
                             data_formatada = novo_pedido.data_criacao.strftime('%Y-%m-%d')
-                            
-                            # Cria o nome do arquivo personalizado
                             nome_arquivo = f"erros_pedido_{cliente_para_validacao.client_code}_{novo_pedido.id}_{data_formatada}.txt"
-                            
                             response = HttpResponse(erros_str, content_type='text/plain')
                             response['Content-Disposition'] = f"attachment; filename=\"{nome_arquivo}\""
                             return response
                         else:
-                            return redirect('upload_pedido')
+                            return redirect(reverse('detalhes_pedido_admin', args=[novo_pedido.id]))
                     
                 except ValueError as e:
                     messages.error(request, f"Erro ao processar a planilha: {e}")
@@ -1552,7 +1554,6 @@ def upload_pedido(request):
     }
     
     return render(request, 'upload_pedido.html', context)
-
 
 @staff_member_required
 def upload_orcamento_pdf(request, pedido_id):
@@ -1716,6 +1717,7 @@ def enviar_whatsapp(request, pedido_id):
         f"*Razão Social:* {pedido.cliente.client_name}\n"
         f"*Data da Expedição:* {pedido.data_envio_solicitada.strftime('%d/%m/%Y')}\n"
         f"*Opção de Frete:* {pedido.get_frete_option_display()}\n"
+        f"*OBS:* {pedido.observacao}\n"
     )
 
     # Adiciona o endereço de entrega apenas se não for ÔNIBUS ou RETIRADA

@@ -25,6 +25,7 @@ class GerarPedidoForm(forms.Form):
         label='Selecione o Cliente',
         empty_label='---',
         required=False
+
     )
 
 class SelectClientForm(forms.Form):
@@ -63,4 +64,11 @@ class UploadPedidoForm(forms.Form):
         label="Fazer Upload da Planilha de Pedido",
         help_text="Arquivo .xlsx ou .csv com duas colunas: 'codigo' e 'quantidade'.",
         widget=forms.FileInput(attrs={'class': 'form-control'})
+    )
+
+ # ✅ Alterado o nome do campo para 'observacao_preferencia'
+    observacao_preferencia = forms.CharField(
+        label="Observação (opcional)",
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
     )

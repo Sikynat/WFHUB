@@ -52,6 +52,11 @@ class WfClient(models.Model):
     frete_preferencia = models.CharField(max_length=20, choices=FRETE_CHOICES, default='CORREIOS', null=True, blank=True)
     nota_fiscal_preferencia = models.CharField(max_length=3, choices=NOTA_FISCAL_CHOICES, default='SEM', null=True, blank=True)
 
+    # Campo de observação padra
+
+    observacao_preferencia = models.TextField(blank=True, null=True, verbose_name="Observação Padrão") # <-- Adicione esta linha
+
+
     class Meta:
         db_table = 'wf_client'
         verbose_name = 'Cliente'
@@ -150,7 +155,7 @@ class Pedido(models.Model):
     orcamento_pdf = models.FileField(upload_to='orcamentos/', blank=True, null=True)
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     criado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_criados')
-
+    observacao = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"

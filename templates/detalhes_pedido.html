@@ -9,6 +9,9 @@
     <p><strong>Situação do Pedido</strong>: {{ pedido.status }}</p>
     <p><strong>Opção de Frete:</strong> {{ pedido.get_frete_option_display }}</p>
     <p><strong>Opção de Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</p>
+    <p><strong>OBS:</strong> {{ pedido.observacao }}</p>
+
+    
     
     {% if user.is_staff %}
     <p><strong>Criado por:</strong> {{ pedido.criado_por.username }}</p>
