@@ -915,31 +915,6 @@ from django.contrib.auth.models import User
 # ... (seus outros modelos)
 
 # Modelo de Pedido
-class PedidoStatus(models.Model):
-    # Opções de status do pedido
-    STATUS_CHOICES = [
-        ('PENDENTE', 'Pendente'),
-        ('ENTREGUE', 'Entregue'),
-        ('EM_ENVIO', 'Em Envio'),
-        # novos
-        ('ORCAMENTO', 'Orçamento'),
-        ('FINANCEIRO', 'Analise De Credito'),
-        ('SEPARACAO', 'Separação'),
-        ('EXPEDICAO', 'Expedição'),
-        ('FINALIZADO', 'Finalizado'),
-        ('CANCELADO', 'Cancelado'),
-    ]
-
-    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos')
-    data_criacao = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE') # NOVO: Campo de status
-
-    def __str__(self):
-        return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"
-
-    def get_total_geral(self):
-        total = sum(item.get_total() for item in self.itens.all())
-        return total
     
 @staff_member_required
 def atualizar_status_pedido(request, pedido_id):
