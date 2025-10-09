@@ -44,7 +44,17 @@ import locale
 from django.db.models.functions import Cast
 from django.db.models import IntegerField
 from django.contrib import messages
+import locale
 
+try:
+    # Tenta definir o locale ideal
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except locale.Error:
+    # Se falhar, usa um locale padrão que suporta UTF-8
+    print("Aviso: Locale 'pt_BR.UTF-8' não encontrado. Usando 'C.UTF-8' como fallback.")
+    locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+
+# O resto do seu código continua aqui...
 #from unidecode import unidecode 
 
 
