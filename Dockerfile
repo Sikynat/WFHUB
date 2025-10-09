@@ -24,7 +24,7 @@ COPY . .
 # 7. BUILD DE ARQUIVOS ESTÁTICOS
 # Define variáveis temporárias APENAS para o build do collectstatic
 ENV SECRET_KEY="dummy-key-for-collectstatic"
-ENV ALLOWED_HOSTS="localhost,127.0.0.1"  # <--- LINHA ADICIONADA
+ENV ALLOWED_HOSTS="localhost,122.0.0.1"
 
 # Coleta todos os arquivos estáticos para o diretório STATIC_ROOT
 RUN python manage.py collectstatic --noinput
