@@ -22,8 +22,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 7. BUILD DE ARQUIVOS ESTÁTICOS
-# Define uma chave secreta temporária APENAS para o build do collectstatic
+# Define variáveis temporárias APENAS para o build do collectstatic
 ENV SECRET_KEY="dummy-key-for-collectstatic"
+ENV ALLOWED_HOSTS="localhost,127.0.0.1"  # <--- LINHA ADICIONADA
+
 # Coleta todos os arquivos estáticos para o diretório STATIC_ROOT
 RUN python manage.py collectstatic --noinput
 
