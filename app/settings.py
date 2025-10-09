@@ -15,6 +15,7 @@ import os
 import pymysql
 pymysql.install_as_MySQLdb()
 from decouple import config, Csv
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -78,19 +79,27 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('MYSQLDATABASE'),
-        'USER': config('MYSQLUSER'),
-        'PASSWORD': config('MYSQLPASSWORD'),
-        'HOST': config('MYSQLHOST'),
-        'PORT': config('MYSQLPORT', cast=int),
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+# Tenta carregar a DATABASE_URL. Se não existir, o valor será None (vazio).
+DATABASE_URL = config('DATABASE_URL', default=None)
+
+# Se a DATABASE_URL foi encontrada, use-a.
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600)
+    }
+# Senão, use as variáveis MYSQL... individuais.
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': config('MYSQLDATABASE'),
+            'USER': config('MYSQLUSER'),
+            'PASSWORD': config('MYSQLPASSWORD'),
+            'HOST': config('MYSQLHOST'),
+            'PORT': config('MYSQLPORT', cast=int),
         }
     }
-}
+    
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
