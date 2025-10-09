@@ -23,9 +23,16 @@ COPY . .
 
 # 7. BUILD DE ARQUIVOS ESTÁTICOS
 # Define variáveis temporárias APENAS para o build do collectstatic
-ENV SECRET_KEY="dummy-key-for-collectstatic"
-ENV ALLOWED_HOSTS="localhost,127.0.0.1"
-ENV CSRF_TRUSTED_ORIGINS="https://wfhub-production.up.railway.app"
+# Django vai tentar se conectar ao DB, então fornecemos valores falsos.
+ENV SECRET_KEY="dummy"
+ENV ALLOWED_HOSTS="dummy"
+ENV CSRF_TRUSTED_ORIGINS="https://dummy.com"
+ENV MYSQLDATABASE="dummy"
+ENV MYSQLUSER="dummy"
+ENV MYSQLPASSWORD="dummy"
+ENV MYSQLHOST="localhost"
+ENV MYSQLPORT="3306"
+ENV DEBUG="False" # Adicionar DEBUG=False para simular o ambiente de produção
 
 # Coleta todos os arquivos estáticos para o diretório STATIC_ROOT
 RUN python manage.py collectstatic --noinput
