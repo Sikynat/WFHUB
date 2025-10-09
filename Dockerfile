@@ -34,3 +34,11 @@ COPY . .
 # "Quando alguém iniciar um contêiner a partir desta imagem, execute este comando para ligar o servidor web."
 # Isso acontece QUANDO O CONTÊINER RODA, não durante a construção.
 CMD ["gunicorn", "app.wsgi:application", "--bind", "0.0.0.0:8000"]
+
+COPY . .
+
+# Coleta todos os arquivos estáticos para o STATIC_ROOT
+RUN python manage.py collectstatic --noinput
+
+# Comando para iniciar sua aplicação
+CMD ["gunicorn", "app.wsgi:application", "--bind", "0.0.0.0:8000"]

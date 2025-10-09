@@ -48,6 +48,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -144,6 +145,7 @@ STATIC_URL = 'static/'
 # Diretório para coletar arquivos estáticos em produção.
 # Mantenha-o diferente do STATICFILES_DIRS.
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_collect')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Diretórios adicionais onde o Django deve procurar por arquivos estáticos
 # (ex: a pasta 'static' na raiz do projeto)
