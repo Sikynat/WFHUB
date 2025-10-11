@@ -2,265 +2,492 @@
 {% block title %}Página Inicial{% endblock %}
 
 {% block content %}
-    <h1>Bem-vindo à nossa lista de produtos!</h1>
-    <p>Este é o conteúdo exclusivo Wefix para você</p>
 
-    {% if user.is_authenticated %}
-        {% if cliente_logado %}
-            <p>
-                Você está logado como: <strong>{{ cliente_logado.client_name }}</strong>
-                {% if not request.user.is_staff %}
-                    (Código: {{ cliente_logado.client_code }})
-                {% endif %}
-            </p>
-        {% else %}
-            <p>Você está logado como: <strong>{{ user.username }}</strong></p>
-        {% endif %}
+<style>
+
+    /* ----- PALETA DE CORES ----- */
+    :root {
+        --cor-fundo: #16001c;      /* Cinza escuro para o fundo */
+        --cor-componente: #343a40; /* Cinza um pouco mais claro para cards e tabelas */
+        --cor-borda: #495057;      /* Cinza para bordas */
+        --cor-texto: #f8f9fa;      /* Branco para texto principal */
+        --cor-destaque: #9747e8;   /* Roxo para botões, links e destaques */
+        --cor-destaque-hover: #783ae3; /* Roxo mais escuro para hover */
+    }
+
+    /* ----- ESTILOS GERAIS ----- */
+    strong {
+        color: var(--cor-destaque); 
+    }
+    span {
+        color: var(--cor-destaque); 
+    }
+
+    body {
+        background-color: var(--cor-fundo);
+        color: var(--cor-texto);
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--cor-texto);
+    }
+    
+    hr {
+        border-top: 1px solid var(--cor-borda);
+    }
+
+    /* ----- CARDS E FILTROS ----- */
+    .card {
+        background-color: var(--cor-componente);
+        border: 1px solid var(--cor-borda);
+    }
+
+    .card-header {
+        background-color: #2c3034;
+        border-bottom: 1px solid var(--cor-borda);
+    }
+
+    /* ----- FORMULÁRIOS E INPUTS ----- */
+    .form-control {
+        background-color: var(--cor-componente);
+        color: var(--cor-texto);
+        border: 1px solid var(--cor-borda);
+    }
+
+    .form-control:focus {
+        background-color: var(--cor-componente);
+        color: var(--cor-texto);
+        border-color: var(--cor-destaque);
+        box-shadow: 0 0 0 0.25rem rgba(111, 66, 193, 0.25);
+    }
+    
+    .form-control::placeholder {
+        color: #adb5bd;
+    }
+
+   /* ----- TABELA (VERSÃO MELHORADA) ----- */
+.table-responsive {
+    border-radius: 0.5rem; /* Cantos arredondados para o container */
+    overflow: hidden; /* Garante que a tabela respeite os cantos arredondados */
+    border: 1px solid var(--cor-borda);
+    background-color: var(--cor-componente); /* Fundo do container da tabela */
+}
+
+.table {
+    color: var(--cor-texto);
+    margin-bottom: 0; /* Remove a margem padrão para ajustar no container */
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%; /* Garante que a tabela ocupe 100% da largura do pai */
+}
+
+/* Estilo do Cabeçalho */
+.table thead th {
+    background-color: #2c3034; /* Cinza mais escuro para o cabeçalho */
+    color: var(--cor-destaque); /* Cor do texto do cabeçalho levemente mais suave */
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--cor-destaque); /* Borda roxa que você já tinha */
+    padding: 0.9rem; /* Espaçamento interno */
+    vertical-align: middle;
+}
+
+/* Estilo do Corpo da Tabela */
+.table tbody tr {
+    background-color: var(--cor-componente); /* Fundo padrão das linhas do corpo */
+    color: var(--cor-texto);
+}
+
+/* Estilo das Células */
+.table th,
+.table td {
+    padding: 0.9rem; /* Aumenta o espaçamento interno */
+    vertical-align: middle; /* Centraliza o conteúdo verticalmente */
+    border-top: 1px solid var(--cor-borda);
+    background-color: #212529;
+    color: white;
+}
+
+/* Remove borda inferior padrão, pois a superior já define */
+.table > :not(caption) > * > * {
+    border-bottom-width: 0;
+}
+
+/* Efeito listrado para linhas ímpares */
+.table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.05); /* Fundo cinza um pouco mais claro para a linha ímpar */
+}
+
+/* Efeito Hover */
+.table tbody tr:hover {
+    background-color: rgba(111, 66, 193, 0.25); /* Fundo roxo mais visível no hover */
+    color: #fff; /* Garante que o texto fique branco no hover */
+}
+
+/* Classe para alinhar texto à direita */
+.text-right-data {
+    text-align: right !important;
+}
+
+
+    /* ----- BOTÕES ----- */
+    .btn-primary, .btn-success {
+        background-color: var(--cor-destaque);
+        border-color: var(--cor-destaque);
+    }
+    .btn-primary:hover, .btn-success:hover {
+        background-color: var(--cor-destaque-hover);
+        border-color: var(--cor-destaque-hover);
+    }
+    .btn-warning {
+        background-color: #6c757d; /* Botão secundário em cinza */
+        border-color: #6c757d;
+        color: white;
+    }
+    .btn-warning:hover {
+        background-color: #5a6268;
+        border-color: #545b62;
+    }
+
+    /* ----- PAGINAÇÃO ----- */
+    .pagination .page-link {
+        background-color: var(--cor-componente);
+        border-color: var(--cor-borda);
+        color: var(--cor-destaque);
+    }
+    .pagination .page-item.active .page-link {
+        background-color: var(--cor-destaque);
+        border-color: var(--cor-destaque);
+        color: var(--cor-texto);
+    }
+    .pagination .page-link:hover {
+        background-color: #495057;
+    }
+    .pagination .page-item.disabled .page-link {
+        background-color: var(--cor-componente);
+        border-color: var(--cor-borda);
+    }
+
+
+    /* ----- ESTILOS PARA MOBILE (Responsividade) ----- */
+@media (max-width: 767.98px) {
+
+    /* 1. Filtros empilhados verticalmente */
+    .card-body .input-group {
+        flex-direction: column;
+    }
+
+    .card-body .input-group .form-control,
+    .card-body .input-group .btn {
+        width: 100%;
+        margin-bottom: 0.75rem; /* Adiciona espaço entre os itens empilhados */
+        border-radius: 0.375rem !important; /* Garante que as bordas fiquem arredondadas */
+    }
+
+    .card-body .input-group > *:last-child {
+        margin-bottom: 0; /* Remove a margem do último item */
+    }
+
+
+    /* 2. Ajuste de fontes para melhor leitura */
+    h1 {
+        font-size: 1.8rem; /* Reduz um pouco o título principal */
+    }
+    h2 {
+        font-size: 1.5rem;
+    }
+    p, body {
+        margin-left: 10px;
+        margin-right: 10px;
+        font-size: 0.65rem; /* Ajusta o texto geral */
+    }
+
+
+    /* 3. Tabela com menos espaçamento interno para caber mais conteúdo */
+    .table th,
+    .table td {
+        
+        padding: 0.6rem 0.4rem; /* Reduz o espaçamento vertical e horizontal */
+    }
+    
+
+    /* 4. Botões de Ação (Gerar Pedido/Limpar) empilhados */
+    #gerar-pedido-form .btn {
+        width: 100%;
+        display: block;
+        margin-bottom: 0.75rem;
+    }
+}
+
+
+
+
+
+</style>
+
+
+<h1><span>Bem-vindo à nossa lista de produtos!</span></h1>
+<p>Este é o conteúdo exclusivo <strong>Wefix</strong> para você</p>
+
+{% if user.is_authenticated %}
+    {% if cliente_logado %}
+        <p>
+            Você está logado como: <strong>{{ cliente_logado.client_name }}</strong>
+            {% if not request.user.is_staff %}
+                (Código: {{ cliente_logado.client_code }})
+            {% endif %}
+        </p>
+    {% else %}
+        <p>Você está logado como: <strong>{{ user.username }}</strong></p>
     {% endif %}
+{% endif %}
 
-    <h2>Nossos Produtos</h2>
-            <p>Você esta visualizando a tabela de preço do dia: <strong>{{ data_hoje|date:"d/m/Y" }}</strong></p>
-    <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            Filtrar Produtos
-            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters" aria-expanded="false" aria-controls="collapseFilters">
-                <i class="bi bi-funnel"></i>
-            </button>
-        </div>
-        <div class="collapse show" id="collapseFilters">
-            <div class="card-body">
-                <form action="" method="get" class="mb-3">
-                    <div class="input-group">
-                        <input type="text" name="codigo" placeholder="Código" class="form-control" value="{{ request.GET.codigo }}">
-                        <input type="text" name="descricao" placeholder="Descrição" class="form-control" value="{{ request.GET.descricao }}">
-                        <input type="text" name="grupo" placeholder="Grupo" class="form-control" value="{{ request.GET.grupo }}">
-                        <input type="text" name="marca" placeholder="Marca" class="form-control" value="{{ request.GET.marca }}">
-                        <button type="submit" class="btn btn-success">Filtrar</button>
-                        <a href="{% url 'home' %}" class="btn btn-warning">Limpar Filtro</a>
-                    </div>
-                </form>
-            </div>
+<h2><span>Nossos Produtos</span></h2>
+        <p>Você esta visualizando a tabela de preço do dia: <strong>{{ data_hoje|date:"d/m/Y" }}</strong></p>
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+       <h4>Filtrar Produtos</h4>
+        <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters" aria-expanded="false" aria-controls="collapseFilters">
+            <i class="bi bi-funnel"></i>
+        </button>
+    </div>
+    <div class="collapse show" id="collapseFilters">
+        <div class="card-body">
+            <form action="" method="get" class="mb-3">
+                <div class="input-group">
+                    <input type="text" name="codigo" placeholder="Código" class="form-control" value="{{ request.GET.codigo }}">
+                    <input type="text" name="descricao" placeholder="Descrição" class="form-control" value="{{ request.GET.descricao }}">
+                    <input type="text" name="grupo" placeholder="Grupo" class="form-control" value="{{ request.GET.grupo }}">
+                    <input type="text" name="marca" placeholder="Marca" class="form-control" value="{{ request.GET.marca }}">
+                    <button type="submit" class="btn btn-success">Filtrar</button>
+                    <a href="{% url 'home' %}" class="btn btn-warning">Limpar Filtro</a>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
-    <hr>
-    
-    <form id="gerar-pedido-form" action="{% url 'gerar_pedido' %}" method="post">
-        {% csrf_token %}
-        <input type="hidden" name="cart_data" id="cart-data-input">
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Código do Produto</th>
-                        <th>Descrição do Produto</th>
-                        <th>Grupo</th>
-                        <th>Marca</th>
-                        {% if preco_exibido == 'todos' %}
-                            <th>Valor (SP)</th>
-                            <th>Valor (ES)</th>
-                        {% else %}
-                            <th>Valor ({{ preco_exibido|upper }})</th>
-                        {% endif %}
-                        {% if not user.is_staff %}
-                            <th>Quantidade</th>
-                            <th>Total</th>
-                        {% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for product in product_list %}
-                    <tr>
-                        <td>{{ product.product_code }}</td>
-                        <td>{{ product.product_description }}</td>
-                        <td>{{ product.product_group }}</td>
-                        <td>{{ product.product_brand }}</td>
-                        
-                        {% if preco_exibido == 'todos' %}
-                            <td data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                            <td data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
-                        {% elif preco_exibido == 'sp' %}
-                            <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                        {% elif preco_exibido == 'es' %}
-                            <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
-                        {% endif %}
-                        
-                        {% if not user.is_staff %}
-                        <td>
-                            <input
-                                type="number"
-                                name="quantidade_{{ product.product_id }}"
-                                id="quantidade_{{ product.product_id }}"
-                                min="0"
-                                class="form-control sm input-quantidade">
-                        </td>
-                        <td>
-                            <span id="total_{{ product.product_id }}">R$ 0,00</span>
-                        </td>
-                        {% endif %}
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="{% if user.is_staff %}6{% else %}8{% endif %}">Nenhum produto cadastrado.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                {% if not user.is_staff %}
-                <tfoot>
-                    <tr>
-                        <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
-                        <td><strong id="grand-total">R$ 0,00</strong></td>
-                    </tr>
-                </tfoot>
-                {% endif %}
-            </table>
-        </div>
-        
-        {% if not user.is_staff %}
-        <button type="submit" class="btn btn-primary">Gerar Pedido</button>
-        <a href="#" class="btn btn-warning" onclick="limparCache()">Limpar Carrinho</a>
-        {% endif %}
-    </form>
-    
-    {% if product_list.has_other_pages %}
-        <nav aria-label="Navegação da página">
-            <ul class="pagination justify-content-center">
-                {% if product_list.has_previous %}
-                    <li class="page-item"><a class="page-link" href="?page=1">Primeira</a></li>
-                    <li class="page-item"><a class="page-link" href="?page={{ product_list.previous_page_number }}">Anterior</a></li>
-                {% endif %}
+<hr>
 
-                {% for i in product_list.paginator.page_range %}
-                    {% if product_list.number == i %}
-                        <li class="page-item active"><span class="page-link">{{ i }}</span></li>
-                    {% elif i > product_list.number|add:'-3' and i < product_list.number|add:'3' %}
-                        <li class="page-item"><a class="page-link" href="?page={{ i }}">{{ i }}</a></li>
+<form id="gerar-pedido-form" action="{% url 'gerar_pedido' %}" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="cart_data" id="cart-data-input">
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Código do Produto</th>
+                    <th>Descrição do Produto</th>
+                    <th>Grupo</th>
+                    <th>Marca</th>
+                    {% if preco_exibido == 'todos' %}
+                        <th class="text-right-data">Valor (SP)</th>
+                        <th class="text-right-data">Valor (ES)</th>
+                    {% else %}
+                        <th class="text-right-data">Valor ({{ preco_exibido|upper }})</th>
                     {% endif %}
+                    {% if not user.is_staff %}
+                        <th class="text-right-data">Quantidade</th>
+                        <th class="text-right-data">Total</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in product_list %}
+                <tr>
+                    <td>{{ product.product_code }}</td>
+                    <td>{{ product.product_description }}</td>
+                    <td>{{ product.product_group }}</td>
+                    <td>{{ product.product_brand }}</td>
+                    
+                    {% if preco_exibido == 'todos' %}
+                        <td class="text-right-data" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
+                        <td class="text-right-data" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                    {% elif preco_exibido == 'sp' %}
+                        <td class="product-value text-right-data" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
+                    {% elif preco_exibido == 'es' %}
+                        <td class="product-value text-right-data" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                    {% endif %}
+                    
+                    {% if not user.is_staff %}
+                    <td>
+                        <input
+                            type="number"
+                            name="quantidade_{{ product.product_id }}"
+                            id="quantidade_{{ product.product_id }}"
+                            min="0"
+                            class="form-control sm input-quantidade text-right-data">
+                    </td>
+                    <td class="text-right-data">
+                        <span id="total_{{ product.product_id }}">R$ 0,00</span>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if user.is_staff %}6{% else %}8{% endif %}">Nenhum produto cadastrado.</td>
+                </tr>
                 {% endfor %}
-
-                {% if product_list.has_next %}
-                    <li class="page-item"><a class="page-link" href="?page={{ product_list.next_page_number }}">Próxima</a></li>
-                    <li class="page-item"><a class="page-link" href="?page={{ product_list.paginator.num_pages }}">Última</a></li>
-                {% endif %}
-            </ul>
-        </nav>
+            </tbody>
+            {% if not user.is_staff %}
+            <tfoot>
+                <tr>
+                    <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
+                    <td class="text-right-data"><strong id="grand-total">R$ 0,00</strong></td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+    
+    {% if not user.is_staff %}
+    <br>
+    <button type="submit" class="btn btn-primary">Gerar Pedido</button>
+    <a href="#" class="btn btn-warning" onclick="limparCache()">Limpar Carrinho</a>
     {% endif %}
+</form>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-            const grandTotalElement = document.getElementById('grand-total');
+{% if product_list.has_other_pages %}
+    <br>
+    <nav aria-label="Navegação da página">
+        <ul class="pagination justify-content-center">
+            {% if product_list.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page=1">Primeira</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ product_list.previous_page_number }}">Anterior</a></li>
+            {% endif %}
 
-            const messagesContainer = document.querySelector('.mt-4'); // CORREÇÃO AQUI
-            const successMessage = messagesContainer ? messagesContainer.querySelector('.alert-success') : null;
+            {% for i in product_list.paginator.page_range %}
+                {% if product_list.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                {% elif i > product_list.number|add:'-3' and i < product_list.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="?page={{ i }}">{{ i }}</a></li>
+                {% endif %}
+            {% endfor %}
 
-            if (successMessage) {
-                localStorage.clear();
-            } else {
-                loadAndCalculateTotals();
-            }
+            {% if product_list.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ product_list.next_page_number }}">Próxima</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ product_list.paginator.num_pages }}">Última</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}
 
-            document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
-                const cartData = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('quantidade_')) {
-                        const savedItem = localStorage.getItem(key);
-                        if (savedItem) {
-                            try {
-                                const itemData = JSON.parse(savedItem);
-                                if (itemData.quantidade > 0) {
-                                    cartData[key.split('_')[1]] = itemData.quantidade;
-                                }
-                            } catch (error) {
-                                console.error('Erro ao processar item do localStorage:', error);
-                            }
-                        }
-                    }
-                }
-                document.getElementById('cart-data-input').value = JSON.stringify(cartData);
-            });
+<script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
+        const grandTotalElement = document.getElementById('grand-total');
 
+        const messagesContainer = document.querySelector('.mt-4');
+        const successMessage = messagesContainer ? messagesContainer.querySelector('.alert-success') : null;
 
-            function loadAndCalculateTotals() {
-                quantidadeInputs.forEach(input => {
-                    const savedItem = localStorage.getItem(input.id);
+        if (successMessage) {
+            localStorage.clear();
+        } else {
+            loadAndCalculateTotals();
+        }
+
+        document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
+            const cartData = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('quantidade_')) {
+                    const savedItem = localStorage.getItem(key);
                     if (savedItem) {
                         try {
                             const itemData = JSON.parse(savedItem);
-                            if (itemData && itemData.quantidade > 0) {
-                                input.value = itemData.quantidade;
-                            } else {
-                                input.value = 0;
+                            if (itemData.quantidade > 0) {
+                                cartData[key.split('_')[1]] = itemData.quantidade;
                             }
-                        } catch (e) {
+                        } catch (error) {
+                            console.error('Erro ao processar item do localStorage:', error);
+                        }
+                    }
+                }
+            }
+            document.getElementById('cart-data-input').value = JSON.stringify(cartData);
+        });
+
+
+        function loadAndCalculateTotals() {
+            quantidadeInputs.forEach(input => {
+                const savedItem = localStorage.getItem(input.id);
+                if (savedItem) {
+                    try {
+                        const itemData = JSON.parse(savedItem);
+                        if (itemData && itemData.quantidade > 0) {
+                            input.value = itemData.quantidade;
+                        } else {
                             input.value = 0;
                         }
+                    } catch (e) {
+                        input.value = 0;
                     }
-                    updateTotals(input);
-                });
+                }
+                updateTotals(input);
+            });
+        }
+
+        function updateTotals(inputElement) {
+            const row = inputElement.closest('tr');
+            const valorUnitarioElement = row.querySelector('.product-value');
+
+            if (!valorUnitarioElement) {
+                return;
+            }
+            
+            const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
+            const quantidade = parseFloat(inputElement.value);
+
+            if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
+                const total = valorUnitario * quantidade;
+                row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
             }
 
-            function updateTotals(inputElement) {
-                const row = inputElement.closest('tr');
-                const valorUnitarioElement = row.querySelector('.product-value');
+            updateGrandTotal();
+        }
 
-                if (!valorUnitarioElement) {
-                    return;
-                }
-                
-                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
-                const quantidade = parseFloat(inputElement.value);
-
-                if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
-                    const total = valorUnitario * quantidade;
-                    row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-                }
-
-                updateGrandTotal();
-            }
-
-            function updateGrandTotal() {
-                let totalGeral = 0;
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('quantidade_')) {
-                        const savedItem = localStorage.getItem(key);
-                        if (savedItem) {
-                            try {
-                                const itemData = JSON.parse(savedItem);
-                                if (!isNaN(itemData.valor) && !isNaN(itemData.quantidade)) {
-                                    totalGeral += itemData.valor * itemData.quantidade;
-                                }
-                            } catch (e) {
-                                // Ignora itens mal formatados
+        function updateGrandTotal() {
+            let totalGeral = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('quantidade_')) {
+                    const savedItem = localStorage.getItem(key);
+                    if (savedItem) {
+                        try {
+                            const itemData = JSON.parse(savedItem);
+                            if (!isNaN(itemData.valor) && !isNaN(itemData.quantidade)) {
+                                totalGeral += itemData.valor * itemData.quantidade;
                             }
+                        } catch (e) {
+                            // Ignora itens mal formatados
                         }
                     }
                 }
-                grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
             }
+            grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
+        }
 
-            quantidadeInputs.forEach(input => {
-                input.addEventListener('input', (e) => {
-                    const row = e.target.closest('tr');
-                    const valorUnitarioElement = row.querySelector('.product-value');
-                    const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
-                    
-                    const itemData = {
-                        quantidade: parseFloat(e.target.value),
-                        valor: valorUnitario
-                    };
-                    localStorage.setItem(e.target.id, JSON.stringify(itemData));
-                    
-                    updateTotals(e.target);
-                });
+        quantidadeInputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const row = e.target.closest('tr');
+                const valorUnitarioElement = row.querySelector('.product-value');
+                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
+                
+                const itemData = {
+                    quantidade: parseFloat(e.target.value),
+                    valor: valorUnitario
+                };
+                localStorage.setItem(e.target.id, JSON.stringify(itemData));
+                
+                updateTotals(e.target);
             });
         });
-        
-        function limparCache() {
-            localStorage.clear();
-            location.reload();
-        }
-    </script>
+    });
+    
+    function limparCache() {
+        localStorage.clear();
+        location.reload();
+    }
+</script>
 {% endblock %}

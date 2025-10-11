@@ -3,7 +3,9 @@
 <head>
      {% load static %}
     <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
-    <link rel="shortcut icon" href="{% static 'favicon.ico' %}">
+    <link rel="shortcut icon" href="{% static 'favicon.ico' %}"> <meta charset="UTF-8">
+
+   
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Seu Título{% endblock %}</title>
@@ -38,9 +40,38 @@
         .hometitulo {
             margin-top: 5px; 
             margin-bottom: 5px; 
-            margin-left: 60px;
+            margin-left: 75px;
             margin-right: 10px;
         }
+
+        /* ----- ESTILOS DA BARRA DE NAVEGAÇÃO ----- */
+        .navbar {
+            background-color: #6f42c1 !important; /* Roxo. O !important garante que ele sobrescreva o Bootstrap */
+        }
+
+        .navbar .navbar-brand,
+        .navbar .nav-link {
+            color: #fff !important; /* Texto branco para o nome e os links */
+        }
+
+        .navbar .nav-link:hover,
+        .navbar .nav-link:focus {
+            color: #e0d8f5 !important; /* Um tom de branco/lilás claro para o efeito hover */
+        }
+        
+        .navbar .nav-link.active {
+            font-weight: bold; /* Deixa o link ativo em negrito */
+        }
+
+        /* O ícone do menu "hambúrguer" em telas menores */
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+        }
+
+        .navbar-toggler {
+            border-color: rgba(255, 255, 255, 0.5) !important; /* Borda do botão do menu */
+        }
+
     </style>
 
     {% block head_extra %}{% endblock %}
@@ -118,7 +149,7 @@
                         <li class="nav-item">
                             <form action="{% url 'logout' %}" method="post">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-danger" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Sair">
+                                <button type="submit" class="btn btn-outline-light" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Sair">
                                     <i class="bi bi-box-arrow-right me-1"></i>Sair
                                 </button>
                             </form>
