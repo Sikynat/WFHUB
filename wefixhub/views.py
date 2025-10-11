@@ -1659,7 +1659,7 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
 
 
 
-
+'''
 def encurtar_url(long_url):
     """
     Encurta uma URL usando a API da TinyURL.
@@ -1672,14 +1672,6 @@ def encurtar_url(long_url):
     except requests.RequestException:
         pass
     return long_url
-
-
-
-
-
-
-
-
 
 
 @staff_member_required
@@ -1728,6 +1720,57 @@ def enviar_whatsapp(request, pedido_id):
     )
 
     # ✅ Use a função 'quote' para codificar a URL
+    link_whatsapp = f"https://wa.me/5516991273974?text={quote(mensagem_final)}"
+
+    return redirect(link_whatsapp)
+'''
+
+@staff_member_required
+def enviar_whatsapp(request, pedido_id):
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+
+    # 1. Construir o link de download público da planilha (isso permanece igual)
+    link_download_excel = request.build_absolute_uri(
+        reverse('exportar_detalhes_pedido_publico_excel', args=[pedido.id])
+    )
+
+    # 2. A linha do encurtador foi REMOVIDA
+    # link_encurtado = encurtar_url(link_download_excel)
+
+    # Informações básicas do pedido
+    mensagem_base = (
+        f"*Dados do Pedido*\n\n"
+        f"*Codigo Interno:* {pedido.id}\n"
+        f"*Código do Cliente:* {pedido.cliente.client_code}\n"
+        f"*Razão Social:* {pedido.cliente.client_name}\n"
+        f"*Data da Expedição:* {pedido.data_envio_solicitada.strftime('%d/%m/%Y')}\n"
+        f"*Opção de Frete:* {pedido.get_frete_option_display()}\n"
+        f"*OBS:* {pedido.observacao}\n"
+    )
+
+    # Adiciona o endereço de entrega (lógica inalterada)
+    fretes_com_endereco = ['SEDEX', 'CORREIOS', 'TRANSPORTADORA']
+    endereco_texto = ""
+    if pedido.frete_option in fretes_com_endereco and pedido.endereco:
+        endereco = pedido.endereco
+        endereco_texto = (
+            f"*Endereço de Entrega:* "
+            f"{endereco.logradouro}, {endereco.bairro}, {endereco.numero} "
+            f"{endereco.cidade} - {endereco.estado} (CEP: {endereco.cep})\n"
+        )
+    else:
+        endereco_texto = ""
+
+    # 3. Conclui a mensagem usando o link original e completo
+    mensagem_final = (
+        f"{mensagem_base}"
+        f"{endereco_texto}"
+        f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}\n\n"
+        f"*Download da Planilha de Itens:*\n"
+        f"{link_download_excel}"  # <- MUDANÇA AQUI: usando o link direto
+    )
+
+    # Codifica a mensagem para a URL do WhatsApp (lógica inalterada)
     link_whatsapp = f"https://wa.me/5516991273974?text={quote(mensagem_final)}"
 
     return redirect(link_whatsapp)
