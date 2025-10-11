@@ -1,0 +1,45 @@
+{% for pedido in pedidos %}
+    <tr>
+        <td>{{ pedido.id }}</td>
+        <td>{{ pedido.cliente.client_name }}</td>
+        <td>{{ pedido.cliente.client_code }}</td>
+        <td>{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
+        <td>{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</td>
+        <td> R$ {{ pedido.get_total_geral|floatformat:2 }} </td>
+        <td>
+            {% if pedido.is_atrasado %}
+                <span class="status-badge status-ATRASADO">Atrasado</span>
+            {% else %}
+                <form action="{% url 'atualizar_status_pedido' pedido.id %}" method="post">
+                    {% csrf_token %}
+                    <select name="status" onchange="this.form.submit()" class="form-select form-select-sm border-0 bg-transparent" style="min-width: 150px;">
+                        <option value="PENDENTE" {% if pedido.status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                        <option value="ORCAMENTO" {% if pedido.status == 'ORCAMENTO' %}selected{% endif %}>Orçamento</option>
+                        <option value="FINANCEIRO" {% if pedido.status == 'FINANCEIRO' %}selected{% endif %}>Análise de Crédito</option>
+                        <option value="SEPARACAO" {% if pedido.status == 'SEPARACAO' %}selected{% endif %}>Separação</option>
+                        <option value="EXPEDICAO" {% if pedido.status == 'EXPEDICAO' %}selected{% endif %}>Expedição</option>
+                        <option value="FINALIZADO" {% if pedido.status == 'FINALIZADO' %}selected{% endif %}>Finalizado</option>
+                        <option value="CANCELADO" {% if pedido.status == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                    </select>
+                </form>
+            {% endif %}
+        </td>
+        <td>
+            <a class="btn btn-primary btn-sm" href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
+        </td>
+    </tr>
+{% endfor %}
+
+{# Gatilho do HTMX para carregar mais itens #}
+{% if pedidos.has_next %}
+<tr id="load-more-trigger">
+    <td colspan="8" class="text-center py-4" 
+        hx-get="?page={{ pedidos.next_page_number }}"
+        hx-trigger="revealed"
+        hx-swap="outerHTML"
+        hx-target="#load-more-trigger">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        <span class="ms-2">Carregando mais...</span>
+    </td>
+</tr>
+{% endif %}

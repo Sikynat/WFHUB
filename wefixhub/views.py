@@ -518,53 +518,6 @@ def detalhes_pedido(request, pedido_id):
 
     return render(request, 'detalhes_pedido.html', contexto)
 
-@staff_member_required
-def detalhes_pedido_admin(request, pedido_id):
-    try:
-        # Puxa o pedido pelo ID (sem filtrar por cliente)
-        pedido = get_object_or_404(Pedido, id=pedido_id) 
-        
-        # Obtém o estado do cliente do pedido para saber qual preço exibir
-        estado_cliente = pedido.cliente.client_state.uf_name
-
-        # Define qual preço será exibido
-        preco_exibido = None
-        if estado_cliente == 'SP':
-            preco_exibido = 'sp'
-        elif estado_cliente == 'ES':
-            preco_exibido = 'es'
-        else:
-            preco_exibido = 'sp' # Define um padrão para outros estados
-        
-        itens_detalhes = []
-        itens = ItemPedido.objects.filter(pedido=pedido)
-
-        for item in itens:
-            itens_detalhes.append({
-                'item': item,
-                'valor_unitario': item.valor_unitario, # Usa o valor que já está no banco de dados
-                'valor_total': item.valor_unitario * item.quantidade,
-            })
-
-        contexto = {
-            'titulo': f"Detalhes do Pedido #{pedido.id}",
-            'pedido': pedido,
-            'itens_detalhes': itens_detalhes,
-            'total_geral': pedido.valor_total, # ✅ Usa o valor que já foi salvo no pedido
-            'preco_exibido': preco_exibido
-        }
-        
-        return render(request, 'detalhes_pedido.html', contexto)
-
-    except Pedido.DoesNotExist:
-        messages.error(request, "Erro: Pedido não encontrado.")
-        return redirect('todos_os_pedidos')
-    except WfClient.DoesNotExist:
-        messages.error(request, "Erro: Cliente não encontrado.")
-        return redirect('pedidos')
-    except Pedido.DoesNotExist:
-        messages.error(request, "Erro: Pedido não encontrado.")
-        return redirect('pedidos')
 
 # Fim detalhes pedido
 
@@ -581,6 +534,7 @@ def dashboard_admin(request):
     pedidos_adc = Pedido.objects.filter(status='FINANCEIRO').count()
     pedidos_separacao = Pedido.objects.filter(status='SEPARACAO').count()
     pedidos_expedicao = Pedido.objects.filter(status='EXPEDICAO').count()
+    pedidos_atrasados = Pedido.objects.filter(status='ATRASADO').count()
 
     # Agrega o total de vendas
     total_vendas_agregadas = ItemPedido.objects.annotate(
@@ -616,6 +570,7 @@ def dashboard_admin(request):
         'pedidos_adc': pedidos_adc,
         'pedidos_separacao': pedidos_separacao,
         'pedidos_expedicao': pedidos_expedicao,
+        'pedidos_atrasados': pedidos_atrasados,
     }
     return render(request, 'dashboard.html', contexto)
 
@@ -712,37 +667,6 @@ def exportar_detalhes_pedido_excel(request, pedido_id):
     return response
 
 
-@staff_member_required
-def detalhes_pedido_admin(request, pedido_id):
-    try:
-        # Puxa o pedido pelo ID (sem filtrar por cliente)
-        pedido = get_object_or_404(Pedido, id=pedido_id) 
-        itens = ItemPedido.objects.filter(pedido=pedido)
-        
-        contexto = {
-            'titulo': f"Detalhes do Pedido #{pedido.id}",
-            'pedido': pedido,
-            'itens': itens,
-        }
-        return render(request, 'detalhes_pedido.html', contexto)
-
-    except Pedido.DoesNotExist:
-        # Redireciona para o dashboard se o pedido não existir
-        return redirect('dashboard_admin')
-    
-@staff_member_required
-def detalhes_pedido_admin(request, pedido_id):
-    try:
-        pedido = get_object_or_404(Pedido, id=pedido_id)
-        itens = ItemPedido.objects.filter(pedido=pedido)
-        contexto = {
-            'titulo': f"Detalhes do Pedido #{pedido.id}",
-            'pedido': pedido,
-            'itens': itens,
-        }
-        return render(request, 'detalhes_pedido.html', contexto)
-    except Pedido.DoesNotExist:
-        return redirect('dashboard_admin')
 
 
 @staff_member_required
@@ -877,52 +801,80 @@ def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
     return response
 
 
+# GARANTA QUE APENAS ESTA VERSÃO DA FUNÇÃO EXISTA NO SEU views.py
+# NOVO ARQUIVO views.py (versão limpa)
+
 @staff_member_required
 def todos_os_pedidos(request):
     pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
 
-    # Lógica de Paginação
     paginator = Paginator(pedidos_qs, 20)
-    page = request.GET.get('page')
-
+    page_number = request.GET.get('page', 1)
+    
     try:
-        pedidos_paginados = paginator.page(page)
+        pedidos_paginados = paginator.page(page_number)
     except PageNotAnInteger:
         pedidos_paginados = paginator.page(1)
     except EmptyPage:
         pedidos_paginados = paginator.page(paginator.num_pages)
-    
-    # Lista para armazenar os pedidos com os valores já formatados
-    pedidos_formatados = []
-    
-    for pedido in pedidos_paginados:
-        # Garante que o valor total é um Decimal para evitar erros
-        total_geral = pedido.get_total_geral() or Decimal('0.00')
 
-        # Cria um novo dicionário com os dados do pedido e o valor total formatado
-        pedidos_formatados.append({
-            'id': pedido.id,
-            'cliente': pedido.cliente,
-            'client_code': pedido.cliente.client_code,
-            'data_criacao': pedido.data_criacao,
-            'data_envio_solicitada': pedido.data_envio_solicitada,
-            'status': pedido.status,
-            'is_staff': request.user.is_staff,
-            'total_formatado': formats.localize(total_geral),
-        })
+    hoje = timezone.localdate()
+    for pedido in pedidos_paginados:
+        if pedido.data_envio_solicitada and pedido.data_envio_solicitada < hoje and pedido.status not in ['FINALIZADO', 'CANCELADO']:
+            pedido.is_atrasado = True
+        else:
+            pedido.is_atrasado = False
 
     contexto = {
         'titulo': 'Todos os Pedidos',
-        'pedidos': pedidos_formatados,
-        'paginator_info': pedidos_paginados, # Passa as informações de paginação
+        'pedidos': pedidos_paginados,
     }
+
+    # --- ESTA É A PARTE QUE REATIVA O SCROLL INFINITO ---
+    if request.htmx:
+        # Quando o usuário rola a página, o HTMX faz uma requisição especial.
+        # Esta linha responde a essa requisição enviando APENAS as novas linhas da tabela.
+        return render(request, '_pedidos_rows.html', contexto)
+
+    # Quando o usuário carrega a página pela primeira vez, esta linha é executada.
     return render(request, 'todos_os_pedidos.html', contexto)
+# Deixe o resto do arquivo em branco por enquanto
 
 
-from django.db import models
-from django.contrib.auth.models import User
+'''
+@staff_member_required
+def todos_os_pedidos(request):
+    pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
 
-# ... (seus outros modelos)
+    paginator = Paginator(pedidos_qs, 20)
+    page_number = request.GET.get('page', 1)
+    
+    try:
+        pedidos_paginados = paginator.page(page_number)
+    except PageNotAnInteger:
+        pedidos_paginados = paginator.page(1)
+    except EmptyPage:
+        pedidos_paginados = paginator.page(paginator.num_pages)
+
+    hoje = timezone.localdate()
+    for pedido in pedidos_paginados:
+        if pedido.data_envio_solicitada and pedido.data_envio_solicitada < hoje and pedido.status not in ['FINALIZADO', 'CANCELADO']:
+            pedido.is_atrasado = True
+        else:
+            pedido.is_atrasado = False
+
+    contexto = {
+        'titulo': 'Todos os Pedidos',
+        'pedidos': pedidos_paginados,
+    }
+
+    # Verifica se a requisição é do HTMX (para o scroll infinito)
+    if request.htmx:
+        # Se for, renderiza apenas o template parcial com as novas linhas
+        return render(request, '_pedidos_rows.html', contexto) # <-- CAMINHO CORRIGIDO
+
+    # Se for uma requisição normal, renderiza a página completa
+    return render(request, 'todos_os_pedidos.html', contexto) # <-- CAMINHO CORRIGIDO'''
 
 # Modelo de Pedido
     
@@ -1102,32 +1054,30 @@ def gerar_pedido(request):
     # Se a requisição não for POST, redireciona de volta
     return redirect('home')
 
+# Em views.py
+# GARANTA QUE APENAS ESTA VERSÃO DA FUNÇÃO EXISTA NO ARQUIVO
+
 @staff_member_required
 def detalhes_pedido_admin(request, pedido_id):
     try:
-        # Puxa o pedido pelo ID (sem filtrar por cliente)
         pedido = get_object_or_404(Pedido, id=pedido_id) 
         
-        # Obtém o estado do cliente do pedido
         estado_cliente = pedido.cliente.client_state.uf_name
-
-        # Define qual preço será exibido, com base no estado do cliente
-        # A variável 'preco_exibido' agora não depende se é admin ou não
         preco_exibido = 'sp' if estado_cliente == 'SP' else 'es'
-
+        
         itens_detalhes = []
-        total_geral = 0
+        total_geral = Decimal('0.00')
         itens = ItemPedido.objects.filter(pedido=pedido)
 
         for item in itens:
-            # Seleciona o valor unitário correto com base no estado do cliente
             valor_unitario = item.valor_unitario_sp if estado_cliente == 'SP' else item.valor_unitario_es
             
-            # Garante que o valor não seja None
             if valor_unitario is None:
-                valor_unitario = 0
+                valor_unitario = Decimal('0.00')
 
-            valor_total_item = valor_unitario * item.quantidade
+            # Garante que a quantidade não seja None para o cálculo
+            quantidade = item.quantidade if item.quantidade is not None else 0
+            valor_total_item = valor_unitario * quantidade
             total_geral += valor_total_item
 
             itens_detalhes.append({
@@ -1135,36 +1085,63 @@ def detalhes_pedido_admin(request, pedido_id):
                 'valor_unitario': valor_unitario,
                 'valor_total': valor_total_item,
             })
-
+        
+        # Lógica para verificar se o pedido está atrasado
+        hoje = timezone.localdate()
+        is_atrasado = False
+        if pedido.data_envio_solicitada and pedido.data_envio_solicitada < hoje and pedido.status not in ['FINALIZADO', 'CANCELADO']:
+            is_atrasado = True
+        
+        # Dicionário de contexto que é enviado para o template
         contexto = {
             'titulo': f"Detalhes do Pedido #{pedido.id}",
             'pedido': pedido,
             'itens_detalhes': itens_detalhes,
             'total_geral': total_geral,
-            'preco_exibido': preco_exibido
+            'preco_exibido': preco_exibido,
+            'is_atrasado': is_atrasado, # <-- A linha que faltava na versão antiga
         }
         
         return render(request, 'detalhes_pedido.html', contexto)
 
     except Pedido.DoesNotExist:
-        # Redireciona para o dashboard se o pedido não existir
-        return redirect('dashboard_admin')
+        messages.error(request, "Erro: Pedido não encontrado.")
+        return redirect('todos_os_pedidos')
+    except WfClient.DoesNotExist:
+        messages.error(request, "Erro: Cliente associado ao pedido não encontrado.")
+        return redirect('todos_os_pedidos')
     
 @staff_member_required
 def pedidos_para_hoje(request):
     """
-    View que filtra e exibe os pedidos agendados para a data atual.
+    View que filtra e exibe os pedidos agendados para a data atual
+    e também os pedidos atrasados que ainda estão pendentes.
     """
-    # Pega a data de hoje, sem a hora
+    # Pega a data de hoje, respeitando o timezone do seu projeto
     hoje = timezone.localdate()
 
-    # Filtra os pedidos onde a data_envio_solicitada é igual à data de hoje
-    pedidos_hoje = Pedido.objects.filter(data_envio_solicitada=hoje)
+    # --- Consulta 1: Pedidos agendados para HOJE que ainda precisam de ação ---
+    pedidos_hoje = Pedido.objects.filter(
+        data_envio_solicitada=hoje
+    ).exclude(
+        status__in=['FINALIZADO', 'CANCELADO'] # Exclui os que já foram concluídos
+    )
 
+    # --- Consulta 2: Pedidos ATRASADOS que ainda precisam de ação ---
+    pedidos_atrasados = Pedido.objects.filter(
+        data_envio_solicitada__lt=hoje  # __lt = 'less than' (data anterior a hoje)
+    ).exclude(
+        status__in=['FINALIZADO', 'CANCELADO'] # Exclui os que já foram concluídos
+    ).order_by('data_envio_solicitada') # Mostra os mais antigos primeiro
+
+    # Monta o contexto com as duas listas de pedidos
     context = {
         'pedidos_hoje': pedidos_hoje,
+        'pedidos_atrasados': pedidos_atrasados,
         'data_hoje': hoje,
+        'titulo': 'Pedidos para Saída' # Adicionado para o título da página
     }
+    
     return render(request, 'pedidos/pedidos_hoje.html', context)
 
 
@@ -1774,3 +1751,42 @@ def enviar_whatsapp(request, pedido_id):
     link_whatsapp = f"https://wa.me/5516991273974?text={quote(mensagem_final)}"
 
     return redirect(link_whatsapp)
+
+
+
+def pedidos_atrasados_view(request):
+    # Pega a data de hoje para comparação
+    hoje = date.today()
+
+    # Esta é a consulta principal:
+    pedidos_atrasados = Pedido.objects.filter(
+        data_envio_solicitada__lt=hoje  # __lt significa 'less than' (menor que)
+    ).exclude(
+        status__in=['FINALIZADO', 'CANCELADO']  # Exclui os status da lista
+    ).order_by('data_envio_solicitada')  # Opcional: ordena pelos mais antigos primeiro
+
+    contexto = {
+        'titulo': 'Pedidos Atrasados',
+        'pedidos_atrasados': pedidos_atrasados
+    }
+
+    return render(request, 'pedidos_atrasados.html', contexto)
+
+# Em seu arquivo views.py
+
+@staff_member_required
+def marcar_pedido_finalizado(request, pedido_id):
+    # Apenas aceita requisições POST por segurança
+    if request.method == 'POST':
+        # Pega o pedido ou retorna um erro 404 se não existir
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+        
+        # Altera o status para 'FINALIZADO'
+        pedido.status = 'FINALIZADO'
+        pedido.save()
+        
+        # Envia uma mensagem de sucesso para o usuário
+        messages.success(request, f'O Pedido #{pedido.id} foi marcado como FINALIZADO.')
+    
+    # Redireciona o usuário de volta para a página de detalhes de onde ele veio
+    return redirect('detalhes_pedido_admin', pedido_id=pedido_id)

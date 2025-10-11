@@ -3,6 +3,7 @@
 
 {% block content %}
     <h1>Detalhes do Pedido #{{ pedido.id }}</h1>
+  
     <p><strong>Data da Compra:</strong> {{ pedido.data_criacao }}</p>
     <p><strong>Código do Cliente:</strong> {{ pedido.cliente.client_code }}</p>
     <p><strong>Data da Expedição:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
@@ -24,6 +25,13 @@
                 <a target="_blank" class="btn btn-success ms-2" href="{% url 'enviar_whatsapp' pedido.id %}">
                     Enviar Para Whatsapp
                 </a>
+
+                   {% if is_atrasado %}
+                <form action="{% url 'marcar_pedido_finalizado' pedido.id %}" method="post" class="ms-2">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning fw-bold">Marcar como Finalizado</button>
+                </form>
+            {% endif %}
             </div>
 
             <div class="col-md-6 d-flex flex-column mb-2">

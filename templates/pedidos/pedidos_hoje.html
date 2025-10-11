@@ -5,8 +5,44 @@
 {% block content %}
 
 <div class="container mt-5">
-    <h1 class="display-6 fw-bold mb-4 text-center">Pedidos para Saída</h1>
-    <p class="lead text-muted text-center mb-5">Agendados para {{ data_hoje|date:"d/m/Y" }}</p>
+    {% if pedidos_atrasados %}
+        <div class="mb-5">
+            <h2 class="display-6 fw-bold mb-4 text-center text-danger">Pedidos Atrasados (Prioridade)</h2>
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                {% for pedido in pedidos_atrasados %}
+                <div class="col">
+                    <div class="card h-100 shadow-sm border-2 border-danger rounded-3"> <div class="card-body d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="card-title fw-bold text-primary mb-0">Pedido #{{ pedido.id }}</h5>
+                                <span class="badge text-uppercase py-2 px-3 rounded-pill bg-danger">
+                                    ATRASADO
+                                </span>
+                            </div>
+                            
+                            <h6 class="card-subtitle mb-3 text-muted">Cliente: {{ pedido.cliente.client_code }}</h6>
+                            
+                            <ul class="list-unstyled mb-4 small">
+                                <li><strong>Razão Social:</strong> {{ pedido.cliente.client_name }}</li>
+                                <li class="fw-bold text-danger"><strong>Data de Envio:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</li>
+                                <li><strong>Status Atual:</strong> {{ pedido.get_status_display }}</li>
+                                <li><strong>Frete:</strong> {{ pedido.get_frete_option_display }}</li>
+                            </ul>
+                            
+                            <div class="mt-auto">
+                                <a href="{% url 'detalhes_pedido_admin' pedido.id %}" class="btn btn-outline-danger w-100 btn-sm fw-bold">
+                                    Ver Detalhes e Resolver
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <hr class="my-5"> {% endif %}
+
+    <h2 class="display-6 fw-bold mb-4 text-center">Agendados para Hoje</h2>
+    <p class="lead text-muted text-center mb-5">{{ data_hoje|date:"d/m/Y" }}</p>
     
     {% if pedidos_hoje %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
@@ -16,7 +52,7 @@
                     <div class="card-body d-flex flex-column">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="card-title fw-bold text-primary mb-0">Pedido #{{ pedido.id }}</h5>
-                            <span class="badge text-uppercase py-2 px-3 rounded-pill bg-{% if pedido.status == 'PENDENTE' %}warning text-dark{% elif pedido.status == 'EM_ENVIO' %}primary{% elif pedido.status == 'ENTREGUE' %}success{% else %}secondary{% endif %}">
+                            <span class="badge text-uppercase py-2 px-3 rounded-pill bg-info">
                                 {{ pedido.get_status_display }}
                             </span>
                         </div>
@@ -24,8 +60,7 @@
                         <h6 class="card-subtitle mb-3 text-muted">Cliente: {{ pedido.cliente.client_code }}</h6>
                         
                         <ul class="list-unstyled mb-4 small">
-                            <li><strong>Razao Social: </strong> {{ pedido.cliente.client_name }} </li>
-                            <li><strong>Data de Envio:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</li>
+                            <li><strong>Razão Social:</strong> {{ pedido.cliente.client_name }}</li>
                             <li><strong>Endereço:</strong> {{ pedido.endereco }}</li>
                             <li><strong>Frete:</strong> {{ pedido.get_frete_option_display }}</li>
                             <li><strong>Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</li>
@@ -42,10 +77,17 @@
             {% endfor %}
         </div>
     {% else %}
-        <div class="alert alert-info text-center py-4 rounded-3" role="alert">
-            <h4 class="alert-heading fw-bold">Nenhum Pedido Hoje!</h4>
-            <p class="mb-0">Não há pedidos agendados para saída na data de hoje.</p>
-        </div>
+        {% if not pedidos_atrasados %}
+            <div class="alert alert-success text-center py-4 rounded-3 mt-5" role="alert">
+                <h4 class="alert-heading fw-bold">Tudo em Dia!</h4>
+                <p class="mb-0">Não há pedidos para hoje e nenhuma pendência atrasada.</p>
+            </div>
+        {% else %}
+            <div class="alert alert-info text-center py-4 rounded-3" role="alert">
+                <h4 class="alert-heading fw-bold">Nenhum Pedido para Hoje!</h4>
+                <p class="mb-0">Não há pedidos agendados para saída na data de hoje.</p>
+            </div>
+        {% endif %}
     {% endif %}
 </div>
 

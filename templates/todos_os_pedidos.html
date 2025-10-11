@@ -2,55 +2,20 @@
 {% block title %}{{ titulo }}{% endblock %}
 
 {% block content %}
-{% load format_tags %}
 <style>
-    /* Estilos personalizados para a tabela */
-    .modern-table {
-        border-collapse: separate;
-        border-spacing: 0 10px; /* Espaço entre as linhas */
-    }
-
-    .modern-table th {
-        font-size: 15px;
-        font-weight: 600;
-        color: #555;
-        border-bottom: 2px solid #ddd;
-    }
-
-    .modern-table td,
-    .modern-table th {
-        font-size: 13px;
-        padding: 15px 12px;
-        border-bottom: 1px solid #eee; /* Borda sutil entre linhas */
-    }
-
-    .modern-table tbody tr:hover {
-        background-color: #f8f9fa;
-        transform: scale(1.01);
-        transition: all 0.2s ease-in-out;
-    }
-
-    /* Estilo para a coluna de status */
-    .status-badge {
-        font-size: 13px;
-        padding: 5px 10px;
-        border-radius: 5px;
-        font-weight: bold;
-        color: white;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-    }
-    .status-PENDENTE { background-color: #e74c3c; } /* Vermelho */
-    .status-ORCAMENTO { background-color: #f39c12; } /* Laranja */
-    .status-FINANCEIRO { background-color: #3498db; } /* Azul */
-    .status-SEPARACAO { background-color: #8e44ad; } /* Roxo */
-    .status-EXPEDICAO { background-color: #2c3e50; } /* Cinza Escuro */
-    .status-FINALIZADO { background-color: #27ae60; } /* Verde */
+    /* Seus estilos personalizados para a tabela ... */
+    .modern-table { border-collapse: separate; border-spacing: 0 10px; }
+    .modern-table tbody tr:hover { background-color: #f8f9fa; transform: scale(1.01); transition: all 0.2s ease-in-out; }
+    .status-badge { font-size: 13px; padding: 5px 10px; border-radius: 5px; font-weight: bold; color: white; }
+    .status-ATRASADO { background-color: #d35400; }
+    /* ... seus outros estilos de status ... */
 </style>
 
-    <h1>Todos os Pedidos</h1>
-    <hr>
-    {% if pedidos %}
-        <table class="table table-borderless table-hover modern-table">
+<h1>Todos os Pedidos</h1>
+<hr>
+{% if pedidos %}
+    <div class="table-responsive">
+        <table class="table table-borderless table-hover modern-table w-100">
             <thead>
                 <tr>
                     <th>ID do Pedido</th>
@@ -63,60 +28,13 @@
                     <th>Detalhes</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for pedido in pedidos %}
-                    <tr>
-                        <td>{{ pedido.id }}</td>
-                        <td>{{ pedido.cliente.client_name }}</td>
-                        <td>{{ pedido.cliente.client_code }}</td>
-                        <td>{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
-                        <td>{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</td>
-                        <td> R$ {{ pedido.total_formatado }} </td>
-                        <td>
-                            <form action="{% url 'atualizar_status_pedido' pedido.id %}" method="post">
-                                {% csrf_token %}
-                                <select name="status" onchange="this.form.submit()" class="form-control" style="background-color: transparent; border: none;">
-                                    <option value="PENDENTE" {% if pedido.status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
-                                    <option value="ORCAMENTO" {% if pedido.status == 'ORCAMENTO' %}selected{% endif %}>Orçamento</option>
-                                    <option value="FINANCEIRO" {% if pedido.status == 'FINANCEIRO' %}selected{% endif %}>Análise de Crédito</option>
-                                    <option value="SEPARACAO" {% if pedido.status == 'SEPARACAO' %}selected{% endif %}>Separação</option>
-                                    <option value="EXPEDICAO" {% if pedido.status == 'EXPEDICAO' %}selected{% endif %}>Expedição</option>
-                                    <option value="FINALIZADO" {% if pedido.status == 'FINALIZADO' %}selected{% endif %}>Finalizado</option>
-                                    <option value="CANCELADO" {% if pedido.status == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
-                                </select>
-                            </form>
-                        </td>
-                        <td>
-                            {% if request.user.is_staff %}
-                                <a class="btn btn-primary" href="{% url 'detalhes_pedido_admin' pedido.id %}">Ver Detalhes</a>
-                            {% else %}
-                                <a class="btn btn-primary" href="{% url 'detalhes_pedido_cliente' pedido.id %}">Ver Detalhes</a>
-                            {% endif %}
-                        </td>
-                    </tr>
-                {% endfor %}
+            <tbody id="pedidos-tbody">
+                {# As linhas iniciais são carregadas pelo include #}
+                {% include '_pedidos_rows.html' %}
             </tbody>
         </table>
-
-        {% if pedidos.has_other_pages %}
-            <nav aria-label="Navegação de Páginas">
-                <ul class="pagination justify-content-center">
-                    {% if pedidos.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.previous_page_number }}">Anterior</a></li>
-                    {% endif %}
-
-                    {% for num in pedidos.paginator.page_range %}
-                        <li class="page-item {% if pedidos.number == num %}active{% endif %}"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
-                    {% endfor %}
-
-                    {% if pedidos.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.next_page_number }}">Próximo</a></li>
-                    {% endif %}
-                </ul>
-            </nav>
-        {% endif %}
-
-    {% else %}
-        <p class="alert alert-info">Nenhum pedido encontrado.</p>
-    {% endif %}
+    </div>
+{% else %}
+    <p class="alert alert-info">Nenhum pedido encontrado.</p>
+{% endif %}
 {% endblock %}
