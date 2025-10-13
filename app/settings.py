@@ -182,7 +182,7 @@ AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 
 # 2. Configuração da Região (Substitua pela sua)
-AWS_S3_REGION_NAME = 'sa-east-1'  # Exemplo: São Paulo (mude se for outra)
+AWS_S3_REGION_NAME = 'us-east-1'  # Exemplo: São Paulo (mude se for outra)
 
 # 3. Configuração do Storages para Mídia (Arquivos de usuário)
 if AWS_ACCESS_KEY_ID: # Apenas se as variáveis estiverem presentes (Produção)
