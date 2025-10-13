@@ -1309,7 +1309,7 @@ def processar_pedido_manual(request):
 
         try:
             cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
-            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
+            data_envio = datetime.strptime(data_envio, '%Y-%m-%d').date()
             cart_data = json.loads(cart_data_json)
 
             if not cart_data:

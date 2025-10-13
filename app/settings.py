@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_htmx',
     'django.contrib.humanize',
-    
+    'storages',
     # Seus aplicativos personalizados
     'wefixhub',
 ]
@@ -172,3 +172,36 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# --- Configurações AWS S3 (Mídia) ---
+# Importe o 'os' para ler as variáveis de ambiente (se ainda não o fez)
+
+# 1. Credenciais e Bucket
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+
+# 2. Configuração da Região (Substitua pela sua)
+AWS_S3_REGION_NAME = 'sa-east-1'  # Exemplo: São Paulo (mude se for outra)
+
+# 3. Configuração do Storages para Mídia (Arquivos de usuário)
+if AWS_ACCESS_KEY_ID: # Apenas se as variáveis estiverem presentes (Produção)
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
+
+    # O domínio de onde os arquivos serão servidos (Importante para o link)
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
+    # Configurações de acesso:
+    AWS_DEFAULT_ACL = 'public-read' # Permite que qualquer um leia o arquivo
+    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'} # Cache de 1 dia
+
+    # Opcional: Para evitar que arquivos existentes sejam sobrescritos
+    AWS_S3_FILE_OVERWRITE = False
+
+    # Opcional: Caminho dentro do bucket (se quiser isolar os uploads)
+    AWS_LOCATION = 'media'
+else:
+    # Configuração de fallback para desenvolvimento local (localmente no venv)
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
