@@ -183,6 +183,7 @@ AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 
 # 2. Configuração da Região (Substitua pela sua)
 AWS_S3_REGION_NAME = 'us-east-1'  # Exemplo: São Paulo (mude se for outra)
+AWS_S3_ENDPOINT_URL = 'https://s3.amazonaws.com' 
 
 # 3. Configuração do Storages para Mídia (Arquivos de usuário)
 if AWS_ACCESS_KEY_ID: # Apenas se as variáveis estiverem presentes (Produção)
