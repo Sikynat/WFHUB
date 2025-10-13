@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_htmx',
     'django.contrib.humanize',
-    'storages',
+    'storages',  # ADICIONADO PARA O S3
     # Seus aplicativos personalizados
     'wefixhub',
 ]
@@ -174,27 +174,29 @@ LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # --- Configurações AWS S3 (Mídia) ---
-# Importe o 'os' para ler as variáveis de ambiente (se ainda não o fez)
+# O 'os' está importado na linha 5.
 
 # 1. Credenciais e Bucket
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 
-# 2. Configuração da Região (Substitua pela sua)
-AWS_S3_REGION_NAME = 'us-east-1'  # Exemplo: São Paulo (mude se for outra)
-AWS_S3_ENDPOINT_URL = 'https://s3.amazonaws.com' 
+# 2. Configuração da Região
+# US East (N. Virginia) é a região onde o bucket foi criado
+AWS_S3_REGION_NAME = 'us-east-1' 
+
+# A linha AWS_S3_ENDPOINT_URL foi REMOVIDA para corrigir a falha de autenticação
 
 # 3. Configuração do Storages para Mídia (Arquivos de usuário)
 if AWS_ACCESS_KEY_ID: # Apenas se as variáveis estiverem presentes (Produção)
     DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
 
-    # O domínio de onde os arquivos serão servidos (Importante para o link)
+    # O domínio de onde os arquivos serão servidos (URLs dos PDFs)
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 
-    # Configurações de acesso:
-    AWS_DEFAULT_ACL = 'public-read' # Permite que qualquer um leia o arquivo
+    # Configurações de acesso CRÍTICAS:
+    AWS_DEFAULT_ACL = 'public-read' # GARANTE ACL DE LEITURA NO UPLOAD
     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'} # Cache de 1 dia
 
     # Opcional: Para evitar que arquivos existentes sejam sobrescritos
