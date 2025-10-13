@@ -177,9 +177,10 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 # O 'os' está importado na linha 5.
 
 # 1. Credenciais e Bucket
-AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+# CORREÇÃO CRÍTICA: Força a leitura das variáveis com config()
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
 
 # 2. Configuração da Região
 # US East (N. Virginia) é a região onde o bucket foi criado
@@ -188,6 +189,7 @@ AWS_S3_REGION_NAME = 'us-east-1'
 # A linha AWS_S3_ENDPOINT_URL foi REMOVIDA para corrigir a falha de autenticação
 
 # 3. Configuração do Storages para Mídia (Arquivos de usuário)
+# A variável AWS_ACCESS_KEY_ID agora é lida por config()
 if AWS_ACCESS_KEY_ID: # Apenas se as variáveis estiverem presentes (Produção)
     DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
 
@@ -208,10 +210,3 @@ else:
     # Configuração de fallback para desenvolvimento local (localmente no venv)
     MEDIA_URL = '/media/'
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# Adicione este bloco no final do settings.py
-
-print("--- DEBUG AWS CHECK ---")
-print(f"AWS_ID: {os.environ.get('AWS_ACCESS_KEY_ID')}") 
-print(f"AWS_BUCKET: {os.environ.get('AWS_STORAGE_BUCKET_NAME')}")
-print("-----------------------")
