@@ -8,6 +8,7 @@ from pathlib import Path
 import pymysql
 from decouple import config, Csv
 import dj_database_url
+import os
 
 # Inicializa o pymysql para que o Django o use como driver do MySQL
 pymysql.install_as_MySQLdb()
@@ -46,6 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_htmx',
+    'django.contrib.humanize',
     
     # Seus aplicativos personalizados
     'wefixhub',

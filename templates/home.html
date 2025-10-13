@@ -220,7 +220,19 @@
     }
 }
 
+.input-quantidade {
+    max-width: 90px; /* Largura máxima para o campo */
+    text-align: right; /* Alinha o texto à direita (melhor para números) */
+    padding: 0.375rem 0.75rem; /* Reduz o padding para um tamanho mais compacto */
+    height: calc(1.5em + 0.75rem + 2px); /* Tenta manter a altura padrão do Bootstrap */
+    font-size: 0.9rem; /* Torna a fonte um pouco menor */
+}
 
+/* Garante que o input da quantidade respeite a largura máxima dentro da célula */
+.table td input.input-quantidade {
+    max-width: 90px;
+    margin: 0 auto; /* Opcional: Se quiser centralizar na célula */
+}
 
 
 
@@ -317,7 +329,7 @@
                             name="quantidade_{{ product.product_id }}"
                             id="quantidade_{{ product.product_id }}"
                             min="0"
-                            class="form-control sm input-quantidade text-right-data">
+                            class="form-control input-quantidade text-right-data">
                     </td>
                     <td class="text-right-data">
                         <span id="total_{{ product.product_id }}">R$ 0,00</span>

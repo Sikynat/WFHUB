@@ -1,15 +1,27 @@
-# wefixhub/templatetags/carrinho_extras.py
+# wefixhub/templatetags/custom_filters.py
 
 from django import template
+from decimal import Decimal
 
 register = template.Library()
 
 @register.filter
-def get_item(dictionary, key):
-    # Tenta obter a chave original (que é um inteiro no loop)
-    # Se não encontrar, tenta converter para string e buscar novamente
-    return dictionary.get(str(key)) or dictionary.get(key)
-
+def replace(value, arg):
+    """
+    Substitui todas as ocorrências de um substring por outro.
+    Uso: {{ value|replace:"antigo,novo" }}
+    """
+    if not isinstance(value, str):
+        # Converte valores como Decimal para string antes de substituir
+        value = str(value)
+        
+    try:
+        # Divide o argumento em "antigo" e "novo"
+        find_string, replace_string = arg.split(',', 1)
+        return value.replace(find_string, replace_string)
+    except ValueError:
+        # Se o formato não for "antigo,novo", retorna o valor original
+        return value
     
 @register.filter
 def replace(value, arg):

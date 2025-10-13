@@ -1,0 +1,280 @@
+/* Corrigido CSS para Alinhamento */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+* {
+    font-family: 'Poppins', sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+a {
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+:root {
+    --body-color: #ffffff;
+    --side-bar-color: #efefef;
+    --primary-color: #6f42c1;
+    --primary-color-light: #F6F5FF;
+    --toggle-collor: #ddd;
+    --text-color: #707070;
+    --tran-02: all 0.2s ease;
+    --tran-03: all 0.3s ease;
+    --tran-04: all 0.4s ease;
+    --tran-05: all 0.5s ease;
+    --sidebar-width-collapsed: 78px; 
+    --sidebar-width: 250px;
+    --content-offset-padding: 15px;
+
+    /* VARIÁVEIS DE COR DO FOOTER */
+    --footer-bg: #212529;           
+    --footer-text-light: #adb5bd;   
+    --footer-text-main: #f8f9fa;    
+    --footer-link-color: #6f42c1;   
+    --footer-link-hover: #8a2be2;   
+}
+
+/* --- BASE LAYOUT (STICKY FOOTER) --- */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    
+    background: var(--body-color);
+    margin-left: var(--sidebar-width); 
+    transition: margin-left var(--tran-03);
+}
+
+main {
+    flex-grow: 1; 
+}
+
+body.move-content {
+    margin-left: var(--sidebar-width-collapsed); 
+}
+
+/* --- SIDEBAR --- */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: var(--sidebar-width);
+    padding: 10px 14px;
+    background: var(--side-bar-color);
+    /* TRANSIÇÃO DE LARGURA CRÍTICA */
+    transition: width var(--tran-03); 
+    display: flex;
+    flex-direction: column; 
+}
+
+.sidebar.close {
+    width: var(--sidebar-width-collapsed); 
+}
+
+.sidebar .menu-bar {
+    flex-grow: 1; 
+}
+
+/* --- SIDEBAR - VISIBILIDADE & HEADER --- */
+
+/* Aplica transição de opacidade/posição para o desaparecimento suave */
+.sidebar.close .text,
+.sidebar.close .header-text .profession,
+.sidebar.close .header-text .name {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--tran-03);
+}
+
+.sidebar.close .image {
+    opacity: 1; 
+    transition: opacity var(--tran-03);
+}
+
+.sidebar header {
+    padding: 0;
+    margin-bottom: 20px;
+}
+.sidebar .image-text {
+    display: flex;
+    align-items: center;
+}
+.sidebar .image {
+    min-width: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sidebar .image img {
+    width: 40px; 
+    border-radius: 6px;
+}
+.sidebar .header-text {
+    display: flex;
+    flex-direction: column;
+    margin-left: 10px;
+    transition: opacity var(--tran-03), margin-left var(--tran-03); /* Transições para o texto do header */
+}
+.sidebar.close .header-text {
+    opacity: 0;
+    margin-left: -250px; /* Puxa o texto para fora da tela */
+}
+
+/* Toggle Button */
+.sidebar header .toggle {
+    position: absolute;
+    top: 25px; 
+    right: -20px; 
+    transform: translateY(0%);
+    height: 50px; 
+    width: 50px; 
+    background: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--side-bar-color);
+    font-size: 25px; 
+    cursor: pointer;
+    transition: var(--tran-03);
+}
+
+/* --- SIDEBAR - LINKS --- */
+.sidebar .menu-links {
+    padding: 0;
+    list-style: none;
+    margin-top: 20px;
+}
+.sidebar li {
+    height: 50px;
+    margin-top: 10px;
+    list-style: none;
+    border-radius: 6px;
+    transition: var(--tran-03);
+}
+.sidebar .nav-links a {
+    text-decoration: none;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: 6px;
+    transition: var(--tran-03);
+}
+.sidebar .nav-links a:hover {
+    background: var(--primary-color-light);
+}
+
+.sidebar .text {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-color);
+    margin-left: 14px;
+    white-space: nowrap; 
+    transition: opacity var(--tran-03);
+}
+.sidebar i {
+    font-size: 20px;
+    color: var(--text-color);
+    transition: var(--tran-03);
+    min-width: 45px; 
+    justify-content: center;
+}
+.sidebar .nav-links a:hover .text,
+.sidebar .nav-links a:hover i {
+    color: var(--primary-color);
+}
+.sidebar .nav-links .active a {
+    background-color: var(--primary-color);
+}
+.sidebar .nav-links .active a .text,
+.sidebar .nav-links .active a i {
+    color: var(--side-bar-color);
+}
+
+
+/* --- FOOTER STYLES --- */
+
+.site-footer {
+    background-color: var(--footer-bg);
+    color: var(--footer-text-light);
+    border-top: 1px solid #343a40; 
+    
+    width: 100%; 
+    position: relative; 
+    left: 0; 
+    
+    /* 1. Compensa a margem do body (puxa o footer para a área do sidebar) */
+    margin-left: calc(var(--sidebar-width) * -1); 
+    transition: margin-left var(--tran-03);
+}
+
+/* 2. Regra para quando o menu está fechado (ajusta a compensação) */
+body.move-content .site-footer {
+    margin-left: calc(var(--sidebar-width-collapsed) * -1); 
+}
+
+/* --- CORREÇÃO DE ALINHAMENTO DO CONTEÚDO DENTRO DO FOOTER (RESOLVE SOBREPOSIÇÃO) --- */
+.site-footer .container {
+    /* 1. MUDANÇA CRÍTICA: Empurra o conteúdo para a direita, respeitando a sidebar. */
+    padding-left: calc(var(--sidebar-width) + var(--content-offset-padding));
+    transition: padding-left var(--tran-03);
+    
+    /* 2. Mantém o padding da direita */
+    padding-right: var(--content-offset-padding);
+}
+
+/* 3. Ajuste do container quando o menu está fechado */
+body.move-content .site-footer .container {
+    padding-left: calc(var(--sidebar-width-collapsed) + var(--content-offset-padding));
+}
+
+/* Títulos e Links do Footer (Mantidos) */
+.footer-heading {
+    color: var(--footer-text-main);
+    font-size: 0.95rem;
+}
+.footer-text {
+    font-size: 0.9rem;
+    color: var(--footer-text-light);
+}
+.footer-copyright-text {
+    color: var(--footer-text-main);
+    font-size: 0.85rem;
+}
+.footer-links {
+    padding-left: 0;
+    list-style: none;
+}
+.footer-links li a {
+    color: var(--footer-link-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+    line-height: 2; 
+    transition: color 0.2s ease-in-out;
+}
+.footer-links li a:hover {
+    color: var(--footer-link-hover);
+    text-decoration: underline;
+}
+.footer-social-icon {
+    font-size: 1.5rem;
+    color: var(--footer-link-color);
+    transition: color 0.2s ease-in-out;
+}
+.footer-social-icon:hover {
+    color: var(--footer-link-hover);
+}
+
+/* Responsividade: Centraliza textos no mobile */
+@media (max-width: 767.98px) {
+    .site-footer .container .row > div {
+        text-align: center !important;
+    }
+    .site-footer .d-flex.justify-content-md-start {
+        justify-content: center !important; 
+    }
+}

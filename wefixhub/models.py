@@ -162,20 +162,32 @@ class Pedido(models.Model):
         return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"
 
     def get_total_geral(self):
-        # A lógica agora garante que os valores sejam números antes de somar
-        total = 0
-        for item in self.itens.all():
-            if self.cliente.client_state.uf_name == 'SP':
-                valor = item.valor_unitario_sp
-            elif self.cliente.client_state.uf_name == 'ES':
-                valor = item.valor_unitario_es
-            else:
-                # Caso o estado não seja SP ou ES, usa SP como padrão
-                valor = item.valor_unitario_sp
+        """
+        Calcula o valor total do pedido, usando o preço SP ou ES do item 
+        congelado no momento da criação do pedido, com base no estado do cliente.
+        """
+        total = Decimal('0.00')
+        
+        # Determina qual campo de preço usar com base no estado do cliente no pedido.
+        # Usa SP como padrão se não for SP nem ES.
+        uf = self.cliente.client_state.uf_name if self.cliente and self.cliente.client_state else 'SP'
+        
+        if uf == 'SP':
+            valor_campo = 'valor_unitario_sp'
+        elif uf == 'ES':
+            valor_campo = 'valor_unitario_es'
+        else:
+            valor_campo = 'valor_unitario_sp' # Padrão
             
-            # Garante que o valor não seja nulo antes de multiplicar
-            valor_final = valor if valor is not None else 0
-            total += valor_final * (item.quantidade if item.quantidade is not None else 0)
+        # Itera sobre os itens e soma.
+        for item in self.itens.all():
+            valor = getattr(item, valor_campo)
+            quantidade = item.quantidade if item.quantidade is not None else 0
+            
+            # Garante que o valor não é None antes da multiplicação
+            valor_final = valor if valor is not None else Decimal('0.00')
+            
+            total += valor_final * Decimal(quantidade)
             
         return total
 

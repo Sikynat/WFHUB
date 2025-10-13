@@ -1,171 +1,133 @@
+{% load static %} 
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
-     {% load static %}
-    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
-    <link rel="shortcut icon" href="{% static 'favicon.ico' %}"> <meta charset="UTF-8">
 
-   
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Seu Título{% endblock %}</title>
-
+    <!--BootStrap-->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            margin: 0;
-        }
-        main {
-            flex-grow: 1; 
-        }
-        .site-footer {
-            background-color: #333;
-            color: #fff;
-            text-align: center;
-            padding: 20px;
-            margin-top: auto; 
-        }
-        .input-quantidade {
-            max-width: 80px;
-            text-align: center;
-        }
-        .hometitulo {
-            margin-top: 5px; 
-            margin-bottom: 5px; 
-            margin-left: 75px;
-            margin-right: 10px;
-        }
 
-        /* ----- ESTILOS DA BARRA DE NAVEGAÇÃO ----- */
-        .navbar {
-            background-color: #6f42c1 !important; /* Roxo. O !important garante que ele sobrescreva o Bootstrap */
-        }
-
-        .navbar .navbar-brand,
-        .navbar .nav-link {
-            color: #fff !important; /* Texto branco para o nome e os links */
-        }
-
-        .navbar .nav-link:hover,
-        .navbar .nav-link:focus {
-            color: #e0d8f5 !important; /* Um tom de branco/lilás claro para o efeito hover */
-        }
-        
-        .navbar .nav-link.active {
-            font-weight: bold; /* Deixa o link ativo em negrito */
-        }
-
-        /* O ícone do menu "hambúrguer" em telas menores */
-        .navbar-toggler-icon {
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
-        }
-
-        .navbar-toggler {
-            border-color: rgba(255, 255, 255, 0.5) !important; /* Borda do botão do menu */
-        }
-
-    </style>
-
-    {% block head_extra %}{% endblock %}
-   
+      {% block head_extra %}{% endblock %}
+    
+      <link rel="stylesheet" href="{% static 'wefixhub/css/style-base.css' %}">
+      <link rel="stylesheet" href="{% static 'wefixhub/css/footer-style.css' %}">
+      <!-- Boxicons CSS -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
 </head>
 <body>
+ 
+        <!--navbar-->
+          <nav class="sidebar close">
+                <header>
+                    <div class="image-text">
+                        <span class="image">
+                          <a href="{% url 'home' %}">  <img src="{% static 'wefixhub/images/1.png' %}" alt="Logo da Empresa"></a>
+                        </span>
 
-    <nav class="navbar navbar-expand-lg bg-body-tertiary">
-        <div class="container-fluid">
-            <a class="navbar-brand hometitulo" href="{% url 'home' %}">Charles Monteiro Representante</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="{% url 'home' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Produtos Disponiveis">
-                            <i class="bi bi-box-seam"></i>
+                        <div class="text header-text">
+                            <a href="{% url 'home' %}"><span class="name">Charles Monteiro</span></a>
+                            <a href="{% url 'home' %}"><span class="profession">Representante</span></a>
+                        </div>
+                    </div>
+                <i class='bx bx-chevron-right toggle'></i>
+                </header>
+
+                <div class="menu-bar">
+                    <div class="menu">
+                        
+                        <ul class="menu-links">
+                <li class="nav-links active"> <a href="{% url 'home' %}">
+                        <i class='bx bx-home'></i>
+                        <span class="text nav-text">Home</span>
+                    </a>
+                </li>
+
+                {% if user.is_staff %}
+                    <li class="nav-links">
+                        <a href="{% url 'upload_pedido' %}">
+                            <i class='bx bx-upload'></i>
+                            <span class="text nav-text">Subir Pedido</span>
                         </a>
                     </li>
-                    {% if user.is_authenticated %}
-                        {% if user.is_staff %}
-                        <li>
-                            <a class="nav-link" href="{% url 'upload_pedido' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Upload de Pedido">
-                                <i class="bi bi-cloud-arrow-up"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'dashboard_admin' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Dashboard">
-                                <i class="bi bi-speedometer"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'todos_os_pedidos' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Todos os Pedidos">
-                                <i class="bi bi-list-check"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'pagina_upload' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Alterar o preço do dia">
-                                <i class="bi bi-cloud-arrow-up"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'pedidos_para_hoje' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Pedidos de Hoje">
-                                <i class="bi bi-calendar-check"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'gerar_pedido_manual' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Gerar Pedido Manual">
-                                <i class="bi bi-plus-square"></i>
-                            </a>
-                        </li>
-                        {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'carrinho' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Ver Carrinho">
-                                <i class="bi bi-cart"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'pedidos' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Histórico de Pedidos">
-                                <i class="bi bi-clock-history"></i>
-                            </a>
-                        </li>
-                        {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'password_change' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Alterar Senha">
-                                <i class="bi bi-key"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'editar_perfil' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Editar Endereço">
-                                <i class="bi bi-pin-map"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <form action="{% url 'logout' %}" method="post">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-outline-light" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Sair">
-                                    <i class="bi bi-box-arrow-right me-1"></i>Sair
-                                </button>
-                            </form>
-                        </li>
+                    <li class="nav-links">
+                        <a href="{% url 'dashboard_admin' %}">
+                            <i class='bx bxs-dashboard'></i>
+                            <span class="text nav-text">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-links">
+                        <a href="{% url 'todos_os_pedidos' %}">
+                            <i class='bx bx-list-ul'></i>
+                            <span class="text nav-text">Todos os pedidos</span>
+                        </a>
+                    </li>
+                    <li class="nav-links">
+                        <a href="{% url 'pagina_upload' %}">
+                            <i class='bx bx-calendar-plus' ></i>
+                            <span class="text nav-text">Preço do dia</span>
+                        </a>
+                    </li>
+                    <li class="nav-links">
+                        <a href="{% url 'pedidos_para_hoje' %}">
+                            <i class='bx bx-error'></i>
+                            <span class="text nav-text">Pedidos de hoje</span>
+                        </a>
+                    </li>
+                    <li class="nav-links">
+                        <a href="{% url 'gerar_pedido_manual' %}">
+                            <i class='bx bx-cart-add'></i>
+                            <span class="text nav-text">Pedido Manual</span>
+                        </a>
+                    </li>
                     {% else %}
-                    <li class="nav-item">
-                        <a class="btn btn-primary" href="{% url 'login' %}">
-                            <i class="bi bi-box-arrow-in-right me-1"></i>Entrar
+                    <li class="nav-links">
+                        <a href="{% url 'pedidos' %}">
+                            <i class='bx bx-history'></i>
+                            <span class="text nav-text">Histórico de Pedidos</span>
                         </a>
                     </li>
                     {% endif %}
-                </ul>
-            </div>
+
+                <li class="nav-links">
+                    <a href="{% url 'password_change' %}">
+                        <i class="bi bi-key"></i>
+                        <span class="text nav-text">Alterar senha</span>
+                    </a>
+                </li>
+                <li class="nav-links">
+                    <a href="{% url 'editar_perfil' %}">
+                        <i class="bi bi-pin-map"></i>
+                        <span class="text nav-text">Endereço</span>
+                    </a>
+                </li>
+            </ul>
         </div>
-    </nav>
-    <main class="container mt-4">
+            <div class="bottom-content">
+                <li class="nav-links">
+                    <a href="{% url 'logout' %}" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                        <i class='bx bx-log-out icon'></i> <span class="text nav-text">Sair</span>
+                    </a>
+                    <form id="logout-form" action="{% url 'logout' %}" method="post" style="display: none;">
+                        {% csrf_token %}
+                    </form>
+                </li>
+            </div>
+</nav>
+    </div>
+</nav>
+
+        <!--Conteudo-->
+
+
+        <main class="container mt-4">
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
@@ -176,6 +138,7 @@
         {% endif %}
         {% block content %}{% endblock %}
     </main>
+  
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
@@ -189,10 +152,48 @@
             const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
         });
     </script>
-    
-    <footer class="site-footer">
-        <p>&copy; 2025 Charles Monteiro Todos os direitos reservados.</p>
-    </footer>    
+
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
+
+      <script>
+          document.addEventListener('DOMContentLoaded', function () {
+        // ... (tooltips mantidos) ...
+
+        // --- Lógica do Menu Lateral (Toggle) ---
+        const body = document.querySelector("body"); 
+        const sidebar = document.querySelector(".sidebar");
+        const toggle = document.querySelector(".toggle");
+        
+        const toggleSidebarState = (shouldClose) => {
+            if (shouldClose) {
+                sidebar.classList.add('close');
+                body.classList.add('move-content'); // Aplica a margem de 78px
+                toggle.classList.remove('bx-chevron-right');
+                toggle.classList.add('bx-chevron-left');
+            } else {
+                sidebar.classList.remove('close');
+                body.classList.remove('move-content'); // Aplica a margem de 250px (definida no CSS)
+                toggle.classList.remove('bx-chevron-left');
+                toggle.classList.add('bx-chevron-right');
+            }
+        };
+
+        // 1. APLICAÇÃO DO ESTADO INICIAL
+        // A tag <nav class="sidebar close"> no HTML define o estado inicial como fechado.
+        if (sidebar.classList.contains('close')) {
+            toggleSidebarState(true);
+        } else {
+            // Isso só acontece se você remover a classe 'close' do HTML
+            toggleSidebarState(false);
+        }
+
+        // Event listener para o botão de toggle
+        toggle.addEventListener("click", () => {
+            const isCurrentlyClosed = sidebar.classList.contains('close');
+            toggleSidebarState(!isCurrentlyClosed);
+        });
+        // ----------------------------------------
+    });
+    </script>
 </body>
 </html>

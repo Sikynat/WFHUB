@@ -1,0 +1,108 @@
+/* --- Login Page Styles --- */
+
+:root {
+    --login-bg-start: #6f42c1; /* Cor primária */
+    --login-bg-end: #8a2be2;   /* Cor secundária para gradiente */
+    --login-card-bg: #ffffff;
+    --login-text-color: #333333;
+    --login-input-border: #cccccc;
+    --login-input-focus: #6f42c1;
+    --login-button-bg-start: #6f42c1;
+    --login-button-bg-end: #8a2be2;
+    --login-button-hover-start: #8a2be2;
+    --login-button-hover-end: #9932cc;
+    --login-box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    --login-card-radius: 15px;
+    --primary-color-light: #F6F5FF; /* Cor de suporte para foco */
+}
+
+/* --- Alinhamento e Fundo --- */
+
+body {
+    /* Garante que a margem do sidebar seja zero (para a página de login) */
+    margin-left: 0 !important; 
+    
+    background: linear-gradient(135deg, var(--login-bg-start), var(--login-bg-end));
+    min-height: 100vh;
+    /* Centraliza o conteúdo de login na tela */
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+}
+
+/* Garante que o container interno não tenha padding vertical desnecessário */
+.container {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.login-section {
+    width: 100%;
+    height: 100%; 
+}
+
+/* --- Card Principal --- */
+
+.login-card {
+    max-width: 400px; /* Limita a largura do card para melhor design */
+    background-color: var(--login-card-bg);
+    border-radius: var(--login-card-radius);
+    box-shadow: var(--login-box-shadow);
+    padding: 2.5rem; 
+    color: var(--login-text-color);
+    text-align: center;
+}
+
+/* Esconde todos os labels (rótulos) dentro do formulário para usar apenas os placeholders */
+.login-card form label {
+    display: none;
+}
+
+/* --- Ícone e Título --- */
+
+.login-icon {
+    width: 80px;
+    height: 80px;
+    fill: var(--login-button-bg-start); /* Usa a cor primária para o ícone */
+}
+
+/* --- Inputs --- */
+
+.login-input {
+    border: 1px solid var(--login-input-border);
+    border-radius: 8px; /* Bordas mais suaves */
+    padding: 0.8rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    width: 100%; /* Garante que o input preencha o espaço corretamente */
+}
+
+.login-input:focus {
+    border-color: var(--login-input-focus);
+    box-shadow: 0 0 0 0.25rem rgba(111, 66, 193, 0.25); /* Sombra de foco mais suave */
+    background-color: var(--primary-color-light); /* Levemente mais claro no foco */
+}
+
+/* --- Botão --- */
+
+.login-button {
+    background: linear-gradient(45deg, var(--login-button-bg-start), var(--login-button-bg-end));
+    border: none;
+    border-radius: 8px;
+    padding: 0.8rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: white;
+    transition: all 0.3s ease;
+    width: 100%; /* Garante que o botão preencha o container (d-grid) */
+}
+
+.login-button:hover {
+    background: linear-gradient(45deg, var(--login-button-hover-start), var(--login-button-hover-end));
+    transform: translateY(-2px); /* Efeito sutil ao passar o mouse */
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+.login-card h1 {
+    color: var(--login-text-color);
+}

@@ -45,6 +45,21 @@ from django.db.models.functions import Cast
 from django.db.models import IntegerField
 from django.contrib import messages
 import locale
+from django.db.models.functions import TruncMonth , Coalesce
+from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper 
+from datetime import datetime, timedelta, date 
+
+from django.db.models import Count, Sum, F, OuterRef, Subquery, DecimalField, ExpressionWrapper, Value 
+from django.db.models.functions import TruncMonth, Coalesce, TruncDate
+from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
+from datetime import datetime, timedelta, date
+from decimal import Decimal
+from django.contrib.admin.views.decorators import staff_member_required
+
+# Garanta que seus modelos estão importados
+from .models import Pedido, ItemPedido, WfClient 
+
 
 try:
     # Tenta definir o locale ideal
@@ -128,7 +143,7 @@ def home(request):
         'cliente_logado': cliente_logado,
         'preco_exibido': preco_exibido,
         # A data exibida será a do último produto atualizado
-        'data_hoje': products[0].date_product if products else datetime.date.today(),
+        'data_hoje': products[0].date_product if products else date.today(),
     }
             
     return render(request, 'home.html', context)
@@ -524,8 +539,56 @@ def detalhes_pedido(request, pedido_id):
 # Configuração do locale para o formato brasileiro
 locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
+
+
+
 @staff_member_required
 def dashboard_admin(request):
+    # Expressão que DEVE calcular o valor congelado (CORRETO)
+    calculo_total_vendas_geral = ExpressionWrapper(
+        F('quantidade') * Coalesce(
+            F('valor_unitario_sp'), 
+            F('valor_unitario_es'), 
+            Value(Decimal('0.00'), output_field=DecimalField())
+        ),
+        output_field=DecimalField()
+    )
+
+    # --- CÁLCULO TOTAL DE VENDAS (HISTÓRICO CORRETO) ---
+    total_vendas_correta_agg = ItemPedido.objects.annotate(
+        subtotal=calculo_total_vendas_geral
+    ).exclude(
+        pedido__status='CANCELADO' 
+    ).aggregate(total_vendas=Sum('subtotal'))
+    
+    valor_total_vendas_correta = total_vendas_correta_agg['total_vendas'] or Decimal('0.00')
+
+    # === DEBUG: VERIFICAÇÃO COM PREÇO ATUAL DO PRODUTO ===
+    # Esta Query INCORRETA (preço do Produto) está provavelmente causando a divergência.
+    # Rodaremos ela para ver se ela gera R$ 771.917,09
+    try:
+        total_vendas_produto_agg = ItemPedido.objects.annotate(
+            # Tenta se ligar ao preço atual do modelo Product (QUE É O ERRO COMUM)
+            subtotal_produto=F('quantidade') * F('produto__product_value_sp') 
+        ).exclude(
+            pedido__status='CANCELADO'
+        ).aggregate(total_vendas_produto=Sum('subtotal_produto'))
+        
+        valor_total_vendas_produto = total_vendas_produto_agg['total_vendas_produto'] or Decimal('0.00')
+    except Exception:
+         valor_total_vendas_produto = Decimal('0.00')
+
+    print("================ DEBUG DIVERGÊNCIA ADMINISTRATIVO ================")
+    print(f"1. VALOR CORRETO (PREÇO CONGELADO ItemPedido): R$ {valor_total_vendas_correta:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    print(f"2. VALOR INCONSISTENTE (PREÇO ATUAL Product): R$ {valor_total_vendas_produto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    print("------------------------------------------------------------------")
+    # Fim do bloco de debug
+
+    # O valor que deve ser enviado é o CORRETO (PREÇO CONGELADO)
+    valor_total_vendas_decimal = valor_total_vendas_correta
+    valor_total_vendas_formatado = locale.currency(valor_total_vendas_decimal, grouping=True, symbol='R$ ')
+    
+    # Restante da sua view...
     total_clientes = WfClient.objects.count()
     total_pedidos = Pedido.objects.count()
     pedidos_pendentes = Pedido.objects.filter(status='PENDENTE').count()
@@ -535,17 +598,6 @@ def dashboard_admin(request):
     pedidos_separacao = Pedido.objects.filter(status='SEPARACAO').count()
     pedidos_expedicao = Pedido.objects.filter(status='EXPEDICAO').count()
     pedidos_atrasados = Pedido.objects.filter(status='ATRASADO').count()
-
-    # Agrega o total de vendas
-    total_vendas_agregadas = ItemPedido.objects.annotate(
-        subtotal=F('quantidade') * F('produto__product_value_sp')
-    ).aggregate(total_vendas=Sum('subtotal'))
-    
-    # Pega o valor, tratando o caso em que não há vendas
-    valor_total_vendas_decimal = total_vendas_agregadas['total_vendas'] or Decimal('0.00')
-    
-    # Formata o valor para o padrão brasileiro
-    valor_total_vendas_formatado = locale.currency(valor_total_vendas_decimal, grouping=True, symbol='R$ ')
     
     pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
     pedidos_com_total = []
@@ -557,12 +609,12 @@ def dashboard_admin(request):
             'data_criacao': pedido.data_criacao,
             'total': locale.currency(total_pedido, grouping=True, symbol='R$ ')
         })
-    
+        
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': total_clientes,
         'total_pedidos': total_pedidos,
-        'total_vendas': valor_total_vendas_formatado,
+        'total_vendas': valor_total_vendas_formatado, 
         'pedidos_recentes': pedidos_com_total,
         'pedidos_pendentes': pedidos_pendentes,
         'pedidos_concluidos': pedidos_concluidos,
@@ -573,6 +625,7 @@ def dashboard_admin(request):
         'pedidos_atrasados': pedidos_atrasados,
     }
     return render(request, 'dashboard.html', contexto)
+
 
 
 # View para exportação de pedidos
@@ -1007,7 +1060,7 @@ def processar_upload(request):
                             'product_value_sp': row['product_value_sp'],
                             'product_value_es': row['product_value_es'],
                             'status': 'PENDENTE',
-                            'date_product': datetime.date.today(),
+                            'date_product': date.today(),
                         }
                     )
                     produtos_processados += 1
@@ -1790,3 +1843,162 @@ def marcar_pedido_finalizado(request, pedido_id):
     
     # Redireciona o usuário de volta para a página de detalhes de onde ele veio
     return redirect('detalhes_pedido_admin', pedido_id=pedido_id)
+
+# views.py (ADICIONE AO SEU ARQUIVO)
+from django.db.models import Sum, Count, F, Q, Case, When, Value, ExpressionWrapper, DecimalField, Subquery, OuterRef, CharField
+
+
+
+
+
+@staff_member_required
+def analise_dados_dashboard(request):
+    periodo_geral_solicitado = 'periodo_geral' in request.GET
+    
+    # --- 1. Definição Inicial das Variáveis do Filtro ---
+    data_fim_str = request.GET.get('data_fim')
+    data_inicio_str = request.GET.get('data_inicio')
+    
+    # --- 2. Lógica de Conversão e Definição de Data ---
+    if data_fim_str and not periodo_geral_solicitado:
+        try:
+            data_fim = datetime.strptime(data_fim_str, '%d/%m/%Y').date()
+        except ValueError:
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+    else:
+        data_fim = timezone.localdate()
+        
+    if periodo_geral_solicitado:
+        # Quando 'Todo o Histórico' é clicado, forçamos as datas para exibição
+        data_inicio = datetime(2000, 1, 1).date()
+        data_inicio_display = data_inicio.strftime('%Y-%m-%d')
+        data_fim_display = data_fim.strftime('%Y-%m-%d')
+    elif data_inicio_str and data_fim_str: 
+        # Lógica para filtro customizado
+        try:
+            data_inicio = datetime.strptime(data_inicio_str, '%d/%m/%Y').date()
+        except ValueError:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+            
+        data_inicio_display = data_inicio_str
+        data_fim_display = data_fim_str
+    else:
+        # Período padrão (90 dias)
+        data_inicio = data_fim - timedelta(days=90)
+        data_inicio_display = data_inicio.strftime('%Y-%m-%d')
+        data_fim_display = data_fim.strftime('%Y-%m-%d')
+        
+    CAMPO_DATA_FILTRO = 'pedido__data_envio_solicitada' 
+    
+    # --- 3. EXPRESSÕES REUTILIZÁVEIS DE VALOR ---
+    valor_unitario_preferencial = Coalesce(
+        F('valor_unitario_sp'), F('valor_unitario_es'), Value(Decimal('0.00'), output_field=DecimalField()) 
+    )
+    calculo_total_preferencial = ExpressionWrapper(
+        F('quantidade') * valor_unitario_preferencial, output_field=DecimalField() 
+    )
+    calculo_total_itempedido_es = ExpressionWrapper(
+        F('quantidade') * Coalesce(F('valor_unitario_es'), Value(Decimal('0.00'), output_field=DecimalField())), 
+        output_field=DecimalField()
+    )
+
+    # --- 4. QuerySet Base (Histórico) ---
+    base_queryset_com_dados = ItemPedido.objects.exclude(
+        pedido__status='CANCELADO'
+    )
+    
+    # --- 5. QuerySet Filtrado (ANOTAÇÃO DE VALOR) ---
+    itens_filtrados = base_queryset_com_dados
+    
+    # APLICA O FILTRO DE DATA SOMENTE SE NÃO ESTIVER NO MODO HISTÓRICO TOTAL
+    if not periodo_geral_solicitado:
+        itens_filtrados = itens_filtrados.filter(
+            **{f'{CAMPO_DATA_FILTRO}__gte': data_inicio, 
+               f'{CAMPO_DATA_FILTRO}__lte': data_fim}
+        ).exclude(
+            **{f'{CAMPO_DATA_FILTRO}__isnull': True} 
+        )
+    
+    # ANOTA O VALOR NO QUERYSET FINAL
+    itens_filtrados = itens_filtrados.annotate(
+        valor_total_item=calculo_total_preferencial 
+    )
+
+    # --- 6. Clientes que Mais Compraram (SEPARAÇÃO POR ESTADO) ---
+    def get_top_clients_by_state(uf_name):
+        return itens_filtrados.filter(
+            pedido__cliente__client_state__uf_name=uf_name
+        ).values(
+            'pedido__cliente__client_id',
+        ).annotate(
+            nome=F('pedido__cliente__client_name'),  
+            codigo=F('pedido__cliente__client_code'),
+            total_gasto=Sum('valor_total_item'), 
+            estado=Value(uf_name, output_field=CharField()), 
+            num_pedidos=Count('pedido__id', distinct=True) 
+        ).order_by('-total_gasto')[:5]
+
+    clientes_top_sp = list(get_top_clients_by_state('SP'))
+    clientes_top_es = list(get_top_clients_by_state('ES'))
+    
+    # --- 7. Produtos Mais Vendidos ---
+    produtos_top = itens_filtrados.values(
+        'produto__product_code', 
+        'produto__product_description'
+    ).annotate(
+        total_vendido=Sum('quantidade')
+    ).order_by('-total_vendido')[:5]
+    
+    # --- 8. Últimas Compras (placeholder) ---
+    clientes_com_ultima_compra = [] 
+    
+    # --- 9. TOTAIS DE VENDA POR CLIENTE/ESTADO (para os cartões) ---
+    total_vendas_sp_clientes = itens_filtrados.filter(
+        pedido__cliente__client_state__uf_name='SP'
+    ).aggregate(
+        total=Sum('valor_total_item')
+    )['total'] or Decimal('0.00')
+
+    total_vendas_es_clientes = itens_filtrados.filter(
+        pedido__cliente__client_state__uf_name='ES'
+    ).annotate(
+        valor_total_item_es=calculo_total_itempedido_es 
+    ).aggregate(
+        total=Sum('valor_total_item_es')
+    )['total'] or Decimal('0.00')
+    
+    # NOVO: Total Geral Filtrado (Soma de todos os estados no período)
+    total_vendas_periodo_calculado = itens_filtrados.aggregate(
+        total=Sum('valor_total_item')
+    )['total'] or Decimal('0.00')
+    
+    # --- 10. Vendas por Mês (Incluindo ES) ---
+    vendas_por_mes = itens_filtrados.annotate(
+        mes_ano=TruncMonth(CAMPO_DATA_FILTRO),
+    ).values('mes_ano').annotate(
+        total_vendas=Sum('valor_total_item'),
+        total_vendas_es=Sum(calculo_total_itempedido_es)
+    ).order_by('mes_ano')
+    
+    # --- 11. Total Geral Histórico (TESTE) ---
+    # Este valor é o valor real do banco (usado para o card amarelo)
+    total_historico_teste = total_vendas_periodo_calculado 
+    
+    # --- 12. Montagem do Contexto ---
+    contexto = {
+        'titulo': 'Dashboard de Análise de Dados',
+        'data_inicio': data_inicio_display, 
+        'data_fim': data_fim_display,
+        'clientes_top_sp': clientes_top_sp,
+        'clientes_top_es': clientes_top_es,
+        'produtos_top': produtos_top,
+        'clientes_com_ultima_compra': clientes_com_ultima_compra,
+        'vendas_por_mes': vendas_por_mes,
+        'total_vendas_sp_clientes': total_vendas_sp_clientes, 
+        'total_vendas_es_clientes': total_vendas_es_clientes, 
+        'total_vendas_periodo_calculado': total_vendas_periodo_calculado,
+        'total_historico_teste': total_historico_teste,
+        'periodo_geral_ativo': periodo_geral_solicitado
+    }
+    
+    return render(request, 'analise/analise_dashboard.html', contexto)
