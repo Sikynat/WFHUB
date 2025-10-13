@@ -208,3 +208,10 @@ else:
     # Configuração de fallback para desenvolvimento local (localmente no venv)
     MEDIA_URL = '/media/'
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Adicione este bloco no final do settings.py
+
+print("--- DEBUG AWS CHECK ---")
+print(f"AWS_ID: {os.environ.get('AWS_ACCESS_KEY_ID')}") 
+print(f"AWS_BUCKET: {os.environ.get('AWS_STORAGE_BUCKET_NAME')}")
+print("-----------------------")
