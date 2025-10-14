@@ -10,15 +10,6 @@ from decouple import config, Csv
 import dj_database_url
 import os
 
-# === DIAGNÓSTICO CRÍTICO DE ENV ===
-# Este bloco verifica se o Railway injetou as variáveis ANTES do Django carregar
-import sys
-if os.environ.get('AWS_ACCESS_KEY_ID'):
-    sys.stderr.write("!!! SUCESSO: CHAVE AWS ENCONTRADA EM OS.ENVIRON.\n")
-else:
-    sys.stderr.write("!!! FALHA CRÍTICA: CHAVE AWS AUSENTE EM OS.ENVIRON.\n")
-# ==================================
-    
 # Inicializa o pymysql para que o Django o use como driver do MySQL
 pymysql.install_as_MySQLdb()
 
@@ -167,7 +158,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (arquivos enviados por usuários)
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.path.join(BASE_DIR / 'media')
 
 
 # ==============================================================================
@@ -183,37 +174,24 @@ LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # --- Configurações AWS S3 (Mídia) ---
+# AVISO: NÃO USE ISTO EM PRODUÇÃO! APENAS PARA TESTE DIAGNÓSTICO.
 
-# 1. Credenciais e Bucket
-# Voltar a usar os.environ.get() para verificar o ambiente
-AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+# 1. Credenciais e Bucket (HARDCODED PARA TESTE)
+AWS_ACCESS_KEY_ID = 'AKIAS7JFEFDDH5D4CFNJ'
+AWS_SECRET_ACCESS_KEY = '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'
+AWS_STORAGE_BUCKET_NAME = 'wfhub-cloud-bucket'
 
 # 2. Configuração da Região
-# US East (N. Virginia) é a região onde o bucket foi criado
 AWS_S3_REGION_NAME = 'us-east-1' 
 
-# A linha AWS_S3_ENDPOINT_URL foi REMOVIDA para corrigir a falha de autenticação
-
 # 3. Configuração do Storages para Mídia (Arquivos de usuário)
-if AWS_ACCESS_KEY_ID: # Apenas se as variáveis estiverem presentes (Produção)
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
+# O bloco "if AWS_ACCESS_KEY_ID" é removido
+# pois as chaves estão hardcoded.
 
-    # O domínio de onde os arquivos serão servidos (URLs dos PDFs)
-    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
-
-    # Configurações de acesso CRÍTICAS:
-    AWS_DEFAULT_ACL = 'public-read' # GARANTE ACL DE LEITURA NO UPLOAD
-    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'} # Cache de 1 dia
-
-    # Opcional: Para evitar que arquivos existentes sejam sobrescritos
-    AWS_S3_FILE_OVERWRITE = False
-
-    # Opcional: Caminho dentro do bucket (se quiser isolar os uploads)
-    AWS_LOCATION = 'media'
-else:
-    # Configuração de fallback para desenvolvimento local (localmente no venv)
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+AWS_DEFAULT_ACL = 'public-read' 
+AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+AWS_S3_FILE_OVERWRITE = False
+AWS_LOCATION = 'media'
