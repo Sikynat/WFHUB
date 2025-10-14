@@ -174,24 +174,29 @@ LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # --- Configurações AWS S3 (Mídia) ---
-# AVISO: NÃO USE ISTO EM PRODUÇÃO! APENAS PARA TESTE DIAGNÓSTICO.
+# AVISO: Não use este código em produção, é para diagnóstico.
+# Ele será alterado após o teste.
 
-# 1. Credenciais e Bucket (HARDCODED PARA TESTE)
-AWS_ACCESS_KEY_ID = 'AKIAS7JFEFDDH5D4CFNJ'
-AWS_SECRET_ACCESS_KEY = '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'
-AWS_STORAGE_BUCKET_NAME = 'wfhub-cloud-bucket'
+# Força a leitura das variáveis de ambiente com decouple
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
 
-# 2. Configuração da Região
-AWS_S3_REGION_NAME = 'us-east-1' 
+# Garante que as variáveis estejam no escopo de produção
+if AWS_ACCESS_KEY_ID:
+    AWS_S3_REGION_NAME = 'us-east-1' 
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 
-# 3. Configuração do Storages para Mídia (Arquivos de usuário)
-# O bloco "if AWS_ACCESS_KEY_ID" é removido
-# pois as chaves estão hardcoded.
-
-DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
-AWS_DEFAULT_ACL = 'public-read' 
-AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-AWS_S3_FILE_OVERWRITE = False
-AWS_LOCATION = 'media'
+    # Usa a classe S3Storage para gerenciar arquivos
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
+    
+    # Configurações de acesso:
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_LOCATION = 'media'
+else:
+    # Fallback para desenvolvimento local
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
