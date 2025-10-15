@@ -2,7 +2,16 @@
 {% block title %}Checkout{% endblock %}
 
 {% block content %}
-    <h1>Finalizar Compra</h1>
+
+
+<style>
+    .under {
+        margin-bottom: 300px;
+    }
+</style>
+
+<div class="under">
+     <h1>Finalizar Compra</h1>
     <hr>
     <h3>Resumo do Pedido</h3>
     <div class="table-responsive">
@@ -15,9 +24,6 @@
                         <th>Valor Unitário (SP)</th>
                     {% elif preco_exibido == 'es' %}
                         <th>Valor Unitário (ES)</th>
-                    {% elif preco_exibido == 'todos' %}
-                        <th>Valor Unitário (SP)</th>
-                        <th>Valor Unitário (ES)</th>
                     {% endif %}
                     <th>Quantidade</th>
                     <th>Valor Total</th>
@@ -28,12 +34,7 @@
                     <tr>
                         <td>{{ item.product.product_code }}</td>
                         <td>{{ item.product.product_description }}</td>
-                        {% if preco_exibido == 'todos' %}
-                            <td>R$ {{ item.product.product_value_sp|floatformat:2 }}</td>
-                            <td>R$ {{ item.product.product_value_es|floatformat:2 }}</td>
-                        {% else %}
-                            <td>R$ {{ item.valor_unitario|floatformat:2 }}</td>
-                        {% endif %}
+                        <td>R$ {{ item.valor_unitario|floatformat:2 }}</td>
                         <td>{{ item.quantidade }}</td>
                         <td>R$ {{ item.valor_total|floatformat:2 }}</td>
                     </tr>
@@ -41,10 +42,10 @@
             </tbody>
             <tfoot>
                 <tr>
-                    {% if preco_exibido == 'todos' %}
-                        <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
-                    {% else %}
+                    {% if preco_exibido == 'sp' or preco_exibido == 'es' %}
                         <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                    {% else %}
+                        <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
                     {% endif %}
                     <td><strong>R$ {{ total_geral|floatformat:2 }}</strong></td>
                 </tr>
@@ -63,17 +64,25 @@
         </div>
     </div>
     
-    <form action="{% url 'checkout' %}" method="post">
+    {% comment %}
+    AQUI ESTÁ A LÓGICA CORRETA PARA O ACTION DO FORMULÁRIO.
+    Se a página foi carregada com um ID de rascunho, o action deve incluir esse ID.
+    Caso contrário, deve usar a URL padrão.
+    {% endcomment %}
+    <form action="{% if pedido_id_rascunho %}{% url 'checkout_rascunho' pedido_id_rascunho=pedido_id_rascunho %}{% else %}{% url 'checkout' %}{% endif %}" method="post">
         {% csrf_token %}
+
+        {% if pedido_id_rascunho %}
+            <input type="hidden" name="pedido_id_rascunho" value="{{ pedido_id_rascunho }}">
+        {% endif %}
         
         <div class="mb-3">
             <label for="frete_option" class="form-label">Opção de Frete:</label>
             <select id="frete_option" name="frete_option" class="form-control" required>
                 <option value="">Selecione uma opção de frete</option>
-                <option value="SEDEX">Sedex</option>
-                <option value="CORREIOS">Correios</option>
-                <option value="ONIBUS">Ônibus</option>
-                <option value="TRANSPORTADORA">Transportadora</option>
+                {% for value, label in cliente_logado.FRETE_CHOICES %}
+                    <option value="{{ value }}" {% if initial_data.frete_option == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
             </select>
         </div>
         
@@ -83,7 +92,8 @@
                 {% if enderecos %}
                     {% for endereco in enderecos %}
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="endereco_selecionado" id="endereco_{{ endereco.id }}" value="{{ endereco.id }}" {% if endereco.is_default %}checked{% endif %}>
+                            <input class="form-check-input" type="radio" name="endereco_selecionado" id="endereco_{{ endereco.id }}" value="{{ endereco.id }}" 
+                                {% if endereco.is_default %}checked{% elif initial_data.endereco_selecionado == endereco.id %}checked{% endif %}>
                             <label class="form-check-label" for="endereco_{{ endereco.id }}">
                                 {{ endereco.logradouro }}, {{ endereco.numero }} - {{ endereco.cidade }} (CEP: {{ endereco.cep }})
                                 {% if endereco.is_default %}
@@ -100,25 +110,35 @@
         </div>
 
         <div class="mb-3">
-            <label for="data_envio" class="form-label">Data de Envio Solicitada:</label>
-            <input type="date" class="form-control" id="data_envio" name="data_envio">
+            <label for="data_expedicao" class="form-label">Data de Envio Solicitada:</label>
+            <input type="date" class="form-control" id="data_expedicao" name="data_expedicao" value="{{ initial_data.data_envio|date:'Y-m-d' }}">
         </div>
         
         <div class="mb-3">
             <label for="nota_fiscal" class="form-label">Opção de Nota Fiscal:</label>
             <select id="nota_fiscal" name="nota_fiscal" class="form-control" required>
                 <option value="">Selecione uma opção</option>
-                <option value="COM">Com Nota Fiscal</option>
-                <option value="SEM">Sem Nota Fiscal</option>
+                {% for value, label in cliente_logado.NOTA_FISCAL_CHOICES %}
+                    <option value="{{ value }}" {% if initial_data.nota_fiscal == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
             </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="observacao" class="form-label">Observação:</label>
+            <textarea class="form-control" id="observacao" name="observacao" rows="3">{{ initial_data.observacao }}</textarea>
         </div>
         
         <div class="mt-3 mb-3">
             <hr>
-            <button type="submit" class="btn btn-success" >Confirmar Compra</button>
+            <button type="submit" class="btn btn-success">Confirmar Compra</button>
             <a href="{% url 'carrinho' %}" class="btn btn-secondary">Editar Compra</a>
         </div>
     </form>
+
+    <div class="under">
+        <p>Atenção a data de expedição.</p>
+    </div>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -126,7 +146,7 @@
             const enderecoField = document.getElementById('endereco-field');
     
             const toggleEnderecoField = () => {
-                if (freteSelect.value === 'ONIBUS') {
+                if (freteSelect.value === 'ONIBUS' || freteSelect.value === 'RETIRADA') {
                     enderecoField.style.display = 'none';
                 } else {
                     enderecoField.style.display = 'block';
@@ -138,5 +158,7 @@
             freteSelect.addEventListener('change', toggleEnderecoField);
         });
     </script>
+</div>
 
+   
 {% endblock %}

@@ -5,65 +5,83 @@
     <h1>Seu Carrinho de Compras</h1>
     <hr>
     {% if carrinho_detalhes %}
-        <form action="{% url 'atualizar_carrinho' %}" method="post">
+        <form action="{% url 'atualizar_carrinho' %}" method="post" id="carrinho-form">
             {% csrf_token %}
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Descrição</th>
-                        <th>Valor Unitário</th>
-                        <th>Quantidade</th>
-                        <th>Valor Total</th>
-                        <th>Ação</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in carrinho_detalhes %}
+            {% if pedido_id_rascunho %}
+                <div class="alert alert-info d-flex justify-content-between align-items-center">
+                    <span>Você está continuando a edição do Pedido #{{ pedido_id_rascunho }}.</span>
+                    <a href="{% url 'limpar_carrinho' %}" class="btn-close" aria-label="Close"></a>
+                </div>
+            {% endif %}
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
                         <tr>
-                            <td>{{ item.product.product_code }}</td>
-                            <td>{{ item.product.product_description }}</td>
-                            <td class="valor-unitario" data-value="{{ item.valor_unitario }}">{{ item.valor_unitario_formatado }}</td>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Valor Unitário</th>
+                            <th>Quantidade</th>
+                            <th>Valor Total</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in carrinho_detalhes %}
+                            <tr>
+                                <td>{{ item.product.product_code }}</td>
+                                <td>{{ item.product.product_description }}</td>
+                                <td class="valor-unitario" data-value="{{ item.valor_unitario }}">{{ item.valor_unitario_formatado }}</td>
+                                <td>
+                                    <input
+                                        type="number"
+                                        name="quantidade_{{ item.product.product_id }}"
+                                        value="{{ item.quantidade }}"
+                                        min="1"
+                                        class="form-control quantidade-input"
+                                        style="width: 80px;">
+                                </td>
+                                <td class="subtotal">{{ item.valor_total_formatado }}</td>
+                                <td>
+                                    <a href="{% url 'remover_item' item.product.product_id %}" class="btn btn-danger btn-sm">Remover</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
+                            <td id="grand-total-container"><strong id="grand-total">{{ total_geral_formatado }}</strong></td>
                             <td>
-                                <input
-                                    type="number"
-                                    name="quantidade_{{ item.product.product_id }}"
-                                    value="{{ item.quantidade }}"
-                                    min="1"
-                                    class="form-control quantidade-input"
-                                    style="width: 80px;">
-                            </td>
-                            <td class="subtotal">{{ item.valor_total_formatado }}</td>
-                            <td>
-                                <a href="{% url 'remover_item' item.product.product_id %}" class="btn btn-danger btn-sm">Remover</a>
+                                <button type="submit" class="btn btn-success">Atualizar</button>
                             </td>
                         </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
-                        <td id="grand-total-container"><strong id="grand-total">{{ total_geral_formatado }}</strong></td>
-                        <td>
-                            <button type="submit" class="btn btn-success">Atualizar</button>
-                        </td>
-                    </tr>
-                </tfoot>
-            </table>
+                    </tfoot>
+                </table>
+            </div>
         </form>
+
         <a href="{% url 'limpar_carrinho' %}" class="btn btn-warning">Limpar Carrinho</a>
         <a href="{% url 'home' %}" class="btn btn-secondary">Continuar Comprando</a>
-        <a href="{% url 'checkout' %}" class="btn btn-success">Finalizar Pedido</a>
+        
+        <button type="button" id="finalizar-pedido-btn" class="btn btn-success">Finalizar Pedido</button>
+        
     {% else %}
         <p class="alert alert-info">Seu carrinho de compras está vazio.</p>
         <a href="{% url 'home' %}" class="btn btn-primary">Voltar para a Loja</a>
     {% endif %}
 
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
+     document.addEventListener('DOMContentLoaded', function() {
         const quantidadeInputs = document.querySelectorAll('.quantidade-input');
         const grandTotalElement = document.getElementById('grand-total');
+        const finalizarBtn = document.getElementById('finalizar-pedido-btn');
+        const carrinhoForm = document.getElementById('carrinho-form');
+        
+        // Esta linha pega o ID do pedido rascunho se ele existir.
+        const pedidoIdRascunho = "{{ pedido_id_rascunho }}";
 
+        // AQUI ESTÁ O SEU CÓDIGO ORIGINAL, AGORA INTEGRADO
         function updateTotals(inputElement) {
             const row = inputElement.closest('tr');
             
@@ -78,18 +96,20 @@
             updateGrandTotal();
         }
 
+        // AQUI ESTÁ O SEU CÓDIGO ORIGINAL, AGORA INTEGRADO
         function updateGrandTotal() {
             let totalGeral = 0;
             quantidadeInputs.forEach(input => {
                 const row = input.closest('tr');
                 const subtotalText = row.querySelector('.subtotal').innerText;
-                const subtotal = parseFloat(subtotalText.replace('R$ ', '').replace(',', '.'));
+                const subtotal = parseFloat(subtotalText.replace('R$ ', '').replace('.', '').replace(',', '.'));
                 if (!isNaN(subtotal)) {
                     totalGeral += subtotal;
                 }
             });
             grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
         }
+        // FIM DO CÓDIGO ORIGINAL
 
         quantidadeInputs.forEach(input => {
             input.addEventListener('input', function() {
@@ -97,6 +117,58 @@
             });
             updateTotals(input);
         });
+        
+        // AQUI ESTÁ A LÓGICA CORRIGIDA PARA O BOTÃO FINALIZAR PEDIDO
+        if (finalizarBtn) {
+            finalizarBtn.addEventListener('click', function(event) {
+                event.preventDefault();
+
+                // Garante que a quantidade de itens é válida
+                const cartData = {};
+                let hasValidItems = false;
+                quantidadeInputs.forEach(input => {
+                    const productId = input.name.split('_')[1];
+                    const quantidade = parseInt(input.value, 10);
+                    
+                    if (!isNaN(quantidade) && quantidade > 0) {
+                        cartData[productId] = quantidade;
+                        hasValidItems = true;
+                    }
+                });
+
+                if (!hasValidItems) {
+                    alert('Seu carrinho está vazio ou contém apenas itens com quantidade zero.');
+                    return;
+                }
+                
+                // Se for um pedido rascunho, a ação do formulário é alterada
+                if (pedidoIdRascunho && pedidoIdRascunho !== 'None') {
+                    carrinhoForm.action = "{% url 'atualizar_rascunho' %}";
+                    carrinhoForm.submit();
+                } else {
+                    // Se for um novo pedido, um formulário temporário é criado
+                    // para enviar os dados via JSON para a view 'gerar_pedido'
+                    const tempForm = document.createElement('form');
+                    tempForm.action = "{% url 'gerar_pedido' %}";
+                    tempForm.method = "POST";
+                    
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = "hidden";
+                    csrfInput.name = "csrfmiddlewaretoken";
+                    csrfInput.value = document.querySelector('[name="csrfmiddlewaretoken"]').value;
+                    tempForm.appendChild(csrfInput);
+
+                    const cartDataInput = document.createElement('input');
+                    cartDataInput.type = "hidden";
+                    cartDataInput.name = "cart_data";
+                    cartDataInput.value = JSON.stringify(cartData);
+                    tempForm.appendChild(cartDataInput);
+
+                    document.body.appendChild(tempForm);
+                    tempForm.submit();
+                }
+            });
+        }
     });
-</script>
+    </script>
 {% endblock %}

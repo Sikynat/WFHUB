@@ -129,6 +129,7 @@ class Pedido(models.Model):
         ('FINALIZADO', 'Finalizado'),
         ('CANCELADO', 'Cancelado'),
         ('ATRASADO', 'Atrasado'),
+        ('RASCUNHO', 'Rascunho'),
     ]
 
      # NOVO: Opções de frete

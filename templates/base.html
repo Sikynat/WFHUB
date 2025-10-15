@@ -1,4 +1,4 @@
-{% load static %} 
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +7,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Seu Título{% endblock %}</title>
-    <!--BootStrap-->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
@@ -19,13 +18,11 @@
     
       <link rel="stylesheet" href="{% static 'wefixhub/css/style-base.css' %}">
       <link rel="stylesheet" href="{% static 'wefixhub/css/footer-style.css' %}">
-      <!-- Boxicons CSS -->
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+      <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
 </head>
 <body>
  
-        <!--navbar-->
-          <nav class="sidebar close">
+        <nav class="sidebar close">
                 <header>
                     <div class="image-text">
                         <span class="image">
@@ -50,13 +47,24 @@
                     </a>
                 </li>
 
-                {% if user.is_staff %}
+                            {% if user.is_staff %}
                     <li class="nav-links">
                         <a href="{% url 'upload_pedido' %}">
                             <i class='bx bx-upload'></i>
                             <span class="text nav-text">Subir Pedido</span>
                         </a>
                     </li>
+                    <li class="nav-links"> <a href="{% url 'pedidos_em_andamento' %}">
+                            <i class='bx bx-bookmark'></i>
+                            <span class="text nav-text">
+                               Rascunho
+                                {% if pedidos_rascunho_count > 0 %}
+                                    <span class="badge text-bg-secondary">{{ pedidos_rascunho_count }}</span>
+                                {% endif %}
+                            </span>
+                        </a>
+                    </li>
+                      
                     <li class="nav-links">
                         <a href="{% url 'dashboard_admin' %}">
                             <i class='bx bxs-dashboard'></i>
@@ -123,9 +131,6 @@
 </nav>
     </div>
 </nav>
-
-        <!--Conteudo-->
-
 
         <main class="container mt-4">
         {% if messages %}

@@ -82,6 +82,7 @@ def home(request):
     descricao = request.GET.get('descricao', None)
     grupo = request.GET.get('grupo', None)
     marca = request.GET.get('marca', None)
+    pedidos_rascunho_count = Pedido.objects.filter(status='RASCUNHO').count()
 
     # Obter o registro mais recente para cada produto, independentemente da data.
     # Esta abordagem é compatível com todos os bancos de dados.
@@ -144,6 +145,7 @@ def home(request):
         'preco_exibido': preco_exibido,
         # A data exibida será a do último produto atualizado
         'data_hoje': products[0].date_product if products else date.today(),
+        'pedidos_rascunho_count': pedidos_rascunho_count,
     }
             
     return render(request, 'home.html', context)
@@ -176,56 +178,21 @@ def home(request):
     return render(request, 'home.html', contexto)"""
 
 # Inicio gerar pedido
+import pdb # Importa o módulo do debugger
 
-@login_required
-def gerar_pedido(request):
-    if request.method == 'POST':
-        # Recebe os dados do carrinho enviados via campo hidden
-        # Garante que o valor padrão seja uma string JSON válida
-        cart_data_json = request.POST.get('cart_data', '{}')
-        
-        # Se a string estiver vazia, redireciona com uma mensagem de erro
-        if not cart_data_json:
-            messages.error(request, 'Erro ao processar os dados do carrinho.')
-            return redirect('home')
-
-        try:
-            carrinho_da_sessao = json.loads(cart_data_json)
-            
-            # Filtra produtos com quantidade zero
-            carrinho_filtrado = {
-                product_id: quantidade
-                for product_id, quantidade in carrinho_da_sessao.items()
-                if quantidade > 0
-            }
-            
-            if not carrinho_filtrado:
-                messages.error(request, 'Seu carrinho está vazio.')
-                return redirect('home')
-
-            # Salva o carrinho na sessão
-            request.session['carrinho'] = carrinho_filtrado
-
-            # Redireciona para a página de checkout
-            return redirect('checkout')
-
-        except json.JSONDecodeError:
-            messages.error(request, 'Erro ao processar os dados do carrinho.')
-            return redirect('home')
-    
-    # Se a requisição não for POST, redireciona de volta
-    return redirect('home')
-
-
-# Fim gerar pedido
 
 # Inicio do carrinho
+
 
 @login_required
 def carrinho(request):
     carrinho_da_sessao = request.session.get('carrinho', {})
     carrinho_detalhes = []
     total_geral = Decimal('0.00')
+
+    # AQUI ESTÁ A CORREÇÃO: Busca o ID do pedido rascunho na sessão.
+    # A view 'continuar_pedido' é que salva este ID.
+    pedido_id_rascunho = request.session.get('pedido_id_rascunho', None)
     
     preco_exibido = None
 
@@ -254,16 +221,19 @@ def carrinho(request):
             else:
                 valor_unitario = Decimal('0.00')
 
+            if valor_unitario is None:
+                valor_unitario = Decimal('0.00')
+
             valor_total_item = valor_unitario * quantidade
             total_geral += valor_total_item
 
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
-                'valor_unitario': valor_unitario, # Valor numérico para o JavaScript
+                'valor_unitario': valor_unitario,
                 'valor_total': valor_total_item,
-                'valor_unitario_formatado': f"R$ {valor_unitario.quantize(Decimal('0.01'))}".replace('.', ','),
-                'valor_total_formatado': f"R$ {valor_total_item.quantize(Decimal('0.01'))}".replace('.', ','),
+                'valor_unitario_formatado': f"{valor_unitario.quantize(Decimal('0.01'))}".replace('.', ','),
+                'valor_total_formatado': f"{valor_total_item.quantize(Decimal('0.01'))}".replace('.', ','),
             })
         except Product.DoesNotExist:
             continue
@@ -271,11 +241,14 @@ def carrinho(request):
     contexto = {
         'titulo': 'Carrinho de Compras',
         'carrinho_detalhes': carrinho_detalhes,
-        'total_geral': total_geral, # Valor numérico para o JavaScript
+        'total_geral': total_geral,
         'total_geral_formatado': f"R$ {total_geral.quantize(Decimal('0.01'))}".replace('.', ','),
         'preco_exibido': preco_exibido,
+        # Adiciona o ID ao contexto, garantindo que o template tenha acesso a ele
+        'pedido_id_rascunho': pedido_id_rascunho,
     }
     return render(request, 'carrinho.html', contexto)
+
 
 # Fim do carrinho
 
@@ -312,115 +285,211 @@ def limpar_carrinho(request):
 
 
 # Inicio Checkout
+
+
+
+
+
+# views.py
+
+# ... (seus outros imports)
+
 @login_required
-def checkout(request):
-    carrinho_da_sessao = request.session.get('carrinho', {})
-    if not carrinho_da_sessao:
-        messages.error(request, 'Seu carrinho está vazio.')
-        return redirect('home')
+def checkout(request, pedido_id_rascunho=None):
+    # Lógica para o método POST (quando o formulário de checkout é enviado)
+    if request.method == 'POST':
+        # Pega os dados do formulário
+        endereco_id = request.POST.get('endereco_selecionado')
+        data_envio_str = request.POST.get('data_expedicao')
+        frete_option = request.POST.get('frete_option')
+        nota_fiscal = request.POST.get('nota_fiscal')
+        observacao = request.POST.get('observacao')
 
-    carrinho_detalhes = []
-    total_geral = Decimal('0.00')
-    preco_exibido = None
-    cliente_logado = None
+        # Tenta pegar o ID do pedido rascunho da URL ou do formulário
+        id_do_pedido = pedido_id_rascunho or request.POST.get('pedido_id_rascunho')
 
-    try:
-        cliente_logado = request.user.wfclient
-        if request.user.is_staff:
-            preco_exibido = 'todos'
-        else:
-            if cliente_logado.client_state.uf_name == 'SP':
-                preco_exibido = 'sp'
-            elif cliente_logado.client_state.uf_name == 'ES':
-                preco_exibido = 'es'
-    except WfClient.DoesNotExist:
-        messages.error(request, 'Usuário não tem um cliente associado.')
-        return redirect('home')
+        # --- DEBUG: Verificando o ID do pedido ---
+        print("================ DEBUG POST ================")
+        print(f"ID do pedido obtido na requisição POST: {id_do_pedido}")
+        print("------------------------------------------")
 
-    for product_id, quantidade in carrinho_da_sessao.items():
+        endereco_selecionado = None
+        fretes_sem_endereco = ['ONIBUS', 'RETIRADA']
+        data_envio_obj = None
+
         try:
-            product = get_object_or_404(Product, product_id=product_id)
+            if id_do_pedido:
+                pedido_rascunho = get_object_or_404(Pedido, id=id_do_pedido)
+                cliente_logado = pedido_rascunho.cliente
+            else:
+                if request.user.is_staff:
+                    messages.error(request, 'Usuários administrativos não podem criar pedidos por esta página.')
+                    return redirect('home')
+                cliente_logado = request.user.wfclient
+
+            if frete_option not in fretes_sem_endereco:
+                if not endereco_id:
+                    messages.error(request, 'Por favor, selecione um endereço válido.')
+                    if id_do_pedido:
+                        return redirect('checkout_rascunho', pedido_id_rascunho=id_do_pedido)
+                    else:
+                        return redirect('checkout')
+                endereco_selecionado = get_object_or_404(Endereco, id=endereco_id, cliente=cliente_logado)
             
-            if preco_exibido == 'sp':
+            if data_envio_str:
+                data_envio_obj = datetime.strptime(data_envio_str, '%Y-%m-%d').date()
+            
+        except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError) as e:
+            messages.error(request, f'Dados de cliente, endereço, frete ou data inválidos: {e}')
+            return redirect('home')
+
+        with transaction.atomic():
+            if id_do_pedido:
+                # --- DEBUG: Verificando se o bloco de atualização é acessado ---
+                print("================ DEBUG ATUALIZAÇÃO ================")
+                print(f"Entrando no bloco para ATUALIZAR o Pedido #{id_do_pedido}")
+                print("-------------------------------------------------")
+                
+                # ATUALIZA o pedido rascunho existente
+                pedido_rascunho.endereco = endereco_selecionado
+                pedido_rascunho.data_envio_solicitada = data_envio_obj
+                pedido_rascunho.frete_option = frete_option
+                pedido_rascunho.nota_fiscal = nota_fiscal
+                pedido_rascunho.observacao = observacao
+                pedido_rascunho.status = 'PENDENTE'
+                pedido_rascunho.save()
+            else:
+                # --- DEBUG: Verificando se o bloco de criação é acessado ---
+                print("================ DEBUG CRIAÇÃO ================")
+                print("Entrando no bloco para CRIAR um novo pedido")
+                print("---------------------------------------------")
+
+                # CRIA um novo pedido a partir do carrinho
+                carrinho_da_sessao = request.session.get('carrinho', {})
+                if not carrinho_da_sessao:
+                    messages.error(request, 'Seu carrinho está vazio.')
+                    return redirect('home')
+
+                pedido = Pedido.objects.create(
+                    cliente=cliente_logado,
+                    endereco=endereco_selecionado,
+                    data_envio_solicitada=data_envio_obj,
+                    frete_option=frete_option,
+                    nota_fiscal=nota_fiscal,
+                    observacao=observacao,
+                    criado_por=request.user,
+                )
+                for product_id, quantidade in carrinho_da_sessao.items():
+                    product = get_object_or_404(Product, product_id=product_id)
+                    ItemPedido.objects.create(
+                        pedido=pedido,
+                        produto=product,
+                        quantidade=quantidade,
+                        valor_unitario_sp=product.product_value_sp,
+                        valor_unitario_es=product.product_value_es,
+                    )
+                
+                if 'carrinho' in request.session:
+                    del request.session['carrinho']
+
+        messages.success(request, 'Seu pedido foi realizado com sucesso!')
+        return redirect('home')
+
+    # Lógica para o método GET (primeira vez que a página é acessada)
+    cliente_logado = None
+    initial_data = {}
+    
+    if pedido_id_rascunho:
+        pedido_para_finalizar = get_object_or_404(Pedido, id=pedido_id_rascunho)
+        cliente_logado = pedido_para_finalizar.cliente
+        carrinho_detalhes = [
+            {
+                'product': item.produto,
+                'quantidade': item.quantidade,
+                'valor_unitario': item.valor_unitario_sp if cliente_logado.client_state.uf_name == 'SP' else item.valor_unitario_es,
+                'valor_total': item.get_total(),
+            }
+            for item in pedido_para_finalizar.itens.all()
+        ]
+        total_geral = pedido_para_finalizar.get_total_geral()
+        initial_data = {
+            'endereco_selecionado': pedido_para_finalizar.endereco.id if pedido_para_finalizar.endereco else None,
+            'data_envio': pedido_para_finalizar.data_envio_solicitada,
+            'frete_option': pedido_para_finalizar.frete_option,
+            'nota_fiscal': pedido_para_finalizar.nota_fiscal,
+            'observacao': pedido_para_finalizar.observacao,
+        }
+    else:
+        carrinho_da_sessao = request.session.get('carrinho', {})
+        if not carrinho_da_sessao:
+            messages.error(request, 'Seu carrinho está vazio.')
+            return redirect('home')
+
+        if not request.user.is_staff:
+            try:
+                cliente_logado = request.user.wfclient
+            except WfClient.DoesNotExist:
+                messages.error(request, 'Usuário não tem um cliente associado.')
+                return redirect('home')
+        else:
+            messages.error(request, 'Usuários administrativos não podem criar pedidos por esta página.')
+            return redirect('home')
+
+        carrinho_detalhes = []
+        total_geral = Decimal('0.00')
+
+        for product_id, quantidade in carrinho_da_sessao.items():
+            product = get_object_or_404(Product, product_id=product_id)
+            if cliente_logado.client_state.uf_name == 'SP':
                 valor_unitario = product.product_value_sp
-            elif preco_exibido == 'es':
+            elif cliente_logado.client_state.uf_name == 'ES':
                 valor_unitario = product.product_value_es
             else:
                 valor_unitario = product.product_value_sp
-            
+            if valor_unitario is None: valor_unitario = Decimal('0.00')
             valor_total_item = valor_unitario * quantidade
             total_geral += valor_total_item
-            
             carrinho_detalhes.append({
                 'product': product,
                 'quantidade': quantidade,
                 'valor_unitario': valor_unitario,
                 'valor_total': valor_total_item,
             })
-        except Product.DoesNotExist:
-            continue
-    
-    if request.method == 'POST':
-        endereco_id = request.POST.get('endereco_selecionado')
-        data_envio = request.POST.get('data_envio')
-        frete_option = request.POST.get('frete_option')
-        nota_fiscal = request.POST.get('nota_fiscal')
-        observacao = request.POST.get('observacao') # <-- ADICIONE ESTA LINHA
-        # 💡 Validação condicional do endereço
-        endereco_selecionado = None
-        if frete_option != 'ONIBUS':
-            if not endereco_id:
-                messages.error(request, 'Por favor, selecione um endereço válido.')
-                return redirect('checkout')
-            
-            try:
-                endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=cliente_logado)
-            except Endereco.DoesNotExist:
-                messages.error(request, 'Endereço inválido.')
-                return redirect('checkout')
-        
-        try:
-            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
-        except ValueError:
-            messages.error(request, 'Data de envio inválida.')
-            return redirect('checkout')
-        
-        with transaction.atomic():
-            pedido = Pedido.objects.create(
-                cliente=cliente_logado,
-                endereco=endereco_selecionado, # O campo pode ser nulo se o frete for Ônibus
-                data_envio_solicitada=data_envio,
-                frete_option=frete_option,
-                nota_fiscal=nota_fiscal,
-                observacao=observacao, # <-- ADICIONE ESTA LINHA
-            )
-            
-            for item in carrinho_detalhes:
-                ItemPedido.objects.create(
-                    pedido=pedido,
-                    produto=item['product'],
-                    quantidade=item['quantidade'],
-                    valor_unitario_sp=item['product'].product_value_sp,
-                    valor_unitario_es=item['product'].product_value_es,
-                )
 
-        if 'carrinho' in request.session:
-            del request.session['carrinho']
+    if cliente_logado and cliente_logado.client_state.uf_name == 'SP':
+        preco_exibido = 'sp'
+    elif cliente_logado and cliente_logado.client_state.uf_name == 'ES':
+        preco_exibido = 'es'
+    else:
+        preco_exibido = 'sp'
 
-        messages.success(request, 'Seu pedido foi realizado com sucesso!')
-        return redirect('home')
-    
-    # Este é o bloco de código que roda apenas no método GET
-    enderecos = Endereco.objects.filter(cliente=cliente_logado)
+    enderecos = Endereco.objects.filter(cliente=cliente_logado) if cliente_logado else Endereco.objects.none()
+
     contexto = {
         'titulo': 'Confirmação de Compra',
         'carrinho_detalhes': carrinho_detalhes,
         'total_geral': total_geral,
         'enderecos': enderecos,
         'preco_exibido': preco_exibido,
+        'cliente_logado': cliente_logado,
+        'initial_data': initial_data,
+        'pedido_id_rascunho': pedido_id_rascunho,
     }
 
     return render(request, 'checkout.html', contexto)
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Fim Checkout
 
 # Inicio salvar pedido
@@ -1074,38 +1143,97 @@ def processar_upload(request):
 
     return render(request, 'upload_planilha.html')
 
+# Início da função gerar_pedido
 @login_required
 def gerar_pedido(request):
     if request.method == 'POST':
-        # Recebe os dados do carrinho enviados via campo hidden
         cart_data_json = request.POST.get('cart_data', '{}')
         
+        if not cart_data_json:
+            messages.error(request, 'Erro ao processar os dados do carrinho.')
+            return redirect('home')
+
         try:
             carrinho_da_sessao = json.loads(cart_data_json)
-            
-            # Filtra produtos com quantidade zero
-            carrinho_filtrado = {
-                product_id: quantidade
-                for product_id, quantidade in carrinho_da_sessao.items()
-                if quantidade > 0
-            }
+            carrinho_filtrado = {}
+            for product_id_str, quantidade_str in carrinho_da_sessao.items():
+                try:
+                    quantidade = int(quantidade_str)
+                    if quantidade > 0:
+                        carrinho_filtrado[product_id_str] = quantidade
+                except (ValueError, TypeError):
+                    continue
             
             if not carrinho_filtrado:
-                messages.error(request, 'Seu carrinho está vazio.')
+                messages.error(request, 'Seu carrinho está vazio ou contém itens inválidos.')
                 return redirect('home')
 
-            # Salva o carrinho na sessão
             request.session['carrinho'] = carrinho_filtrado
+            
+            # --- AQUI ESTÁ A CORREÇÃO ---
+            # Verifica se há um ID de pedido rascunho na sessão
+            pedido_id_rascunho = request.session.get('pedido_id_rascunho')
 
-            # Redireciona para a página de checkout
-            return redirect('checkout')
+            if pedido_id_rascunho:
+                # Se houver, redireciona para o checkout com o ID do rascunho
+                return redirect('checkout_rascunho', pedido_id_rascunho=pedido_id_rascunho)
+            else:
+                # Se não houver, redireciona para o checkout padrão
+                return redirect('checkout')
 
         except json.JSONDecodeError:
             messages.error(request, 'Erro ao processar os dados do carrinho.')
             return redirect('home')
     
-    # Se a requisição não for POST, redireciona de volta
     return redirect('home')
+# Fim da função gerar_pedido
+
+
+# views.py
+# ... (seus imports) ...
+
+# views.py
+
+@login_required
+def atualizar_rascunho(request):
+    if request.method == 'POST':
+        carrinho_da_sessao = request.session.get('carrinho', {})
+        pedido_id_rascunho = request.session.get('pedido_id_rascunho')
+
+        if not pedido_id_rascunho:
+            messages.error(request, 'Não há pedido rascunho na sessão para atualizar.')
+            return redirect('carrinho')
+
+        try:
+            pedido = get_object_or_404(Pedido, id=pedido_id_rascunho)
+        except Pedido.DoesNotExist:
+            messages.error(request, 'Pedido rascunho não encontrado.')
+            return redirect('home')
+
+        with transaction.atomic():
+            # Apaga todos os itens do pedido antigo
+            pedido.itens.all().delete()
+
+            # Adiciona os itens atualizados do carrinho na sessão
+            for product_id, quantidade in carrinho_da_sessao.items():
+                product = get_object_or_404(Product, product_id=product_id)
+                
+                # ... (sua lógica de valor unitário) ...
+
+                ItemPedido.objects.create(
+                    pedido=pedido,
+                    produto=product,
+                    quantidade=quantidade,
+                    valor_unitario_sp=product.product_value_sp,
+                    valor_unitario_es=product.product_value_es,
+                )
+
+        messages.success(request, 'Pedido rascunho atualizado com sucesso!')
+        
+        # AQUI ESTÁ A LINHA DE REDIRECIONAMENTO QUE PRECISA SER VERIFICADA
+        return redirect('checkout_rascunho', pedido_id_rascunho=pedido_id_rascunho)
+    
+    return redirect('carrinho')
 
 # Em views.py
 # GARANTA QUE APENAS ESTA VERSÃO DA FUNÇÃO EXISTA NO ARQUIVO
@@ -1403,8 +1531,16 @@ def normalize_text(text):
 
 
 
+
+
+
+
 @staff_member_required
 def upload_pedido(request):
+    """
+    Processa o upload de uma planilha de pedido e cria um Pedido
+    com o status 'ORCAMENTO' (rascunho) no banco de dados.
+    """
     clientes_ordenados = WfClient.objects.all().order_by('client_code')
     cliente_selecionado = None
     form_cliente = SelectClientForm(request.GET or None)
@@ -1412,17 +1548,21 @@ def upload_pedido(request):
     upload_form = None
 
     if form_cliente.is_valid():
-        cliente_selecionado = form_cliente.cleaned_data['cliente']
+        cliente_selecionado = form_cliente.cleaned_data.get('cliente')
         if cliente_selecionado:
             initial_data['frete_preferencia'] = cliente_selecionado.frete_preferencia
             initial_data['nota_fiscal_preferencia'] = cliente_selecionado.nota_fiscal_preferencia
             initial_data['observacao_preferencia'] = cliente_selecionado.observacao_preferencia
             endereco_padrao = Endereco.objects.filter(cliente=cliente_selecionado, is_default=True).first()
             if endereco_padrao:
-                initial_data['endereco_padrao_id'] = endereco_padrao.id
-
+                initial_data['endereco_selecionado'] = endereco_padrao.id
+    
     if request.method == 'POST':
         cliente_id_post = request.POST.get('cliente_id')
+        if not cliente_id_post:
+            messages.error(request, 'Por favor, selecione um cliente.')
+            return redirect('upload_pedido')
+
         cliente_para_validacao = get_object_or_404(WfClient, pk=cliente_id_post)
         
         form = UploadPedidoForm(request.POST, request.FILES)
@@ -1430,145 +1570,196 @@ def upload_pedido(request):
         form.fields['endereco_selecionado'].queryset = enderecos_do_cliente
 
         if form.is_valid():
-            frete_option = form.cleaned_data['frete_option']
-            endereco_selecionado = form.cleaned_data.get('endereco_selecionado', None)
-            observacao = form.cleaned_data['observacao_preferencia']
+            try:
+                planilha_pedido = request.FILES.get('planilha_pedido')
+                if not planilha_pedido:
+                    messages.error(request, 'Nenhum arquivo de planilha foi selecionado.')
+                    return redirect('upload_pedido')
+                    
+                if planilha_pedido.name.endswith('.csv'):
+                    df = pd.read_csv(planilha_pedido)
+                else:
+                    df = pd.read_excel(planilha_pedido)
+                
+                df.columns = [normalize_text(col) for col in df.columns]
+                expected_cols = {
+                    'codigo': ['codigo', 'código', 'cod'],
+                    'quantidade': ['quantidade', 'qtd', 'qtde']
+                }
+                
+                col_mapping = {
+                    key: next((c for c in values if c in df.columns), None)
+                    for key, values in expected_cols.items()
+                }
 
-            usuario_logado = request.user 
+                if not col_mapping['codigo'] or not col_mapping['quantidade']:
+                    messages.error(request, "A planilha deve ter colunas para 'código' e 'quantidade'.")
+                    return redirect('upload_pedido')
+                
+                with transaction.atomic():
+                    novo_pedido = Pedido.objects.create(
+                        cliente=cliente_para_validacao,
+                        endereco=form.cleaned_data.get('endereco_selecionado'),
+                        data_criacao=timezone.now(),
+                        data_envio_solicitada=form.cleaned_data['data_expedicao'],
+                        frete_option=form.cleaned_data['frete_option'],
+                        nota_fiscal=form.cleaned_data['nota_fiscal'],
+                        status='RASCUNHO',
+                        criado_por=request.user,
+                        observacao=form.cleaned_data['observacao_preferencia'],
+                    )
+                    
+                    erros = []
+                    itens_pedido_para_criar = []
+                    total_valor_pedido = Decimal('0.0')
 
-            if frete_option.upper() not in ['ONIBUS', 'RETIRADA'] and not endereco_selecionado:
-                messages.error(request, "O campo de endereço é obrigatório para a opção de frete selecionada.")
-                upload_form = form
-            else:
-                try:
-                    with transaction.atomic():
-                        planilha_pedido = request.FILES['planilha_pedido']
-                        if planilha_pedido.name.endswith('.csv'):
-                            df = pd.read_csv(planilha_pedido)
-                        else:
-                            df = pd.read_excel(planilha_pedido)
-                        
-                        expected_codigo_cols = ['codigo', 'código', 'cod']
-                        expected_quantidade_cols = ['quantidade', 'qtd', 'qtde']
+                    latest_dates = Product.objects.filter(product_code=OuterRef('product_code')).order_by('-date_product').values('date_product')[:1]
+                    produtos_atuais = Product.objects.filter(date_product=Subquery(latest_dates)).in_bulk(field_name='product_code')
 
-                        df.columns = [normalize_text(col) for col in df.columns]
-                        
-                        codigo_col_name = None
-                        quantidade_col_name = None
-                        
-                        for col in df.columns:
-                            if col in expected_codigo_cols:
-                                codigo_col_name = col
-                                break
-                        
-                        for col in df.columns:
-                            if col in expected_quantidade_cols:
-                                quantidade_col_name = col
-                                break
-
-                        if not codigo_col_name or not quantidade_col_name:
-                            messages.error(request, "A planilha deve ter colunas 'codigo' (ou similar) e 'quantidade' (ou similar).")
-                            raise ValueError("Colunas obrigatórias não encontradas.")
-                        
+                    for index, row in df.iterrows():
+                        codigo_produto = str(row[col_mapping['codigo']]).strip()
+                        quantidade_raw = row[col_mapping['quantidade']]
+                        if pd.isnull(quantidade_raw) or int(quantidade_raw) <= 0:
+                            erros.append(f"Produto '{codigo_produto}' foi ignorado: quantidade zero ou inválida.")
+                            continue
+                        quantidade = int(quantidade_raw)
+                        produto = produtos_atuais.get(codigo_produto)
+                        if not produto:
+                            erros.append(f"Produto com código '{codigo_produto}' não encontrado no catálogo.")
+                            continue
+                            
                         regiao = cliente_para_validacao.client_state.uf_name
                         valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
+                        valor_unitario = getattr(produto, valor_field)
+                        if valor_unitario is None or valor_unitario <= 0:
+                            erros.append(f"Produto '{codigo_produto}' foi ignorado: preço não disponível para a região de {regiao}.")
+                            continue
 
-                        itens_pedido = []
-                        erros = []
-                        total_valor_pedido = Decimal('0.0')
+                        total_valor_pedido += valor_unitario * Decimal(quantidade)
+                        itens_pedido_para_criar.append(ItemPedido(
+                            pedido=novo_pedido,
+                            produto=produto,
+                            quantidade=quantidade,
+                            valor_unitario_sp=produto.product_value_sp,
+                            valor_unitario_es=produto.product_value_es,
+                        ))
 
-                        for index, row in df.iterrows():
-                            codigo_produto = str(row[codigo_col_name]).strip()
-                            quantidade_raw = row[quantidade_col_name]
-                            if pd.isnull(quantidade_raw) or not isinstance(quantidade_raw, (int, float)):
-                                quantidade = 0
-                            else:
-                                quantidade = int(quantidade_raw)
-                            
-                            if quantidade == 0:
-                                erros.append(f"Produto '{codigo_produto}' foi desconsiderado, pois a quantidade é zero ou inválida.")
-                                continue
-
-                            try:
-                                produto = Product.objects.get(product_code=codigo_produto) # Alterado de get_object_or_404 para .get()
-                                valor_unitario = getattr(produto, valor_field)
-                                
-                                if valor_unitario is not None and valor_unitario > 0:
-                                    total_valor_pedido += valor_unitario * Decimal(quantidade)
-                                    itens_pedido.append(ItemPedido(
-                                        pedido=None,
-                                        produto=produto,
-                                        quantidade=quantidade,
-                                        valor_unitario_sp=produto.product_value_sp,
-                                        valor_unitario_es=produto.product_value_es,
-                                    ))
-                                else:
-                                    erros.append(f"Produto '{codigo_produto}' foi desconsiderado, pois não se encontra disponível no estoque.")
-                            except Product.DoesNotExist:
-                                # ✅ Adiciona o erro à lista e continua o loop
-                                erros.append(f"Produto com código '{codigo_produto}' não encontrado.")
-                                continue
-                            except Exception as e:
-                                erros.append(f"Erro ao processar o item '{codigo_produto}': {e}")
-                                raise ValueError(f"Erro crítico: {e}")
-                        
-                        if not itens_pedido: # Verifica se a lista de itens está vazia antes de criar o pedido
-                            messages.error(request, "Não há produtos válidos para criar um pedido.")
-                            raise ValueError("Nenhum produto válido encontrado.")
-
-                        novo_pedido = Pedido.objects.create(
-                            cliente=cliente_para_validacao,
-                            endereco=endereco_selecionado,
-                            data_criacao=timezone.now(),
-                            data_envio_solicitada=form.cleaned_data['data_expedicao'],
-                            frete_option=frete_option,
-                            nota_fiscal=form.cleaned_data['nota_fiscal'],
-                            status='PENDENTE',
-                            criado_por=usuario_logado,
-                            valor_total=total_valor_pedido,
-                            observacao=observacao,
-                        )
-
-                        for item in itens_pedido:
-                            item.pedido = novo_pedido
-
-                        ItemPedido.objects.bulk_create(itens_pedido)
-                        
-                        messages.success(request, f"Pedido #{novo_pedido.id} para {cliente_para_validacao.client_name} criado com sucesso.")
-                        
-                        if erros:
-                            erros_str = "\n".join(erros)
-                            data_formatada = novo_pedido.data_criacao.strftime('%Y-%m-%d')
-                            nome_arquivo = f"erros_pedido_{cliente_para_validacao.client_code}_{novo_pedido.id}_{data_formatada}.txt"
-                            response = HttpResponse(erros_str, content_type='text/plain')
-                            response['Content-Disposition'] = f"attachment; filename=\"{nome_arquivo}\""
-                            return response
-                        else:
-                            return redirect(reverse('detalhes_pedido_admin', args=[novo_pedido.id]))
+                    if not itens_pedido_para_criar:
+                        messages.error(request, "Nenhum produto válido foi encontrado na planilha.")
+                        novo_pedido.delete()
+                        return redirect('upload_pedido')
                     
-                except ValueError as e:
-                    messages.error(request, f"Erro ao processar a planilha: {e}")
-                    upload_form = form
-                
-                except Exception as e:
-                    messages.error(request, f"Erro ao processar a planilha: {e}")
-                    upload_form = form
+                    ItemPedido.objects.bulk_create(itens_pedido_para_criar)
+                    
+                    novo_pedido.valor_total = total_valor_pedido
+                    novo_pedido.save()
+
+                    messages.success(request, f"Itens da planilha carregados. Por favor, confira os dados e finalize o pedido.")
+                    
+                    # Redireciona para o checkout com o ID do pedido rascunho
+                    #return redirect('checkout', pedido_id_rascunho=novo_pedido.id)
+                    return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
+            
+            except Exception as e:
+                messages.error(request, f"Erro ao processar a planilha: {e}")
+                if 'novo_pedido' in locals():
+                    novo_pedido.delete()
+                upload_form = form
         else:
             upload_form = form
     else:
         upload_form = UploadPedidoForm(initial=initial_data)
         if cliente_selecionado:
             enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_selecionado)
+            # AQUI ESTÁ A CORREÇÃO
             upload_form.fields['endereco_selecionado'].queryset = enderecos_do_cliente
 
     context = {
         'form_cliente': form_cliente,
+        'clientes_ordenados': clientes_ordenados,
         'cliente_selecionado': cliente_selecionado,
-        'initial_data': initial_data,
         'upload_form': upload_form,
     }
     
     return render(request, 'upload_pedido.html', context)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@staff_member_required
+def pedidos_em_andamento(request):
+    """
+    Exibe uma lista de pedidos com o status 'ORCAMENTO' (rascunhos)
+    para que o administrador possa visualizá-los e continuar a edição.
+    """
+    pedidos_rascunho = Pedido.objects.filter(
+        status='RASCUNHO'
+    ).order_by('-data_criacao')
+    
+    context = {
+        'titulo': 'Pedidos em Andamento (Rascunhos)',
+        'pedidos': pedidos_rascunho,
+    }
+    
+    # AQUI ESTÁ O AJUSTE. O caminho aponta direto para o arquivo.
+    return render(request, 'pedidos_em_andamento.html', context)
+
+
+# No seu arquivo views.py
+
+# views.py
+
+# ... (restante do código)
+
+@staff_member_required
+def continuar_pedido(request, pedido_id):
+    try:
+        pedido = get_object_or_404(Pedido, id=pedido_id, status='RASCUNHO')
+    except Pedido.DoesNotExist:
+        messages.error(request, 'O pedido especificado não é um rascunho válido.')
+        return redirect('pedidos_em_andamento')
+
+    # ... (restante da sua lógica de sessão) ...
+
+    # 1. Popula o carrinho da sessão com os itens do pedido rascunho
+    carrinho_da_sessao = {}
+    for item in pedido.itens.all():
+        carrinho_da_sessao[str(item.produto.product_id)] = item.quantidade
+    request.session['carrinho'] = carrinho_da_sessao
+    
+    # 2. Salva o ID do pedido na sessão
+    request.session['pedido_id_rascunho'] = pedido.id
+
+    messages.info(request, f'Você está continuando a edição do Pedido #{pedido.id}.')
+    
+    # --- DEBUG COM PRINT() ---
+    url_nome = 'checkout_rascunho'
+    url_kwargs = {'pedido_id_rascunho': pedido.id}
+    print("================ DEBUG URL ================")
+    print(f"Tentando redirecionar para a URL com nome: '{url_nome}'")
+    print(f"Com os argumentos de palavra-chave: {url_kwargs}")
+    print("-------------------------------------------")
+    
+    # 3. Redireciona para o checkout usando a URL específica com o ID
+    return redirect(url_nome, **url_kwargs)
+
+# ... (restante do código)
+
+
+
 
 @staff_member_required
 def upload_orcamento_pdf(request, pedido_id):

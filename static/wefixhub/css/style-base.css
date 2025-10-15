@@ -63,7 +63,6 @@ body.move-content {
     width: var(--sidebar-width);
     padding: 10px 14px;
     background: var(--side-bar-color);
-    /* TRANSIÇÃO DE LARGURA CRÍTICA */
     transition: width var(--tran-03); 
     display: flex;
     flex-direction: column; 
@@ -79,7 +78,6 @@ body.move-content {
 
 /* --- SIDEBAR - VISIBILIDADE & HEADER --- */
 
-/* Aplica transição de opacidade/posição para o desaparecimento suave */
 .sidebar.close .text,
 .sidebar.close .header-text .profession,
 .sidebar.close .header-text .name {
@@ -115,11 +113,11 @@ body.move-content {
     display: flex;
     flex-direction: column;
     margin-left: 10px;
-    transition: opacity var(--tran-03), margin-left var(--tran-03); /* Transições para o texto do header */
+    transition: opacity var(--tran-03), margin-left var(--tran-03);
 }
 .sidebar.close .header-text {
     opacity: 0;
-    margin-left: -250px; /* Puxa o texto para fora da tela */
+    margin-left: -250px;
 }
 
 /* Toggle Button */
@@ -164,6 +162,7 @@ body.move-content {
     border-radius: 6px;
     transition: var(--tran-03);
 }
+
 .sidebar .nav-links a:hover {
     background: var(--primary-color-light);
 }
@@ -175,7 +174,9 @@ body.move-content {
     margin-left: 14px;
     white-space: nowrap; 
     transition: opacity var(--tran-03);
+    flex-grow: 1; /* Adicionado */
 }
+
 .sidebar i {
     font-size: 20px;
     color: var(--text-color);
@@ -195,6 +196,11 @@ body.move-content {
     color: var(--side-bar-color);
 }
 
+.nav-links a .badge {
+    display: inline-flex;
+    margin-left: auto;
+    align-self: center;
+}
 
 /* --- FOOTER STYLES --- */
 
@@ -207,27 +213,21 @@ body.move-content {
     position: relative; 
     left: 0; 
     
-    /* 1. Compensa a margem do body (puxa o footer para a área do sidebar) */
     margin-left: calc(var(--sidebar-width) * -1); 
     transition: margin-left var(--tran-03);
 }
 
-/* 2. Regra para quando o menu está fechado (ajusta a compensação) */
 body.move-content .site-footer {
     margin-left: calc(var(--sidebar-width-collapsed) * -1); 
 }
 
-/* --- CORREÇÃO DE ALINHAMENTO DO CONTEÚDO DENTRO DO FOOTER (RESOLVE SOBREPOSIÇÃO) --- */
 .site-footer .container {
-    /* 1. MUDANÇA CRÍTICA: Empurra o conteúdo para a direita, respeitando a sidebar. */
     padding-left: calc(var(--sidebar-width) + var(--content-offset-padding));
     transition: padding-left var(--tran-03);
     
-    /* 2. Mantém o padding da direita */
     padding-right: var(--content-offset-padding);
 }
 
-/* 3. Ajuste do container quando o menu está fechado */
 body.move-content .site-footer .container {
     padding-left: calc(var(--sidebar-width-collapsed) + var(--content-offset-padding));
 }
@@ -278,3 +278,5 @@ body.move-content .site-footer .container {
         justify-content: center !important; 
     }
 }
+
+
