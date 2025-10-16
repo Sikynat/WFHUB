@@ -1966,7 +1966,8 @@ def enviar_whatsapp(request, pedido_id):
         f"*Razão Social:* {pedido.cliente.client_name}\n"
         f"*Data da Expedição:* {pedido.data_envio_solicitada.strftime('%d/%m/%Y')}\n"
         f"*Opção de Frete:* {pedido.get_frete_option_display()}\n"
-        f"*OBS:* {pedido.observacao}\n"
+        
+        
     )
 
     # Adiciona o endereço de entrega (lógica inalterada)
@@ -1986,8 +1987,10 @@ def enviar_whatsapp(request, pedido_id):
     mensagem_final = (
         f"{mensagem_base}"
         f"{endereco_texto}"
-        f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}\n\n"
-        f"*Download da Planilha de Itens:*\n"
+        f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}\n"
+        f"*Valor total:* {pedido.valor_total}\n"
+        f"*OBS:* {pedido.observacao}\n\n"
+        f"*Download da Planilha de Itens:*\n" 
         f"{link_download_excel}"  # <- MUDANÇA AQUI: usando o link direto
     )
 
