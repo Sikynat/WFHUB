@@ -1539,7 +1539,8 @@ def normalize_text(text):
 def upload_pedido(request):
     """
     Processa o upload de uma planilha de pedido e cria um Pedido
-    com o status 'ORCAMENTO' (rascunho) no banco de dados.
+    com o status 'ORCAMENTO' (rascunho) no banco de dados,
+    lendo dados de TODAS as sheets da planilha.
     """
     clientes_ordenados = WfClient.objects.all().order_by('client_code')
     cliente_selecionado = None
@@ -1576,11 +1577,34 @@ def upload_pedido(request):
                     messages.error(request, 'Nenhum arquivo de planilha foi selecionado.')
                     return redirect('upload_pedido')
                     
+                # --- INÍCIO DA MUDANÇA PARA LER MÚLTIPLAS SHEETS ---
                 if planilha_pedido.name.endswith('.csv'):
-                    df = pd.read_csv(planilha_pedido)
+                    # CSVs só têm uma sheet, então lemos normalmente.
+                    df_list = [pd.read_csv(planilha_pedido)]
                 else:
-                    df = pd.read_excel(planilha_pedido)
+                    # Para Excel, usamos sheet_name=None para ler todas as sheets.
+                    # Ele retorna um dicionário {nome_sheet: DataFrame}
+                    xls_data = pd.read_excel(planilha_pedido, sheet_name=None)
+                    df_list = list(xls_data.values()) # Pegamos a lista de DataFrames
                 
+                # Consolida todos os DataFrames em um único
+                if not df_list:
+                     messages.error(request, 'A planilha de upload está vazia.')
+                     return redirect('upload_pedido')
+                     
+                df_completo = pd.concat(df_list, ignore_index=True)
+                
+                # Garante que não há linhas completamente vazias após a concatenação
+                df = df_completo.dropna(how='all') 
+
+                # Se o DataFrame final estiver vazio
+                if df.empty:
+                    messages.error(request, 'A planilha de upload não contém dados após a leitura de todas as abas.')
+                    return redirect('upload_pedido')
+
+                # --- FIM DA MUDANÇA PARA LER MÚLTIPLAS SHEETS ---
+
+                # O restante do código de processamento da planilha continua o mesmo
                 df.columns = [normalize_text(col) for col in df.columns]
                 expected_cols = {
                     'codigo': ['codigo', 'código', 'cod'],
@@ -1617,22 +1641,40 @@ def upload_pedido(request):
                     produtos_atuais = Product.objects.filter(date_product=Subquery(latest_dates)).in_bulk(field_name='product_code')
 
                     for index, row in df.iterrows():
-                        codigo_produto = str(row[col_mapping['codigo']]).strip()
+                        # A partir daqui, o código pode ter que lidar com NaNs/vazios
+                        # que podem vir das abas que não foram completamente preenchidas.
+                        
+                        codigo_produto_raw = row[col_mapping['codigo']]
+                        if pd.isna(codigo_produto_raw):
+                             continue # Ignora linhas sem código
+                             
+                        codigo_produto = str(codigo_produto_raw).strip()
                         quantidade_raw = row[col_mapping['quantidade']]
-                        if pd.isnull(quantidade_raw) or int(quantidade_raw) <= 0:
-                            erros.append(f"Produto '{codigo_produto}' foi ignorado: quantidade zero ou inválida.")
+                        
+                        # Tratamento mais robusto para quantidade vazia/zero
+                        if pd.isnull(quantidade_raw):
+                            continue # Ignora linhas sem quantidade
+
+                        try:
+                            quantidade = int(quantidade_raw)
+                        except ValueError:
+                            erros.append(f"Produto '{codigo_produto}' na linha {index + 2} foi ignorado: quantidade inválida (não-numérica).")
                             continue
-                        quantidade = int(quantidade_raw)
+
+                        if quantidade <= 0:
+                            erros.append(f"Produto '{codigo_produto}' na linha {index + 2} foi ignorado: quantidade zero ou negativa.")
+                            continue
+
                         produto = produtos_atuais.get(codigo_produto)
                         if not produto:
-                            erros.append(f"Produto com código '{codigo_produto}' não encontrado no catálogo.")
+                            erros.append(f"Produto com código '{codigo_produto}' na linha {index + 2} não encontrado no catálogo.")
                             continue
                             
                         regiao = cliente_para_validacao.client_state.uf_name
                         valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
                         valor_unitario = getattr(produto, valor_field)
                         if valor_unitario is None or valor_unitario <= 0:
-                            erros.append(f"Produto '{codigo_produto}' foi ignorado: preço não disponível para a região de {regiao}.")
+                            erros.append(f"Produto '{codigo_produto}' na linha {index + 2} foi ignorado: preço não disponível para a região de {regiao}.")
                             continue
 
                         total_valor_pedido += valor_unitario * Decimal(quantidade)
@@ -1643,9 +1685,11 @@ def upload_pedido(request):
                             valor_unitario_sp=produto.product_value_sp,
                             valor_unitario_es=produto.product_value_es,
                         ))
+                    
+                    # --- FIM DO PROCESSAMENTO DO DATAFRAME COMPLETO ---
 
                     if not itens_pedido_para_criar:
-                        messages.error(request, "Nenhum produto válido foi encontrado na planilha.")
+                        messages.error(request, "Nenhum produto válido foi encontrado na planilha (todas as abas).")
                         novo_pedido.delete()
                         return redirect('upload_pedido')
                     
@@ -1654,10 +1698,15 @@ def upload_pedido(request):
                     novo_pedido.valor_total = total_valor_pedido
                     novo_pedido.save()
 
-                    messages.success(request, f"Itens da planilha carregados. Por favor, confira os dados e finalize o pedido.")
+                    if erros:
+                        erros_msg = 'Alguns itens foram ignorados:\n' + '\n'.join(erros[:5]) # Limita a 5 erros na mensagem
+                        if len(erros) > 5:
+                            erros_msg += f'\n...e mais {len(erros) - 5} erros.'
+                        messages.warning(request, f"Pedido criado, mas com erros. {erros_msg}")
+                    
+                    messages.success(request, f"Itens da planilha (todas as abas) carregados. Por favor, confira os dados e finalize o pedido.")
                     
                     # Redireciona para o checkout com o ID do pedido rascunho
-                    #return redirect('checkout', pedido_id_rascunho=novo_pedido.id)
                     return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
             
             except Exception as e:
@@ -1671,7 +1720,6 @@ def upload_pedido(request):
         upload_form = UploadPedidoForm(initial=initial_data)
         if cliente_selecionado:
             enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_selecionado)
-            # AQUI ESTÁ A CORREÇÃO
             upload_form.fields['endereco_selecionado'].queryset = enderecos_do_cliente
 
     context = {
