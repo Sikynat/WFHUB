@@ -113,14 +113,15 @@
                 <i class="bi bi-whatsapp me-1"></i> Enviar Whatsapp
             </a>
 
-            {% if is_atrasado %}
+            
                 <form action="{% url 'marcar_pedido_finalizado' pedido.id %}" method="post" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger rounded-pill fw-bold">
                         <i class="bi bi-check-circle me-1"></i> Marcar como Finalizado
                     </button>
                 </form>
-            {% endif %}
+            
+
 
             {# Upload de Orçamento com Collapse #}
             <button class="btn btn-outline-primary rounded-pill" type="button" data-bs-toggle="collapse" data-bs-target="#collapseForm" aria-expanded="false" aria-controls="collapseForm">
