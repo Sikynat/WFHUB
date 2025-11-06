@@ -11,7 +11,7 @@ class ClientAdmin(admin.ModelAdmin):
     exclude = ('user',)
     
     # Exibição na lista de clientes, usando o método 'nome_com_codigo'
-    list_display = ['client_is_active', 'client_id', 'client_code', 'nome_com_codigo', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date', 'frete_preferencia', 'nota_fiscal_preferencia', 'observacao_preferencia',]
+    list_display = ['client_is_active', 'client_id', 'client_code', 'nome_com_codigo', 'client_cnpj', 'client_city', 'client_state_subscription', 'client_date', 'frete_preferencia', 'nota_fiscal_preferencia', 'observacao_preferencia', 'client_state']
     
     # Campos de busca
     search_fields = ['client_name', 'client_code', 'client_cnpj']
