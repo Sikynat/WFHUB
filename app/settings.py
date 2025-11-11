@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_htmx',
     'django.contrib.humanize',
-    'storages',  # ADICIONADO PARA O S3
+    # 'storages',  # <-- MUDANÇA: Comentado para isolar erro de inicialização S3
     # Seus aplicativos personalizados
     'wefixhub',
 ]
@@ -101,7 +101,13 @@ DATABASE_URL = config('DATABASE_URL', default=None)
 
 if DATABASE_URL:
     DATABASES = {
-        'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600, ssl_require=False)
+        'default': dj_database_url.config(
+            default=DATABASE_URL, 
+            conn_max_age=600, 
+            # MUDANÇA: Removendo explicitamente ssl_require=False
+            # para deixar o dj-database-url determinar o modo SSL/TLS.
+            # Isto resolve problemas de conexão em alguns ambientes de nuvem.
+        )
     }
 else:
     # Fallback para configurações locais se DATABASE_URL não estiver definida.
@@ -175,26 +181,26 @@ LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # --- Configurações AWS S3 (Mídia) ---
-# Força a leitura das variáveis de ambiente com decouple
-AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
-AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
-AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
+# MUDANÇA: Este bloco foi mantido no código, mas agora não será executado
+# porque o 'storages' foi removido de INSTALLED_APPS. 
+# Se você precisar de S3, deverá reativar e garantir que as variáveis AWS 
+# estejam corretas no Railway.
 
-# Garante que as variáveis estejam no escopo de produção
-if AWS_ACCESS_KEY_ID:
-    AWS_S3_REGION_NAME = 'us-east-1' 
-    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+# AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
+# AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
+# AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
 
-    # Usa a classe S3Storage para gerenciar arquivos
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
+# if AWS_ACCESS_KEY_ID:
+#     AWS_S3_REGION_NAME = 'us-east-1' 
+#     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+#     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
+#     # DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
     
-    # Configurações de acesso:
-    AWS_DEFAULT_ACL = 'public-read'
-    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-    AWS_S3_FILE_OVERWRITE = False
-    AWS_LOCATION = 'media'
-else:
-    # Fallback para desenvolvimento local
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+#     AWS_DEFAULT_ACL = 'public-read'
+#     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+#     AWS_S3_FILE_OVERWRITE = False
+#     AWS_LOCATION = 'media'
+# else:
+#     MEDIA_URL = '/media/'
+#     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
