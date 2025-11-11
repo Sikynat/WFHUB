@@ -158,7 +158,8 @@ class Pedido(models.Model):
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     criado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_criados')
     observacao = models.TextField(blank=True, null=True)
-
+   
+    erros_upload = models.TextField(blank=True, null=True, verbose_name="Erros de Upload da Planilha")
     def __str__(self):
         return f"Pedido #{self.id} de {self.cliente.client_name} - Status: {self.status}"
 

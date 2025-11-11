@@ -6,6 +6,17 @@
         Detalhes do Pedido <span class="text-secondary fw-light">#{{ pedido.id }}</span>
     </h1>
 
+    {# NOVO BLOCO: Exibição dos Erros de Upload Salvos (Se existirem) #}
+    {% if pedido.erros_upload %}
+        <div class="alert alert-warning border-0 shadow-sm rounded-lg p-4 mb-5" role="alert">
+            <h4 class="alert-heading fw-bold text-danger">⚠️ Itens Ignorados no Upload</h4>
+            <p class="mb-0">Este pedido foi gerado via planilha, mas alguns itens foram ignorados ou apresentaram erros de preço/catálogo:</p>
+            <hr>
+            {# O tag <pre> preserva as quebras de linha que você inseriu em views.py #}
+            <pre class="mb-0 small text-dark" style="white-space: pre-wrap; word-break: break-word;">{{ pedido.erros_upload }}</pre>
+        </div>
+    {% endif %}
+
     <div class="row mb-5">
         
         {# Card: Informações Essenciais #}
@@ -89,10 +100,18 @@
     {# Seção de Ações #}
     <h2 class="h5 fw-bold text-dark mb-4">Gerenciamento do Pedido</h2>
     <div class="d-flex flex-wrap gap-3 p-4 border rounded-lg bg-light mb-5">
-        {# Ações Comuns de Exportação #}
-        <a href="{% url 'pedidos' %}" class="btn btn-outline-secondary rounded-pill">
-            <i class="bi bi-arrow-left me-1"></i> Voltar
-        </a>
+        
+        {# AJUSTE NO LINK VOLTAR: Usa o histórico do cliente ou a lista admin #}
+        {% if user.is_staff %}
+            <a href="{% url 'todos_os_pedidos' %}" class="btn btn-outline-secondary rounded-pill">
+                <i class="bi bi-arrow-left me-1"></i> Voltar para Lista Admin
+            </a>
+        {% else %}
+            <a href="{% url 'historico_pedidos' %}" class="btn btn-outline-secondary rounded-pill">
+                <i class="bi bi-arrow-left me-1"></i> Voltar para Histórico
+            </a>
+        {% endif %}
+
         
         {% if user.is_staff %}
             <a href="{% url 'dashboard_admin' %}" class="btn btn-outline-secondary rounded-pill">
@@ -102,7 +121,8 @@
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar (Admin)
             </a>
         {% else %}
-            <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-outline-info rounded-pill">
+            {# Garante que o nome da URL seja o correto, no seu código anterior era exportar_pedido_cliente_excel #}
+            <a href="{% url 'exportar_detalhes_pedido_cliente_excel' pedido.id %}" class="btn btn-outline-info rounded-pill">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar
             </a>
         {% endif %}
@@ -166,12 +186,16 @@
                 <tr class="border-bottom">
                     <td class="fw-bold ps-4">{{ item_detalhe.item.produto.product_code }}</td>
                     <td>{{ item_detalhe.item.produto.product_description }}</td>
+                    
+                    {# CORREÇÃO: Usar valor unitário congelado (item_detalhe.item.valor_unitario_xx) #}
                     {% if preco_exibido == 'todos' %}
-                        <td class="text-end text-muted">R$ {{ item_detalhe.item.produto.product_value_sp|floatformat:2 }}</td>
-                        <td class="text-end text-muted">R$ {{ item_detalhe.item.produto.product_value_es|floatformat:2 }}</td>
+                        <td class="text-end text-muted">R$ {{ item_detalhe.item.valor_unitario_sp|floatformat:2 }}</td>
+                        <td class="text-end text-muted">R$ {{ item_detalhe.item.valor_unitario_es|floatformat:2 }}</td>
                     {% else %}
+                        {# Se for SP ou ES, o item_detalhe.valor_unitario já é o correto, calculado na view #}
                         <td class="text-end text-muted">R$ {{ item_detalhe.valor_unitario|floatformat:2 }}</td>
                     {% endif %}
+                    
                     <td class="text-end">{{ item_detalhe.item.quantidade }}</td>
                     <td class="text-end text-primary fw-bold pe-4">R$ {{ item_detalhe.valor_total|floatformat:2 }}</td>
                 </tr>
