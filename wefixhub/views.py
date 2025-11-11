@@ -84,15 +84,15 @@ def home(request):
     marca = request.GET.get('marca', None)
     pedidos_rascunho_count = Pedido.objects.filter(status='RASCUNHO').count()
 
-    # Obter o registro mais recente para cada produto, independentemente da data.
-    # Esta abordagem é compatível com todos os bancos de dados.
+    # Obter o registro mais recente para cada produto.
     latest_dates = Product.objects.filter(
         product_code=OuterRef('product_code')
     ).order_by('-date_product').values('date_product')[:1]
 
+    # Aplica o filtro de subconsulta e adiciona a ordenação estável por código.
     products = Product.objects.filter(
         date_product=Subquery(latest_dates)
-    )
+    ).order_by('product_code') # <-- CORREÇÃO: Adiciona ordem para paginação consistente
 
     if codigo:
         products = products.filter(product_code__icontains=codigo)
@@ -149,6 +149,7 @@ def home(request):
     }
             
     return render(request, 'home.html', context)
+
 """
     # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
