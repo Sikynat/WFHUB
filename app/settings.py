@@ -28,6 +28,7 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Hosts permitidos (carregados do .env)
+# Atenção: Em produção (Railway), esta variável DEVE incluir o domínio público.
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
 
 # Origens confiáveis para requisições CSRF (essencial para segurança)
@@ -174,9 +175,6 @@ LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # --- Configurações AWS S3 (Mídia) ---
-# AVISO: Não use este código em produção, é para diagnóstico.
-# Ele será alterado após o teste.
-
 # Força a leitura das variáveis de ambiente com decouple
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
