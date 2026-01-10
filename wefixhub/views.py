@@ -812,16 +812,17 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     worksheet.title = f"Pedido #{pedido.id}"
 
     # Define as colunas dinamicamente com base no estado do cliente
+    # MUDANÇA 1: Inclusão de 'Grupo' e 'Marca' nos cabeçalhos
     if uf_cliente == 'SP':
-        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
-        valor_key = 'valor_unitario_sp' # <-- Alterado para o campo do ItemPedido
+        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        valor_key = 'valor_unitario_sp'
     elif uf_cliente == 'ES':
-        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
-        valor_key = 'valor_unitario_es' # <-- Alterado para o campo do ItemPedido
+        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        valor_key = 'valor_unitario_es'
     else:
         # Padrão caso o estado não seja SP ou ES
-        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
-        valor_key = 'valor_unitario_sp' # <-- Padrão para SP
+        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        valor_key = 'valor_unitario_sp'
 
     row_num = 1
     for col_num, column_title in enumerate(columns, 1):
@@ -833,25 +834,32 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     for item in itens:
         row_num += 1
 
-        # ✅ Acessa o valor do item de pedido, não do produto
         valor_unitario = getattr(item, valor_key)
         
-        # Garante que o valor não seja None
         if valor_unitario is None:
             valor_unitario = 0
 
         subtotal = valor_unitario * item.quantidade
         total_geral += subtotal
 
+        # MUDANÇA 2: Preenchimento das células com os novos índices
         worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
         worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
-        worksheet.cell(row=row_num, column=3, value=item.quantidade)
-        worksheet.cell(row=row_num, column=4, value=valor_unitario)
-        worksheet.cell(row=row_num, column=5, value=subtotal)
+        
+        # Novas Colunas
+        worksheet.cell(row=row_num, column=3, value=item.produto.product_group) # Grupo
+        worksheet.cell(row=row_num, column=4, value=item.produto.product_brand) # Marca
+        
+        # Colunas deslocadas (+2 posições)
+        worksheet.cell(row=row_num, column=5, value=item.quantidade)
+        worksheet.cell(row=row_num, column=6, value=valor_unitario)
+        worksheet.cell(row=row_num, column=7, value=subtotal)
 
     row_num += 1
-    worksheet.cell(row=row_num, column=4, value="Total Geral:")
-    worksheet.cell(row=row_num, column=5, value=total_geral)
+    
+    # MUDANÇA 3: Ajuste da posição do Total Geral (agora nas colunas 6 e 7)
+    worksheet.cell(row=row_num, column=6, value="Total Geral:")
+    worksheet.cell(row=row_num, column=7, value=total_geral)
 
     workbook.save(response)
     return response
@@ -1856,20 +1864,21 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
     uf_cliente = pedido.cliente.client_state.uf_name
 
     # Define as colunas e a chave de valor dinamicamente
+    # MUDANÇA 1: Adicionei 'Grupo' e 'Marca' nas listas de colunas abaixo
     if uf_cliente == 'SP':
-        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
         valor_key = 'valor_unitario_sp'
     elif uf_cliente == 'ES':
-        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
         valor_key = 'valor_unitario_es'
     else:
         # Padrão caso o estado não seja SP ou ES
-        columns = ['Código', 'Descrição', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário', 'Subtotal']
         valor_key = 'valor_unitario_sp'
 
     # Criação do DataFrame com os dados dos itens
     data = []
-    total_geral = 0 # ✅ Inicializa o total geral
+    total_geral = 0
 
     for item in itens_pedido:
         # Acessa o valor do item de pedido usando a chave definida
@@ -1877,36 +1886,47 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
         if valor_unitario is None:
             valor_unitario = 0
             
-        subtotal = float(item.get_total()) # ✅ Calcula o subtotal
+        subtotal = float(item.get_total())
 
         # Adiciona os dados à lista
+        # MUDANÇA 2: Adicionei o mapeamento de Group e Brand
         data.append({
             'Código': item.produto.product_code,
             'Descrição': item.produto.product_description,
+            'Grupo': item.produto.product_group,  # Novo campo
+            'Marca': item.produto.product_brand,  # Novo campo
             'Quantidade': item.quantidade,
             'Valor Unitário': float(valor_unitario),
             'Subtotal': subtotal
         })
         
-        total_geral += subtotal # ✅ Soma ao total geral
+        total_geral += subtotal
 
     df = pd.DataFrame(data)
 
-    # ✅ Renomeia a coluna 'Valor Unitário' para o nome correto
-    df = df.rename(columns={'Valor Unitário': columns[3]})
+    # Renomeia a coluna 'Valor Unitário' para o nome correto (SP ou ES)
+    df = df.rename(columns={'Valor Unitário': columns[5]}) # Ajustei o índice de 3 para 5, pois inserimos 2 colunas novas
     df = df[columns] # Reordena as colunas
 
-    # ✅ Adiciona a linha de total ao final do DataFrame
-    df.loc[len(df)] = ['', '', '', 'Total Geral:', total_geral]
+    # MUDANÇA 3: Ajuste na linha de totais
+    # A tabela agora tem 7 colunas. Precisamos de 5 vazias, 1 rótulo e 1 valor.
+    df.loc[len(df)] = ['', '', '', '', '', 'Total Geral:', total_geral]
 
     # Criação da resposta HTTP
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Itens do Pedido')
+        
+        # Opcional: Ajuste automático da largura das colunas (melhoria visual)
+        worksheet = writer.sheets['Itens do Pedido']
+        worksheet.set_column('A:A', 15) # Código
+        worksheet.set_column('B:B', 40) # Descrição
+        worksheet.set_column('C:D', 20) # Grupo e Marca
+        worksheet.set_column('E:G', 15) # Qtd e Valores
 
     output.seek(0)
 
-    # ✅ Renomeia o arquivo com as novas informações
+    # Renomeia o arquivo com as novas informações
     data_hoje = date.today().strftime('%d-%m-%Y')
     filename = f"pedido_{pedido.cliente.client_code}_{data_hoje}.xlsx"
     
@@ -1917,7 +1937,6 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
     response['Content-Disposition'] = f'attachment; filename={filename}'
     
     return response
-
 
 
 '''
