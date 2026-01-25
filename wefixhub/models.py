@@ -232,3 +232,27 @@ class ItemPedido(models.Model):
             return valor_final * quantidade_final
             
         return Decimal('0.00') 
+
+# models.py
+
+class ItemPedidoIgnorado(models.Model):
+    # Vínculo com o pedido original (opcional, mas recomendado para rastreio)
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens_ignorados')
+    
+    # Dados solicitados
+    cliente = models.ForeignKey(WfClient, on_delete=models.SET_NULL, null=True) # Código do cliente (via objeto)
+    data_tentativa = models.DateTimeField(auto_now_add=True) # Data do pedido (momento do upload)
+    codigo_produto = models.CharField(max_length=50) # Código do produto (da planilha)
+    descricao_produto = models.CharField(max_length=255, blank=True, null=True) # Descrição
+    quantidade_tentada = models.IntegerField(null=True) # Quantidade
+    
+    # Campo extra muito útil: Por que foi ignorado?
+    motivo_erro = models.CharField(max_length=255) 
+
+    class Meta:
+        db_table = 'wf_itens_ignorados'
+        verbose_name = 'Item Ignorado'
+        verbose_name_plural = 'Itens Ignorados'
+
+    def __str__(self):
+        return f"Erro: {self.codigo_produto} - {self.motivo_erro}"

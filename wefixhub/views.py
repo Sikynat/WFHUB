@@ -57,8 +57,9 @@ from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django.contrib.admin.views.decorators import staff_member_required
 
+
 # Garanta que seus modelos estão importados
-from .models import Pedido, ItemPedido, WfClient 
+from .models import Pedido, ItemPedido, WfClient, ItemPedidoIgnorado
 
 
 try:
@@ -1540,12 +1541,14 @@ def normalize_text(text):
 
 
 
+# views.py
+
 @staff_member_required
 def upload_pedido(request):
     """
-    Processa o upload de uma planilha de pedido e cria um Pedido
-    com o status 'RASCUNHO' (rascunho) no banco de dados,
-    lendo dados de TODAS as sheets da planilha e salvando os erros de validação.
+    Processa o upload de uma planilha de pedido, cria um Pedido (Rascunho),
+    salva os itens válidos em ItemPedido e os itens com falha em ItemPedidoIgnorado.
+    Ignora linhas de somatório (TOTAL, SUBTOTAL) silenciosamente.
     """
     clientes_ordenados = WfClient.objects.all().order_by('client_code')
     cliente_selecionado = None
@@ -1553,6 +1556,7 @@ def upload_pedido(request):
     initial_data = {}
     upload_form = None
 
+    # Lógica de seleção prévia do cliente (via GET)
     if form_cliente.is_valid():
         cliente_selecionado = form_cliente.cleaned_data.get('cliente')
         if cliente_selecionado:
@@ -1582,7 +1586,7 @@ def upload_pedido(request):
                     messages.error(request, 'Nenhum arquivo de planilha foi selecionado.')
                     return redirect('upload_pedido')
                     
-                # --- INÍCIO DA MUDANÇA PARA LER MÚLTIPLAS SHEETS ---
+                # 1. Leitura do arquivo (Excel ou CSV)
                 if planilha_pedido.name.endswith('.csv'):
                     df_list = [pd.read_csv(planilha_pedido)]
                 else:
@@ -1597,14 +1601,17 @@ def upload_pedido(request):
                 df = df_completo.dropna(how='all') 
 
                 if df.empty:
-                    messages.error(request, 'A planilha de upload não contém dados após a leitura de todas as abas.')
+                    messages.error(request, 'A planilha de upload não contém dados após a leitura.')
                     return redirect('upload_pedido')
-                # --- FIM DA MUDANÇA PARA LER MÚLTIPLAS SHEETS ---
 
+                # 2. Normalização e Mapeamento de Colunas
+                # Certifique-se de que a função normalize_text existe no seu código ou imports
                 df.columns = [normalize_text(col) for col in df.columns]
+                
                 expected_cols = {
                     'codigo': ['codigo', 'código', 'cod'],
-                    'quantidade': ['quantidade', 'qtd', 'qtde']
+                    'quantidade': ['quantidade', 'qtd', 'qtde'],
+                    'descricao': ['descricao', 'descrição', 'produto', 'nome', 'description']
                 }
                 
                 col_mapping = {
@@ -1617,7 +1624,7 @@ def upload_pedido(request):
                     return redirect('upload_pedido')
                 
                 with transaction.atomic():
-                    # 1. Criação do Pedido Rascunho
+                    # 3. Criação do Pedido Rascunho
                     novo_pedido = Pedido.objects.create(
                         cliente=cliente_para_validacao,
                         endereco=form.cleaned_data.get('endereco_selecionado'),
@@ -1630,15 +1637,16 @@ def upload_pedido(request):
                         observacao=form.cleaned_data['observacao_preferencia'],
                     )
                     
-                    erros = []
-                    itens_pedido_para_criar = []
+                    erros_texto = [] # Log para o campo texto do pedido e display
+                    itens_pedido_para_criar = [] # Itens válidos
+                    itens_ignorados_db = [] # Itens inválidos (para tabela de erros)
                     total_valor_pedido = Decimal('0.0')
 
-                    # Otimização de busca de produto mais recente
+                    # Otimização: Busca produtos em lote para evitar N queries
                     latest_dates = Product.objects.filter(product_code=OuterRef('product_code')).order_by('-date_product').values('date_product')[:1]
                     produtos_atuais = Product.objects.filter(date_product=Subquery(latest_dates)).in_bulk(field_name='product_code')
 
-                    # 2. Processamento dos Itens
+                    # 4. Processamento linha a linha
                     for index, row in df.iterrows():
                         
                         codigo_produto_raw = row[col_mapping['codigo']]
@@ -1646,33 +1654,88 @@ def upload_pedido(request):
                              continue
                              
                         codigo_produto = str(codigo_produto_raw).strip()
+
+                        # --- FILTRO DE RODAPÉ (TOTAL GERAL) ---
+                        # Ignora silenciosamente linhas que contêm palavras de somatório
+                        termos_ignorar = ['TOTAL', 'SUBTOTAL', 'GERAL', 'VALOR TOTAL']
+                        codigo_upper = codigo_produto.upper()
+                        if any(termo in codigo_upper for termo in termos_ignorar):
+                            continue
+                        # --------------------------------------
+
                         quantidade_raw = row[col_mapping['quantidade']]
                         
+                        # Tenta obter a descrição da planilha (fallback caso produto não exista)
+                        descricao_excel = row.get(col_mapping.get('descricao'), 'Descrição não informada na planilha')
+                        
+                        # --- Validação A: Quantidade Nula ---
                         if pd.isnull(quantidade_raw):
                             continue
 
+                        # --- Validação B: Quantidade Numérica ---
                         try:
                             quantidade = int(quantidade_raw)
                         except ValueError:
-                            erros.append(f"Produto '{codigo_produto}' na linha {index + 2} foi ignorado: quantidade inválida (não-numérica).")
+                            msg = "Quantidade inválida (não-numérica)"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido,
+                                cliente=cliente_para_validacao,
+                                codigo_produto=codigo_produto,
+                                descricao_produto=str(descricao_excel),
+                                quantidade_tentada=0,
+                                motivo_erro=msg
+                            ))
                             continue
 
+                        # --- Validação C: Quantidade Zero ou Negativa ---
                         if quantidade <= 0:
-                            erros.append(f"Produto '{codigo_produto}' na linha {index + 2} foi ignorado: quantidade zero ou negativa.")
+                            msg = "Quantidade zero ou negativa"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido,
+                                cliente=cliente_para_validacao,
+                                codigo_produto=codigo_produto,
+                                descricao_produto=str(descricao_excel),
+                                quantidade_tentada=quantidade,
+                                motivo_erro=msg
+                            ))
                             continue
 
+                        # --- Validação D: Produto Existe no Catálogo? ---
                         produto = produtos_atuais.get(codigo_produto)
                         if not produto:
-                            erros.append(f"Produto com código '{codigo_produto}' na linha {index + 2} não encontrado no catálogo.")
+                            msg = "Não encontrado no catálogo"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido,
+                                cliente=cliente_para_validacao,
+                                codigo_produto=codigo_produto,
+                                descricao_produto=str(descricao_excel),
+                                quantidade_tentada=quantidade,
+                                motivo_erro=msg
+                            ))
                             continue
                             
+                        # --- Validação E: Estoque e Preço ---
                         regiao = cliente_para_validacao.client_state.uf_name
                         valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
                         valor_unitario = getattr(produto, valor_field)
+                        
                         if valor_unitario is None or valor_unitario <= 0:
-                            erros.append(f"Produto '{codigo_produto}' na linha {index + 2} produto indisponivel no estoque.")
+                            msg = "Produto indisponível no estoque/tabela"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido,
+                                cliente=cliente_para_validacao,
+                                codigo_produto=codigo_produto,
+                                descricao_produto=produto.product_description, # Usa descrição oficial
+                                quantidade_tentada=quantidade,
+                                motivo_erro=msg
+                            ))
                             continue
 
+                        # Se passou por tudo, adiciona aos itens válidos
                         total_valor_pedido += valor_unitario * Decimal(quantidade)
                         itens_pedido_para_criar.append(ItemPedido(
                             pedido=novo_pedido,
@@ -1682,41 +1745,48 @@ def upload_pedido(request):
                             valor_unitario_es=produto.product_value_es,
                         ))
                     
-                    # 3. Finalização e Salvamento
-                    if not itens_pedido_para_criar:
-                        messages.error(request, "Nenhum produto válido foi encontrado na planilha (todas as abas).")
+                    # 5. Finalização
+                    
+                    # Se a planilha não gerou NADA (nem válido, nem erro - vazia de dados úteis)
+                    if not itens_pedido_para_criar and not itens_ignorados_db:
+                        messages.error(request, "Nenhum dado processável encontrado na planilha.")
                         novo_pedido.delete()
                         return redirect('upload_pedido')
                     
-                    ItemPedido.objects.bulk_create(itens_pedido_para_criar)
+                    # Salva Itens Válidos em lote
+                    if itens_pedido_para_criar:
+                        ItemPedido.objects.bulk_create(itens_pedido_para_criar)
                     
-                    if erros:
-                        # ✅ SALVA A LISTA COMPLETA DE ERROS NO BANCO DE DADOS
-                        novo_pedido.erros_upload = '\n'.join(erros)
+                    # Salva Itens Ignorados em lote
+                    if itens_ignorados_db:
+                        ItemPedidoIgnorado.objects.bulk_create(itens_ignorados_db)
+                    
+                    # Mensagens e Logs
+                    if erros_texto:
+                        novo_pedido.erros_upload = '\n'.join(erros_texto)
                         
-                        # Lógica para exibição no front-end (mensagem limitada)
-                        erros_msg = 'Alguns itens foram ignorados:\n' + '\n'.join(erros[:5])
-                        if len(erros) > 5:
-                            erros_msg += f'\n...e mais {len(erros) - 5} erros.'
-                        messages.warning(request, f"Pedido criado, mas com erros. {erros_msg}")
+                        erros_msg = 'Alguns itens foram ignorados:\n' + '\n'.join(erros_texto[:5])
+                        if len(erros_texto) > 5:
+                            erros_msg += f'\n...e mais {len(erros_texto) - 5} erros.'
+                        messages.warning(request, f"Pedido criado parcialmente. {erros_msg}")
+                    else:
+                        messages.success(request, f"Itens carregados com sucesso. Por favor, confira os dados e finalize o pedido.")
                     
                     novo_pedido.valor_total = total_valor_pedido
-                    # ✅ Salva o pedido, incluindo a lista de erros, se houver.
                     novo_pedido.save()
-                    
-                    messages.success(request, f"Itens da planilha (todas as abas) carregados. Por favor, confira os dados e finalize o pedido.")
                     
                     return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
             
             except Exception as e:
-                messages.error(request, f"Erro ao processar a planilha: {e}")
+                messages.error(request, f"Erro crítico ao processar a planilha: {e}")
+                # Garante que não fica lixo no banco se der erro fatal
                 if 'novo_pedido' in locals():
-                    # Garante que o rascunho (e seus itens) seja deletado em caso de falha.
                     novo_pedido.delete()
                 upload_form = form
         else:
             upload_form = form
     else:
+        # GET request
         upload_form = UploadPedidoForm(initial=initial_data)
         if cliente_selecionado:
             enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_selecionado)
