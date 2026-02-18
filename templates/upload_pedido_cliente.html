@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Enviar Planilha de Pedido{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <div class="card shadow-lg p-4">
+                <div class="card-body">
+                    <h1 class="text-center mb-2 display-5 fw-bold text-dark">Fazer Pedido por Planilha</h1>
+                    <p class="text-center text-muted mb-5">Olá, <strong>{{ cliente.client_name }}</strong>. Envie seu arquivo abaixo.</p>
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Data Desejada de Expedição</label>
+                                {{ upload_form.data_expedicao }}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Nota Fiscal</label>
+                                {{ upload_form.nota_fiscal }}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Opção de Frete</label>
+                                {{ upload_form.frete_option }}
+                            </div>
+                            
+                            <div class="col-md-6" id="endereco-field">
+                                <label class="form-label fw-bold">Endereço de Entrega</label>
+                                {{ upload_form.endereco_selecionado }}
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Observações do Pedido</label>
+                                {{ upload_form.observacao_preferencia }}
+                            </div>
+                        </div>
+                        
+                        <div class="card bg-light border-dashed p-4 mb-4 text-center">
+                            <label for="{{ upload_form.planilha_pedido.id_for_label }}" class="form-label fw-bold d-block">Selecione o Arquivo (.xlsx ou .csv)</label>
+                            <div class="d-flex justify-content-center">
+                                {{ upload_form.planilha_pedido }}
+                            </div>
+                            <small class="text-muted d-block mt-2">Certifique-se que as colunas se chamam "código" e "quantidade".</small>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-cloud-upload me-2"></i>Processar e Finalizar Pedido
+                            </button>
+                            <a href="{% url 'home' %}" class="btn btn-outline-secondary">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const freteSelect = document.getElementById('id_frete_option');
+        const enderecoField = document.getElementById('endereco-field');
+
+        function toggleEndereco() {
+            const val = freteSelect.value.toLowerCase();
+            enderecoField.style.display = (val === 'onibus' || val === 'retirada') ? 'none' : 'block';
+        }
+
+        freteSelect.addEventListener('change', toggleEndereco);
+        toggleEndereco(); // Executa ao carregar
+
+        // Inicializa Select2 no endereço
+        $('#id_endereco_selecionado').select2({
+            theme: "bootstrap-5",
+            width: '100%'
+        });
+    });
+</script>
+{% endblock %}

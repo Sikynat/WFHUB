@@ -2325,3 +2325,112 @@ def analise_dados_dashboard(request):
     }
     
     return render(request, 'analise/analise_dashboard.html', contexto)
+
+
+# Função cliente upload
+
+
+@login_required
+def upload_pedido_cliente(request):
+    try:
+        # Puxa o cliente vinculado ao usuário logado
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        messages.error(request, 'Seu usuário não possui um perfil de cliente vinculado.')
+        return redirect('home')
+
+    # Dados iniciais baseados nas preferências do cliente
+    initial_data = {
+        'frete_option': cliente.frete_preferencia,
+        'nota_fiscal': cliente.nota_fiscal_preferencia,
+        'observacao_preferencia': cliente.observacao_preferencia,
+    }
+
+    if request.method == 'POST':
+        form = UploadPedidoForm(request.POST, request.FILES)
+        # Filtra os endereços apenas para o cliente logado
+        form.fields['endereco_selecionado'].queryset = Endereco.objects.filter(cliente=cliente)
+
+        if form.is_valid():
+            try:
+                planilha_pedido = request.FILES.get('planilha_pedido')
+                
+                # ... (Mesma lógica de leitura do Excel que você já tem) ...
+                if planilha_pedido.name.endswith('.csv'):
+                    df = pd.read_csv(planilha_pedido)
+                else:
+                    xls_data = pd.read_excel(planilha_pedido, sheet_name=None)
+                    df = pd.concat(xls_data.values(), ignore_index=True)
+
+                df = df.dropna(how='all')
+                df.columns = [normalize_text(col) for col in df.columns]
+
+                # Mapeamento de colunas (Reutilizando sua lógica)
+                col_mapping = {
+                    'codigo': next((c for c in ['codigo', 'código', 'cod'] if c in df.columns), None),
+                    'quantidade': next((c for c in ['quantidade', 'qtd', 'qtde'] if c in df.columns), None),
+                }
+
+                if not col_mapping['codigo'] or not col_mapping['quantidade']:
+                    messages.error(request, "A planilha deve ter colunas para 'código' e 'quantidade'.")
+                    return render(request, 'upload_pedido_cliente.html', {'upload_form': form, 'cliente': cliente})
+
+                with transaction.atomic():
+                    novo_pedido = Pedido.objects.create(
+                        cliente=cliente,
+                        endereco=form.cleaned_data.get('endereco_selecionado'),
+                        data_envio_solicitada=form.cleaned_data['data_expedicao'],
+                        frete_option=form.cleaned_data['frete_option'],
+                        nota_fiscal=form.cleaned_data['nota_fiscal'],
+                        status='RASCUNHO',
+                        criado_por=request.user,
+                        observacao=form.cleaned_data['observacao_preferencia'],
+                    )
+
+                    # Lógica de processamento de itens (simplificada para o exemplo)
+                    # Use sua lógica de 'latest_dates' e 'produtos_atuais' aqui para performance
+                    total_valor_pedido = Decimal('0.00')
+                    regiao = cliente.client_state.uf_name
+                    valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
+
+                    for _, row in df.iterrows():
+                        cod = str(row[col_mapping['codigo']]).strip()
+                        # Ignorar linhas de total
+                        if any(t in cod.upper() for t in ['TOTAL', 'SUBTOTAL']): continue
+                        
+                        try:
+                            qtd = int(row[col_mapping['quantidade']])
+                            produto = Product.objects.filter(product_code=cod).order_by('-date_product').first()
+                            
+                            if produto and qtd > 0:
+                                valor_unit = getattr(produto, valor_field) or Decimal('0.00')
+                                ItemPedido.objects.create(
+                                    pedido=novo_pedido,
+                                    produto=produto,
+                                    quantidade=qtd,
+                                    valor_unitario_sp=produto.product_value_sp,
+                                    valor_unitario_es=produto.product_value_es,
+                                )
+                                total_valor_pedido += valor_unit * Decimal(qtd)
+                        except: continue
+
+                    novo_pedido.valor_total = total_valor_pedido
+                    novo_pedido.save()
+
+                messages.success(request, "Planilha processada! Confira os itens no seu carrinho/rascunho.")
+                return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
+
+            except Exception as e:
+                messages.error(request, f"Erro ao processar: {e}")
+    else:
+        form = UploadPedidoForm(initial=initial_data)
+        form.fields['endereco_selecionado'].queryset = Endereco.objects.filter(cliente=cliente)
+        # Tentar setar o endereço padrão
+        endereco_padrao = Endereco.objects.filter(cliente=cliente, is_default=True).first()
+        if endereco_padrao:
+            form.initial['endereco_selecionado'] = endereco_padrao.id
+
+    return render(request, 'upload_pedido_cliente.html', {
+        'upload_form': form,
+        'cliente': cliente
+    })

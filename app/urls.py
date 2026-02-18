@@ -27,6 +27,7 @@ urlpatterns = [
     path('editar-endereco/<int:endereco_id>/', views.editar_endereco, name='editar_endereco'),
     path('exportar_detalhes_pedido_cliente_excel/<int:pedido_id>/', views.exportar_detalhes_pedido_cliente_excel, name='exportar_pedido_cliente_excel'),
     path('exportar_publico/excel/<int:pedido_id>/', views.exportar_detalhes_pedido_publico_excel, name='exportar_detalhes_pedido_publico_excel'),
+    path('pedido/upload-planilha/', views.upload_pedido_cliente, name='upload_pedido_cliente'),
 
     # Rotas do administrador
     path('dashboard/analise/', views.analise_dados_dashboard, name='analise_dados_dashboard'),
