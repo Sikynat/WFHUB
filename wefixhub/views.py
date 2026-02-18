@@ -2354,21 +2354,36 @@ def upload_pedido_cliente(request):
         if form.is_valid():
             try:
                 planilha_pedido = request.FILES.get('planilha_pedido')
+                if not planilha_pedido:
+                    messages.error(request, 'Nenhum arquivo foi selecionado.')
+                    return redirect('upload_pedido_cliente')
                 
-                # ... (Mesma lógica de leitura do Excel que você já tem) ...
+                # 1. Leitura do arquivo (Excel ou CSV)
                 if planilha_pedido.name.endswith('.csv'):
-                    df = pd.read_csv(planilha_pedido)
+                    df_list = [pd.read_csv(planilha_pedido)]
                 else:
                     xls_data = pd.read_excel(planilha_pedido, sheet_name=None)
-                    df = pd.concat(xls_data.values(), ignore_index=True)
+                    df_list = list(xls_data.values())
+                
+                df_completo = pd.concat(df_list, ignore_index=True)
+                df = df_completo.dropna(how='all') 
 
-                df = df.dropna(how='all')
+                if df.empty:
+                    messages.error(request, 'A planilha está vazia.')
+                    return redirect('upload_pedido_cliente')
+
+                # 2. Normalização e Mapeamento de Colunas
                 df.columns = [normalize_text(col) for col in df.columns]
-
-                # Mapeamento de colunas (Reutilizando sua lógica)
+                
+                expected_cols = {
+                    'codigo': ['codigo', 'código', 'cod'],
+                    'quantidade': ['quantidade', 'qtd', 'qtde'],
+                    'descricao': ['descricao', 'descrição', 'produto', 'nome', 'description']
+                }
+                
                 col_mapping = {
-                    'codigo': next((c for c in ['codigo', 'código', 'cod'] if c in df.columns), None),
-                    'quantidade': next((c for c in ['quantidade', 'qtd', 'qtde'] if c in df.columns), None),
+                    key: next((c for c in values if c in df.columns), None)
+                    for key, values in expected_cols.items()
                 }
 
                 if not col_mapping['codigo'] or not col_mapping['quantidade']:
@@ -2376,9 +2391,11 @@ def upload_pedido_cliente(request):
                     return render(request, 'upload_pedido_cliente.html', {'upload_form': form, 'cliente': cliente})
 
                 with transaction.atomic():
+                    # 3. Criação do Pedido Rascunho
                     novo_pedido = Pedido.objects.create(
                         cliente=cliente,
                         endereco=form.cleaned_data.get('endereco_selecionado'),
+                        data_criacao=timezone.now(),
                         data_envio_solicitada=form.cleaned_data['data_expedicao'],
                         frete_option=form.cleaned_data['frete_option'],
                         nota_fiscal=form.cleaned_data['nota_fiscal'],
@@ -2386,51 +2403,125 @@ def upload_pedido_cliente(request):
                         criado_por=request.user,
                         observacao=form.cleaned_data['observacao_preferencia'],
                     )
+                    
+                    erros_texto = []
+                    itens_pedido_para_criar = []
+                    itens_ignorados_db = []
+                    total_valor_pedido = Decimal('0.0')
 
-                    # Lógica de processamento de itens (simplificada para o exemplo)
-                    # Use sua lógica de 'latest_dates' e 'produtos_atuais' aqui para performance
-                    total_valor_pedido = Decimal('0.00')
-                    regiao = cliente.client_state.uf_name
-                    valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
+                    # Otimização: Busca produtos em lote
+                    latest_dates = Product.objects.filter(product_code=OuterRef('product_code')).order_by('-date_product').values('date_product')[:1]
+                    produtos_atuais = Product.objects.filter(date_product=Subquery(latest_dates)).in_bulk(field_name='product_code')
 
-                    for _, row in df.iterrows():
-                        cod = str(row[col_mapping['codigo']]).strip()
-                        # Ignorar linhas de total
-                        if any(t in cod.upper() for t in ['TOTAL', 'SUBTOTAL']): continue
+                    # 4. Processamento linha a linha
+                    for index, row in df.iterrows():
+                        codigo_raw = row[col_mapping['codigo']]
+                        if pd.isna(codigo_raw): continue
+                             
+                        codigo_produto = str(codigo_raw).strip()
+
+                        # Filtro de rodapé
+                        termos_ignorar = ['TOTAL', 'SUBTOTAL', 'GERAL', 'VALOR TOTAL']
+                        if any(termo in codigo_produto.upper() for termo in termos_ignorar):
+                            continue
+
+                        quantidade_raw = row[col_mapping['quantidade']]
+                        descricao_excel = row.get(col_mapping.get('descricao'), 'Descrição não informada')
                         
-                        try:
-                            qtd = int(row[col_mapping['quantidade']])
-                            produto = Product.objects.filter(product_code=cod).order_by('-date_product').first()
-                            
-                            if produto and qtd > 0:
-                                valor_unit = getattr(produto, valor_field) or Decimal('0.00')
-                                ItemPedido.objects.create(
-                                    pedido=novo_pedido,
-                                    produto=produto,
-                                    quantidade=qtd,
-                                    valor_unitario_sp=produto.product_value_sp,
-                                    valor_unitario_es=produto.product_value_es,
-                                )
-                                total_valor_pedido += valor_unit * Decimal(qtd)
-                        except: continue
+                        if pd.isnull(quantidade_raw): continue
 
+                        # Validação: Quantidade Numérica
+                        try:
+                            quantidade = int(quantidade_raw)
+                        except ValueError:
+                            msg = "Quantidade inválida (não-numérica)"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido, cliente=cliente, codigo_produto=codigo_produto,
+                                descricao_produto=str(descricao_excel), quantidade_tentada=0, motivo_erro=msg
+                            ))
+                            continue
+
+                        # Validação: Quantidade Positiva
+                        if quantidade <= 0:
+                            msg = "Quantidade zero ou negativa"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido, cliente=cliente, codigo_produto=codigo_produto,
+                                descricao_produto=str(descricao_excel), quantidade_tentada=quantidade, motivo_erro=msg
+                            ))
+                            continue
+
+                        # Validação: Catálogo
+                        produto = produtos_atuais.get(codigo_produto)
+                        if not produto:
+                            msg = "Não encontrado no catálogo"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido, cliente=cliente, codigo_produto=codigo_produto,
+                                descricao_produto=str(descricao_excel), quantidade_tentada=quantidade, motivo_erro=msg
+                            ))
+                            continue
+                            
+                        # Validação: Preço por Região (SP ou ES)
+                        regiao = cliente.client_state.uf_name
+                        valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
+                        valor_unitario = getattr(produto, valor_field)
+                        
+                        if valor_unitario is None or valor_unitario <= 0:
+                            msg = f"Indisponível no estoque"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            itens_ignorados_db.append(ItemPedidoIgnorado(
+                                pedido=novo_pedido, cliente=cliente, codigo_produto=codigo_produto,
+                                descricao_produto=produto.product_description, quantidade_tentada=quantidade, motivo_erro=msg
+                            ))
+                            continue
+
+                        # Sucesso: Prepara para criar
+                        total_valor_pedido += valor_unitario * Decimal(quantidade)
+                        itens_pedido_para_criar.append(ItemPedido(
+                            pedido=novo_pedido,
+                            produto=produto,
+                            quantidade=quantidade,
+                            valor_unitario_sp=produto.product_value_sp,
+                            valor_unitario_es=produto.product_value_es,
+                        ))
+                    
+                    # 5. Finalização
+                    if not itens_pedido_para_criar and not itens_ignorados_db:
+                        messages.error(request, "Nenhum dado processável encontrado.")
+                        novo_pedido.delete()
+                        return redirect('upload_pedido_cliente')
+                    
+                    if itens_pedido_para_criar:
+                        ItemPedido.objects.bulk_create(itens_pedido_para_criar)
+                    
+                    if itens_ignorados_db:
+                        ItemPedidoIgnorado.objects.bulk_create(itens_ignorados_db)
+                    
+                    if erros_texto:
+                        novo_pedido.erros_upload = '\n'.join(erros_texto)
+                        erros_msg = 'Alguns itens foram ignorados:\n' + '\n'.join(erros_texto[:3])
+                        if len(erros_texto) > 3: erros_msg += f'\n... e mais {len(erros_texto) - 3} erros.'
+                        messages.warning(request, erros_msg)
+                    else:
+                        messages.success(request, "Itens carregados com sucesso!")
+                    
                     novo_pedido.valor_total = total_valor_pedido
                     novo_pedido.save()
-
-                messages.success(request, "Planilha processada! Confira os itens no seu carrinho/rascunho.")
-                return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
-
+                    
+                    return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
+            
             except Exception as e:
-                messages.error(request, f"Erro ao processar: {e}")
+                messages.error(request, f"Erro crítico no processamento: {e}")
+                if 'novo_pedido' in locals(): novo_pedido.delete()
+        
     else:
+        # GET: Prepara formulário com endereços do cliente e sugestão de endereço padrão
         form = UploadPedidoForm(initial=initial_data)
         form.fields['endereco_selecionado'].queryset = Endereco.objects.filter(cliente=cliente)
-        # Tentar setar o endereço padrão
-        endereco_padrao = Endereco.objects.filter(cliente=cliente, is_default=True).first()
-        if endereco_padrao:
-            form.initial['endereco_selecionado'] = endereco_padrao.id
+        end_padrao = Endereco.objects.filter(cliente=cliente, is_default=True).first()
+        if end_padrao:
+            form.initial['endereco_selecionado'] = end_padrao.id
 
-    return render(request, 'upload_pedido_cliente.html', {
-        'upload_form': form,
-        'cliente': cliente
-    })
+    return render(request, 'upload_pedido_cliente.html', {'upload_form': form, 'cliente': cliente})
