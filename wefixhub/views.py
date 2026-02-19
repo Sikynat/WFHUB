@@ -1102,6 +1102,7 @@ def editar_endereco(request, endereco_id):
 def pagina_upload(request):
     return render(request, 'upload_planilha.html')
 
+
 def processar_upload(request):
     if request.method == 'POST':
         planilha_es_file = request.FILES.get('planilha_es')
@@ -1112,43 +1113,83 @@ def processar_upload(request):
             return redirect('pagina_upload')
 
         try:
-            # Lógica para ler, tratar e juntar as planilhas
-            # ALTERAÇÃO: Incluir a coluna 'MARCA' na leitura da planilha de ES
-            df_es = pd.read_excel(planilha_es_file, usecols=['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'TABELA'])
-            df_es = df_es.rename(columns={'CÓDIGO': 'product_code', 'DESCRIÇÃO': 'product_description', 'GRUPO': 'product_group', 'MARCA': 'product_brand', 'TABELA': 'product_value_es'})
+            # 1. Leitura e Limpeza Inicial
+            # Usamos converters para garantir que o CÓDIGO venha como String e não vire número científico
+            df_es = pd.read_excel(planilha_es_file, usecols=['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'TABELA'], dtype={'CÓDIGO': str})
+            df_sp = pd.read_excel(planilha_sp_file, usecols=['CÓDIGO', 'TABELA'], dtype={'CÓDIGO': str})
 
-            df_sp = pd.read_excel(planilha_sp_file, usecols=['CÓDIGO', 'TABELA'])
+            # Renomear colunas
+            df_es = df_es.rename(columns={
+                'CÓDIGO': 'product_code', 
+                'DESCRIÇÃO': 'product_description', 
+                'GRUPO': 'product_group', 
+                'MARCA': 'product_brand', 
+                'TABELA': 'product_value_es'
+            })
             df_sp = df_sp.rename(columns={'CÓDIGO': 'product_code', 'TABELA': 'product_value_sp'})
-            
-            df_es.loc[df_es['product_value_es'] == 'SEM ESTOQUE', 'product_value_es'] = 0
-            df_sp.loc[df_sp['product_value_sp'] == 'SEM ESTOQUE', 'product_value_sp'] = 0
 
+            # 2. Tratamento de Preços (Converte "SEM ESTOQUE" ou lixo em 0)
+            for col in ['product_value_es', 'product_value_sp']:
+                target_df = df_es if col == 'product_value_es' else df_sp
+                # Força conversão para numérico, erros viram NaN, depois preenchemos com 0
+                target_df[col] = pd.to_numeric(target_df[col], errors='coerce').fillna(0)
+
+            # 3. Merge das planilhas
             df_final = pd.merge(df_es, df_sp, on='product_code', how='left')
             df_final = df_final.replace({np.nan: None})
+            # Remove duplicatas de código na própria planilha para evitar erro no banco
+            df_final = df_final.drop_duplicates(subset=['product_code'])
 
-            with transaction.atomic():
-                produtos_processados = 0
-                for _, row in df_final.iterrows():
-                    # NOVO CÓDIGO: Usar update_or_create para garantir unicidade
-                    Product.objects.update_or_create(
-                        product_code=row['product_code'],
-                        defaults={
-                            'product_description': row['product_description'],
-                            'product_group': row['product_group'],
-                            'product_brand': row['product_brand'], # ALTERAÇÃO: Adicionar a marca aqui
-                            'product_value_sp': row['product_value_sp'],
-                            'product_value_es': row['product_value_es'],
-                            'status': 'PENDENTE',
-                            'date_product': date.today(),
-                        }
-                    )
-                    produtos_processados += 1
+            # --- INÍCIO DA OTIMIZAÇÃO DE BANCO ---
+            codigos_na_planilha = df_final['product_code'].tolist()
+            hoje = date.today()
+            
+            # Busca todos os produtos existentes de uma só vez
+            produtos_existentes = {
+                p.product_code: p for p in Product.objects.filter(product_code__in=codigos_na_planilha)
+            }
+
+            produtos_para_criar = []
+            produtos_para_atualizar = []
+
+            for _, row in df_final.iterrows():
+                codigo = str(row['product_code']).strip()
                 
-            messages.success(request, f'{produtos_processados} produtos processados com sucesso.')
+                dados_comuns = {
+                    'product_description': str(row['product_description'])[:255] if row['product_description'] else "",
+                    'product_group': str(row['product_group'])[:100] if row['product_group'] else "",
+                    'product_brand': str(row['product_brand'])[:100] if row['product_brand'] else "",
+                    'product_value_sp': row['product_value_sp'],
+                    'product_value_es': row['product_value_es'],
+                    'status': 'PENDENTE',
+                    'date_product': hoje,
+                }
+
+                if codigo in produtos_existentes:
+                    obj = produtos_existentes[codigo]
+                    for campo, valor in dados_comuns.items():
+                        setattr(obj, campo, valor)
+                    produtos_para_atualizar.append(obj)
+                else:
+                    produtos_para_criar.append(Product(product_code=codigo, **dados_comuns))
+
+            # 4. Gravação Atômica e em Massa
+            with transaction.atomic():
+                if produtos_para_criar:
+                    Product.objects.bulk_create(produtos_para_criar, batch_size=500)
+                
+                if produtos_para_atualizar:
+                    Product.objects.bulk_update(
+                        produtos_para_atualizar, 
+                        fields=['product_description', 'product_group', 'product_brand', 'product_value_sp', 'product_value_es', 'status', 'date_product'],
+                        batch_size=500
+                    )
+            
+            messages.success(request, f'Processamento concluído: {len(produtos_para_criar)} novos e {len(produtos_para_atualizar)} atualizados.')
             return redirect('pagina_upload')
 
         except Exception as e:
-            messages.error(request, f'Ocorreu um erro ao processar as planilhas: {e}')
+            messages.error(request, f'Erro crítico no processamento: {e}')
             return redirect('pagina_upload')
 
     return render(request, 'upload_planilha.html')
