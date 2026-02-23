@@ -2158,7 +2158,7 @@ def enviar_whatsapp(request, pedido_id):
         f"{mensagem_base}"
         f"{endereco_texto}"
         f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}\n"
-        f"*Valor total:* {pedido.valor_total}\n"
+        f"*Valor total:* R${pedido.valor_total:,.2f}\n"
         f"*OBS:* {pedido.observacao}\n\n"
         f"*Download da Planilha de Itens:*\n" 
         f"{link_download_excel}"  # <- MUDANÇA AQUI: usando o link direto
