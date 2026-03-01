@@ -11,7 +11,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('dashboard/', include('wefixhub.admin_urls')),
     path('accounts/', include('django.contrib.auth.urls')),
-
+    path('pedido/<int:pedido_id>/whatsapp-excel/', views.exportar_detalhes_pedido_whatsapp_excel, name='exportar_detalhes_pedido_whatsapp_excel'),
     # Rotas do cliente
     path('', views.home, name='home'),
     path('carrinho/', views.carrinho, name='carrinho'),

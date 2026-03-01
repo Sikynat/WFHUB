@@ -2116,6 +2116,8 @@ def enviar_whatsapp(request, pedido_id):
     return redirect(link_whatsapp)
 '''
 
+
+''' Função original
 @staff_member_required
 def enviar_whatsapp(request, pedido_id):
     pedido = get_object_or_404(Pedido, id=pedido_id)
@@ -2168,6 +2170,51 @@ def enviar_whatsapp(request, pedido_id):
     link_whatsapp = f"https://wa.me/5516991273974?text={quote(mensagem_final)}"
 
     return redirect(link_whatsapp)
+'''
+
+
+@staff_member_required
+def enviar_whatsapp(request, pedido_id):
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+
+    # 1. Link para a nova planilha simplificada (Cód, Qtd, Preço)
+    link_download_excel = request.build_absolute_uri(
+        reverse('exportar_detalhes_pedido_whatsapp_excel', args=[pedido.id])
+    )
+
+    # 2. Construção da mensagem formatada conforme seu exemplo
+    mensagem_corpo = (
+        f"*Dados do Pedido*\n\n"
+        f"*Codigo Interno:* {pedido.id}\n"
+        f"*Wefixgo do Cliente:* {pedido.cliente.client_code}\n"
+        f"*Razão Social:* {pedido.cliente.client_name}\n"
+        f"*Data da Expedição:* {pedido.data_envio_solicitada.strftime('%d/%m/%Y')}\n"
+        f"*Opção de Frete:* {pedido.get_frete_option_display()}\n"
+    )
+
+    # 3. Lógica de Endereço (apenas se houver frete que exija entrega)
+    fretes_com_endereco = ['SEDEX', 'CORREIOS', 'TRANSPORTADORA']
+    if pedido.frete_option in fretes_com_endereco and pedido.endereco:
+        end = pedido.endereco
+        mensagem_corpo += (
+            f"*Endereço de Entrega:* {end.logradouro}, {end.bairro}, {end.numero} "
+            f"{end.cidade} - {end.estado} (CEP: {end.cep})\n"
+        )
+
+    # 4. Adicionando Nota Fiscal, Valor Total e OBS
+    mensagem_final = (
+        f"{mensagem_corpo}"
+        f"*Opção de Nota Fiscal:* {pedido.get_nota_fiscal_display()}\n" # <-- AQUI A NOTA FISCAL
+        f"*Valor total:* R$ {pedido.valor_total:,.2f}\n".replace(",", "X").replace(".", ",").replace("X", ".") +
+        f"*OBS:* {pedido.observacao}\n\n"
+        f"*Link para Digitação (Planilha):*\n"
+        f"{link_download_excel}"
+    )
+
+    # 5. Codifica e Redireciona
+    link_whatsapp = f"https://wa.me/5516991273974?text={quote(mensagem_final)}"
+    return redirect(link_whatsapp)
+
 
 
 
@@ -2566,3 +2613,48 @@ def upload_pedido_cliente(request):
             form.initial['endereco_selecionado'] = end_padrao.id
 
     return render(request, 'upload_pedido_cliente.html', {'upload_form': form, 'cliente': cliente})
+
+
+
+@staff_member_required
+def exportar_detalhes_pedido_whatsapp_excel(request, pedido_id):
+    """
+    Exporta uma planilha simplificada (Código, Quantidade, Preço) 
+    para facilitar a digitação via WhatsApp.
+    """
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    itens_pedido = ItemPedido.objects.filter(pedido=pedido).select_related('produto')
+    uf_cliente = pedido.cliente.client_state.uf_name
+
+    # Define qual valor unitário usar com base no estado
+    valor_key = 'valor_unitario_sp' if uf_cliente == 'SP' else 'valor_unitario_es'
+
+    data = []
+    for item in itens_pedido:
+        valor_unitario = getattr(item, valor_key) or 0
+        data.append({
+            'Código': item.produto.product_code,
+            'Quantidade': item.quantidade,
+            'Preço Unitário': float(valor_unitario),
+        })
+
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Resumo para Digitação')
+        
+        # Ajuste de largura básico
+        worksheet = writer.sheets['Resumo para Digitação']
+        worksheet.set_column('A:A', 15) # Código
+        worksheet.set_column('B:C', 12) # Qtd e Preço
+
+    output.seek(0)
+    data_hoje = date.today().strftime('%d-%m-%Y')
+    filename = f"pedido_{pedido.cliente.client_code}_{data_hoje}.xlsx"
+    
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
