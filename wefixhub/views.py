@@ -2186,7 +2186,7 @@ def enviar_whatsapp(request, pedido_id):
     mensagem_corpo = (
         f"*Dados do Pedido*\n\n"
         f"*Codigo Interno:* {pedido.id}\n"
-        f"*Wefixgo do Cliente:* {pedido.cliente.client_code}\n"
+        f"*Código do Cliente:* {pedido.cliente.client_code}\n"
         f"*Razão Social:* {pedido.cliente.client_name}\n"
         f"*Data da Expedição:* {pedido.data_envio_solicitada.strftime('%d/%m/%Y')}\n"
         f"*Opção de Frete:* {pedido.get_frete_option_display()}\n"
