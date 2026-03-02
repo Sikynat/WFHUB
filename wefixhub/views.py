@@ -2615,8 +2615,6 @@ def upload_pedido_cliente(request):
     return render(request, 'upload_pedido_cliente.html', {'upload_form': form, 'cliente': cliente})
 
 
-
-@staff_member_required
 def exportar_detalhes_pedido_whatsapp_excel(request, pedido_id):
     """
     Exporta uma planilha simplificada (Código, Quantidade, Preço) 
