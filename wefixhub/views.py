@@ -300,20 +300,13 @@ def limpar_carrinho(request):
 def checkout(request, pedido_id_rascunho=None):
     # Lógica para o método POST (quando o formulário de checkout é enviado)
     if request.method == 'POST':
-        # Pega os dados do formulário
         endereco_id = request.POST.get('endereco_selecionado')
         data_envio_str = request.POST.get('data_expedicao')
         frete_option = request.POST.get('frete_option')
         nota_fiscal = request.POST.get('nota_fiscal')
         observacao = request.POST.get('observacao')
 
-        # Tenta pegar o ID do pedido rascunho da URL ou do formulário
         id_do_pedido = pedido_id_rascunho or request.POST.get('pedido_id_rascunho')
-
-        # --- DEBUG: Verificando o ID do pedido ---
-        print("================ DEBUG POST ================")
-        print(f"ID do pedido obtido na requisição POST: {id_do_pedido}")
-        print("------------------------------------------")
 
         endereco_selecionado = None
         fretes_sem_endereco = ['ONIBUS', 'RETIRADA']
@@ -332,41 +325,32 @@ def checkout(request, pedido_id_rascunho=None):
             if frete_option not in fretes_sem_endereco:
                 if not endereco_id:
                     messages.error(request, 'Por favor, selecione um endereço válido.')
-                    if id_do_pedido:
-                        return redirect('checkout_rascunho', pedido_id_rascunho=id_do_pedido)
-                    else:
-                        return redirect('checkout')
+                    return redirect('checkout')
                 endereco_selecionado = get_object_or_404(Endereco, id=endereco_id, cliente=cliente_logado)
             
             if data_envio_str:
                 data_envio_obj = datetime.strptime(data_envio_str, '%Y-%m-%d').date()
             
         except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError) as e:
-            messages.error(request, f'Dados de cliente, endereço, frete ou data inválidos: {e}')
+            messages.error(request, f'Dados inválidos: {e}')
             return redirect('home')
 
         with transaction.atomic():
             if id_do_pedido:
-                # --- DEBUG: Verificando se o bloco de atualização é acessado ---
-                print("================ DEBUG ATUALIZAÇÃO ================")
-                print(f"Entrando no bloco para ATUALIZAR o Pedido #{id_do_pedido}")
-                print("-------------------------------------------------")
-                
-                # ATUALIZA o pedido rascunho existente
+                # Fluxo de Atualização de Rascunho
                 pedido_rascunho.endereco = endereco_selecionado
                 pedido_rascunho.data_envio_solicitada = data_envio_obj
                 pedido_rascunho.frete_option = frete_option
                 pedido_rascunho.nota_fiscal = nota_fiscal
                 pedido_rascunho.observacao = observacao
                 pedido_rascunho.status = 'PENDENTE'
+                
+                # RECALCULA O TOTAL ANTES DE SALVAR O RASCUNHO FINALIZADO
+                pedido_rascunho.valor_total = pedido_rascunho.get_total_geral()
                 pedido_rascunho.save()
+                pedido_final = pedido_rascunho
             else:
-                # --- DEBUG: Verificando se o bloco de criação é acessado ---
-                print("================ DEBUG CRIAÇÃO ================")
-                print("Entrando no bloco para CRIAR um novo pedido")
-                print("---------------------------------------------")
-
-                # CRIA um novo pedido a partir do carrinho
+                # Fluxo de Criação de Novo Pedido (Carrinho Manual)
                 carrinho_da_sessao = request.session.get('carrinho', {})
                 if not carrinho_da_sessao:
                     messages.error(request, 'Seu carrinho está vazio.')
@@ -381,6 +365,7 @@ def checkout(request, pedido_id_rascunho=None):
                     observacao=observacao,
                     criado_por=request.user,
                 )
+                
                 for product_id, quantidade in carrinho_da_sessao.items():
                     product = get_object_or_404(Product, product_id=product_id)
                     ItemPedido.objects.create(
@@ -391,11 +376,31 @@ def checkout(request, pedido_id_rascunho=None):
                         valor_unitario_es=product.product_value_es,
                     )
                 
+                # === CORREÇÃO E DEBUG ===
+                # 1. Calcula o total usando a função do model
+                total_calculado = pedido.get_total_geral()
+                
+                # 2. Prints de Debug no Terminal
+                print(f"\n--- DEBUG CHECKOUT MANUAL (PEDIDO #{pedido.id}) ---")
+                print(f"Cliente: {cliente_logado.client_name} | UF: {cliente_logado.client_state.uf_name}")
+                print(f"Total Calculado via get_total_geral(): {total_calculado}")
+                
+                # 3. Salva o valor no banco de dados
+                pedido.valor_total = total_calculado
+                pedido.save()
+                
+                print(f"Valor salvo no campo valor_total: {pedido.valor_total}")
+                print("---------------------------------------------------\n")
+                
+                pedido_final = pedido
+                
                 if 'carrinho' in request.session:
                     del request.session['carrinho']
 
-        messages.success(request, 'Seu pedido foi realizado com sucesso!')
+        messages.success(request, f'Pedido #{pedido_final.id} realizado com sucesso!')
         return redirect('home')
+
+
 
     # Lógica para o método GET (primeira vez que a página é acessada)
     cliente_logado = None
@@ -500,18 +505,55 @@ def checkout(request, pedido_id_rascunho=None):
 def salvar_pedido(request):
     if request.method == 'POST':
         endereco_id = request.POST.get('endereco')
-        data_envio = request.POST.get('data_envio')
+        data_envio_str = request.POST.get('data_envio') # Renomeei para evitar conflito
 
         try:
-            endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=request.user.wfclient)
-            # ALTERAÇÃO AQUI: Use datetime.datetime.strptime()
-            data_envio = datetime.datetime.strptime(data_envio, '%Y-%m-%d').date()
+            cliente = request.user.wfclient
+            endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=cliente)
+            data_envio = datetime.datetime.strptime(data_envio_str, '%Y-%m-%d').date()
+            
+            # Puxa o carrinho do cliente (ajuste conforme o nome da sua variável de sessão ou model)
+            # Supondo que você use uma lógica de itens no banco ou sessão:
+            itens_carrinho = Carrinho.objects.filter(cliente=cliente) # Exemplo
+
+            with transaction.atomic():
+                # 1. Cria o Pedido primeiro
+                novo_pedido = Pedido.objects.create(
+                    cliente=cliente,
+                    endereco=endereco_selecionado,
+                    data_envio_solicitada=data_envio,
+                    status='RASCUNHO', # Ou o status inicial do seu sistema
+                    criado_por=request.user,
+                    # ... outros campos como frete_option, nota_fiscal ...
+                )
+
+                # 2. Cria os Itens do Pedido (Loop)
+                for item in itens_carrinho:
+                    ItemPedido.objects.create(
+                        pedido=novo_pedido,
+                        produto=item.produto,
+                        quantidade=item.quantidade,
+                        valor_unitario_sp=item.produto.product_value_sp,
+                        valor_unitario_es=item.produto.product_value_es,
+                    )
+
+                # 3. AGORA SIM: Atualiza o total e salva de novo
+                # O get_total_geral() vai somar os ItemPedido que acabamos de criar acima
+                novo_pedido.valor_total = novo_pedido.get_total_geral()
+                novo_pedido.save() 
+
+                # 4. Limpa o carrinho após salvar
+                itens_carrinho.delete()
+
+            messages.success(request, 'Pedido realizado com sucesso!')
+            return redirect('pedido_concluido') # Ou para a tela de checkout final
+
         except (Endereco.DoesNotExist, ValueError):
             messages.error(request, 'Endereço ou data de envio inválidos.')
             return redirect('checkout')
-        
-        # ... (restante do código para salvar o pedido)
-        # O restante do seu código aqui...
+        except Exception as e:
+            messages.error(request, f'Erro ao salvar pedido: {e}')
+            return redirect('checkout')
 
     return redirect('checkout')
 
@@ -2613,6 +2655,7 @@ def upload_pedido_cliente(request):
             form.initial['endereco_selecionado'] = end_padrao.id
 
     return render(request, 'upload_pedido_cliente.html', {'upload_form': form, 'cliente': cliente})
+
 
 
 def exportar_detalhes_pedido_whatsapp_excel(request, pedido_id):

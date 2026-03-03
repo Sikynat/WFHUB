@@ -117,6 +117,16 @@ class Product(models.Model):
 
 # Modelo de Pedido
 class Pedido(models.Model):
+
+    def atualizar_total(self):
+        total = self.get_total_geral() # Usa sua função existente que já trata SP/ES
+        self.valor_total = total
+        self.save(update_fields=['valor_total'])
+
+    def save(self, *args, **kwargs):
+    # Garante que pedidos novos não tentem calcular antes de ter ID
+        super().save(*args, **kwargs)
+
     STATUS_CHOICES = [
         ('PENDENTE', 'Pendente'),
         ('ENTREGUE', 'Entregue'),
