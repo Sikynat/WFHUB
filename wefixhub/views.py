@@ -56,10 +56,20 @@ from django.utils import timezone
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django.contrib.admin.views.decorators import staff_member_required
-
-
+from django.db import transaction
+from .models import VendaReal
+from django.db.models.functions import TruncDay
+import json
 # Garanta que seus modelos estão importados
 from .models import Pedido, ItemPedido, WfClient, ItemPedidoIgnorado
+from django.shortcuts import render
+from django.db.models import Sum
+from .models import VendaReal
+from decimal import Decimal
+import json
+import calendar
+from datetime import date
+
 
 
 try:
@@ -78,23 +88,23 @@ except locale.Error:
 # View para a página inicial com filtros e paginação
 @login_required
 def home(request):
-    # Lógica de filtragem e busca
+    # 1. Parâmetros de Filtro e Busca
     codigo = request.GET.get('codigo', None)
     descricao = request.GET.get('descricao', None)
     grupo = request.GET.get('grupo', None)
     marca = request.GET.get('marca', None)
     pedidos_rascunho_count = Pedido.objects.filter(status='RASCUNHO').count()
 
-    # Obter o registro mais recente para cada produto.
+    # 2. Obter o registro mais recente para cada produto (Otimização de Subquery)
     latest_dates = Product.objects.filter(
         product_code=OuterRef('product_code')
     ).order_by('-date_product').values('date_product')[:1]
 
-    # Aplica o filtro de subconsulta e adiciona a ordenação estável por código.
     products = Product.objects.filter(
         date_product=Subquery(latest_dates)
-    ).order_by('product_code') # <-- CORREÇÃO: Adiciona ordem para paginação consistente
+    ).order_by('product_code')
 
+    # 3. Aplicação dos Filtros de Busca
     if codigo:
         products = products.filter(product_code__icontains=codigo)
     if descricao:
@@ -106,13 +116,20 @@ def home(request):
     
     preco_exibido = None
     cliente_logado = None
+    itens_frequentes = [] # Inicializa a lista de recomendações
 
+    # 4. Lógica de Preços por Estado e Recomendações
     if request.user.is_authenticated:
         if request.user.is_staff:
             preco_exibido = 'todos'
         else:
             try:
                 cliente_logado = request.user.wfclient
+                
+                # --- NOVO: Busca Itens Frequentes do Cliente ---
+                # Chama o método que você implementou no modelo WfClient
+                itens_frequentes = cliente_logado.get_frequent_items(limit=6)
+                
                 if cliente_logado.client_state.uf_name == 'SP':
                     preco_exibido = 'sp'
                     products = products.exclude(product_value_sp=0)
@@ -125,11 +142,12 @@ def home(request):
     if not request.user.is_authenticated:
         products = Product.objects.none()
     
-    # Prepara os produtos para o template, formatando os valores
+    # 5. Formatação de Valores para Exibição
     for product in products:
         product.valor_sp_formatado = f"{product.product_value_sp.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_sp else "0,00"
         product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
     
+    # 6. Paginação
     paginator = Paginator(products, 30) 
     page = request.GET.get('page')
 
@@ -140,17 +158,17 @@ def home(request):
     except EmptyPage:
         product_list = paginator.page(paginator.num_pages)
         
+    # 7. Contexto do Template
     context = {
         'product_list': product_list,
+        'itens_frequentes': itens_frequentes, # Adicionado ao contexto para o algoritmo de recomendação
         'cliente_logado': cliente_logado,
         'preco_exibido': preco_exibido,
-        # A data exibida será a do último produto atualizado
         'data_hoje': products[0].date_product if products else date.today(),
         'pedidos_rascunho_count': pedidos_rascunho_count,
     }
             
     return render(request, 'home.html', context)
-
 """
     # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
@@ -655,55 +673,25 @@ locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 
 
+from .models import VendaReal, Pedido, WfClient, ItemPedido # Certifique-se de importar VendaReal
+from django.db.models import Sum
+from decimal import Decimal
+import locale
+
 @staff_member_required
 def dashboard_admin(request):
-    # Expressão que DEVE calcular o valor congelado (CORRETO)
-    calculo_total_vendas_geral = ExpressionWrapper(
-        F('quantidade') * Coalesce(
-            F('valor_unitario_sp'), 
-            F('valor_unitario_es'), 
-            Value(Decimal('0.00'), output_field=DecimalField())
-        ),
-        output_field=DecimalField()
-    )
+    # 1. CÁLCULO DO FATURAMENTO REAL (ERP)
+    total_faturamento_real = VendaReal.objects.aggregate(
+        total=Sum('Total')
+    )['total'] or Decimal('0.00')
 
-    # --- CÁLCULO TOTAL DE VENDAS (HISTÓRICO CORRETO) ---
-    total_vendas_correta_agg = ItemPedido.objects.annotate(
-        subtotal=calculo_total_vendas_geral
-    ).exclude(
-        pedido__status='CANCELADO' 
-    ).aggregate(total_vendas=Sum('subtotal'))
-    
-    valor_total_vendas_correta = total_vendas_correta_agg['total_vendas'] or Decimal('0.00')
+    # FORMATANDO O VALOR PARA STRING (Evita erro de casas decimais no HTML)
+    faturamento_formatado = "{:,.2f}".format(float(total_faturamento_real)).replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # === DEBUG: VERIFICAÇÃO COM PREÇO ATUAL DO PRODUTO ===
-    # Esta Query INCORRETA (preço do Produto) está provavelmente causando a divergência.
-    # Rodaremos ela para ver se ela gera R$ 771.917,09
-    try:
-        total_vendas_produto_agg = ItemPedido.objects.annotate(
-            # Tenta se ligar ao preço atual do modelo Product (QUE É O ERRO COMUM)
-            subtotal_produto=F('quantidade') * F('produto__product_value_sp') 
-        ).exclude(
-            pedido__status='CANCELADO'
-        ).aggregate(total_vendas_produto=Sum('subtotal_produto'))
-        
-        valor_total_vendas_produto = total_vendas_produto_agg['total_vendas_produto'] or Decimal('0.00')
-    except Exception:
-         valor_total_vendas_produto = Decimal('0.00')
-
-    print("================ DEBUG DIVERGÊNCIA ADMINISTRATIVO ================")
-    print(f"1. VALOR CORRETO (PREÇO CONGELADO ItemPedido): R$ {valor_total_vendas_correta:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-    print(f"2. VALOR INCONSISTENTE (PREÇO ATUAL Product): R$ {valor_total_vendas_produto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-    print("------------------------------------------------------------------")
-    # Fim do bloco de debug
-
-    # O valor que deve ser enviado é o CORRETO (PREÇO CONGELADO)
-    valor_total_vendas_decimal = valor_total_vendas_correta
-    valor_total_vendas_formatado = locale.currency(valor_total_vendas_decimal, grouping=True, symbol='R$ ')
-    
-    # Restante da sua view...
+    # 2. MÉTRICAS DO SITE
     total_clientes = WfClient.objects.count()
     total_pedidos = Pedido.objects.count()
+    
     pedidos_pendentes = Pedido.objects.filter(status='PENDENTE').count()
     pedidos_concluidos = Pedido.objects.filter(status='FINALIZADO').count()
     pedidos_orcamento = Pedido.objects.filter(status='ORCAMENTO').count()
@@ -712,22 +700,27 @@ def dashboard_admin(request):
     pedidos_expedicao = Pedido.objects.filter(status='EXPEDICAO').count()
     pedidos_atrasados = Pedido.objects.filter(status='ATRASADO').count()
     
+    # 3. PEDIDOS RECENTES (FORMATANDO OS VALORES DA TABELA TAMBÉM)
     pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
     pedidos_com_total = []
+    
     for pedido in pedidos_recentes_qs:
-        total_pedido = pedido.get_total_geral() or Decimal('0.00')
+        total_pedido = float(pedido.get_total_geral() or 0)
+        # Formata cada subtotal da tabela recente
+        total_p_formatado = "{:,.2f}".format(total_pedido).replace(",", "X").replace(".", ",").replace("X", ".")
+        
         pedidos_com_total.append({
             'id': pedido.id,
             'cliente': pedido.cliente,
             'data_criacao': pedido.data_criacao,
-            'total': locale.currency(total_pedido, grouping=True, symbol='R$ ')
+            'total_str': total_p_formatado # Enviamos como string formatada
         })
         
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': total_clientes,
         'total_pedidos': total_pedidos,
-        'total_vendas': valor_total_vendas_formatado, 
+        'total_vendas': faturamento_formatado, # String: "662.061,12"
         'pedidos_recentes': pedidos_com_total,
         'pedidos_pendentes': pedidos_pendentes,
         'pedidos_concluidos': pedidos_concluidos,
@@ -737,7 +730,9 @@ def dashboard_admin(request):
         'pedidos_expedicao': pedidos_expedicao,
         'pedidos_atrasados': pedidos_atrasados,
     }
+    
     return render(request, 'dashboard.html', contexto)
+
 
 
 
@@ -2699,3 +2694,264 @@ def exportar_detalhes_pedido_whatsapp_excel(request, pedido_id):
     )
     response['Content-Disposition'] = f'attachment; filename={filename}'
     return response
+
+@login_required
+def detalhes_produto(request, product_id):
+    product = get_object_or_404(Product, product_id=product_id)
+    
+    # Busca recomendações
+    recomendacoes_raw = product.get_recommendations(limit=4)
+    
+    # Transforma em objetos Product para facilitar o uso no template (preços, etc)
+    recomendacoes_ids = [item['produto_id'] for item in recomendacoes_raw]
+    produtos_recomendados = Product.objects.filter(product_id__in=recomendacoes_ids)
+
+    return render(request, 'detalhes_produto.html', {
+        'product': product,
+        'recomendacoes': produtos_recomendados
+    })
+
+
+@login_required
+def sugestoes_compra(request):
+    try:
+        cliente_logado = request.user.wfclient
+        # Busca os itens frequentes usando o método que criamos no Model
+        itens_frequentes = cliente_logado.get_frequent_items(limit=24) # Aumentei o limite para uma página cheia
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    contexto = {
+        'titulo': 'Sugestões de Reabastecimento',
+        'itens_frequentes': itens_frequentes,
+        'cliente_logado': cliente_logado,
+    }
+    return render(request, 'sugestoes.html', contexto)
+
+# upload planilha do trs
+@staff_member_required
+def upload_vendas_reais(request):
+    if request.method == 'POST' and request.FILES.get('planilha_vendas'):
+        file = request.FILES['planilha_vendas']
+        try:
+            # Lemos a planilha original detalhada
+            df = pd.read_excel(file)
+            
+            with transaction.atomic():
+                for _, row in df.iterrows():
+                    cod_cliente = int(row['Código_Cliente'])
+                    
+                    # Busca o nome do cliente para o histórico
+                    cliente_obj = WfClient.objects.filter(client_code=cod_cliente).first()
+                    nome = cliente_obj.client_name if cliente_obj else f"Cod: {cod_cliente}"
+
+                    VendaReal.objects.update_or_create(
+                        Emissao=pd.to_datetime(row['Emissão'], dayfirst=True).date(),
+                        Codigo_Cliente=cod_cliente,
+                        Pedido=str(row['Pedido']),
+                        Produto_Codigo=str(row['Produto_Código']),
+                        defaults={
+                            'cliente_nome': nome,
+                            'Produto_Descricao': str(row['Produto_Descrição']),
+                            'Quantidade': int(row['Quantidade']),
+                            'Unitario': Decimal(str(row['Unitário'])),
+                            'Total': Decimal(str(row['Total'])),
+                        }
+                    )
+            messages.success(request, f'Sucesso! {len(df)} itens de venda importados individualmente.')
+        except Exception as e:
+            messages.error(request, f'Erro ao processar: {e}')
+        return redirect('dashboard_admin')
+
+    return render(request, 'analise/upload_vendas_reais.html')
+
+from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.db.models import Q
+from .models import VendaReal
+from django.contrib.admin.views.decorators import staff_member_required
+
+@staff_member_required
+def listar_vendas_reais(request):
+    # 1. Captura e limpa filtros
+    filtro_pedido = request.GET.get('pedido', '').strip()
+    filtro_produto = request.GET.get('produto', '').strip()
+    filtro_cliente = request.GET.get('cliente', '').strip()
+
+    vendas_qs = VendaReal.objects.all().order_by('-Emissao', '-Pedido')
+
+    # 2. Aplica Filtros Dinâmicos
+    if filtro_pedido:
+        vendas_qs = vendas_qs.filter(Pedido__icontains=filtro_pedido)
+    if filtro_produto:
+        vendas_qs = vendas_qs.filter(
+            Q(Produto_Codigo__icontains=filtro_produto) | 
+            Q(Produto_Descricao__icontains=filtro_produto)
+        )
+    if filtro_cliente:
+        vendas_qs = vendas_qs.filter(
+            Q(cliente_nome__icontains=filtro_cliente) | 
+            Q(Codigo_Cliente__icontains=filtro_cliente)
+        )
+
+    # 3. Paginação Robusta (50 itens)
+    paginator = Paginator(vendas_qs, 50)
+    page_number = request.GET.get('page', 1)
+    vendas_paginadas = paginator.get_page(page_number)
+
+    # 4. Formatação Blindada para o Template
+    for v in vendas_paginadas:
+        v.unit_str = "{:,.2f}".format(float(v.Unitario)).replace(",", "X").replace(".", ",").replace("X", ".")
+        v.total_str = "{:,.2f}".format(float(v.Total)).replace(",", "X").replace(".", ",").replace("X", ".")
+
+    contexto = {
+        'titulo': 'Histórico Detalhado ERP',
+        'vendas': vendas_paginadas,
+    }
+    return render(request, 'analise/listar_vendas_reais.html', contexto)
+
+@staff_member_required
+def exportar_vendas_reais_excel(request):
+    # 1. Captura os mesmos filtros da tela de listagem
+    filtro_pedido = request.GET.get('pedido')
+    filtro_produto = request.GET.get('produto')
+    filtro_cliente = request.GET.get('cliente')
+
+    vendas_qs = VendaReal.objects.all().order_by('-Emissao')
+
+    if filtro_pedido:
+        vendas_qs = vendas_qs.filter(Pedido__icontains=filtro_pedido)
+    if filtro_produto:
+        vendas_qs = vendas_qs.filter(
+            Q(Produto_Codigo__icontains=filtro_produto) | 
+            Q(Produto_Descricao__icontains=filtro_produto)
+        )
+    if filtro_cliente:
+        vendas_qs = vendas_qs.filter(
+            Q(cliente_nome__icontains=filtro_cliente) | 
+            Q(Codigo_Cliente__icontains=filtro_cliente)
+        )
+
+    # 2. Transforma o QuerySet em uma lista de dicionários para o Pandas
+    data = []
+    for v in vendas_qs:
+        data.append({
+            'Emissão': v.Emissao.strftime('%d/%m/%Y'),
+            'Pedido': v.Pedido,
+            'Cód. Cliente': v.Codigo_Cliente,
+            'Cliente': v.cliente_nome,
+            'Cód. Produto': v.Produto_Codigo,
+            'Descrição': v.Produto_Descricao,
+            'Quantidade': v.Quantidade,
+            'Unitário': float(v.Unitario),
+            'Total': float(v.Total),
+        })
+
+    # 3. Criação do Excel em memória
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Vendas Reais')
+        
+    output.seek(0)
+
+    # 4. Resposta HTTP para download
+    filename = f"vendas_reais_export_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
+
+
+@staff_member_required
+def dashboard_analise(request):
+    vendas_qs = VendaReal.objects.all()
+
+    # --- FUNÇÃO AUXILIAR: DIAS ÚTEIS (SEG A SEX) ---
+    def contar_dias_uteis(data_inicio, data_fim):
+        dias = 0
+        atual = data_inicio
+        while atual <= data_fim:
+            if atual.weekday() < 5:  # 0=Seg, 1=Ter, 2=Qua, 3=Qui, 4=Sex
+                dias += 1
+            atual += timedelta(days=1)
+        return dias
+
+    # --- 1. MÉTRICAS BÁSICAS ---
+    total_faturamento = vendas_qs.aggregate(total=Sum('Total'))['total'] or Decimal('0.00')
+    total_itens = vendas_qs.aggregate(total=Sum('Quantidade'))['total'] or 0
+    total_pedidos = vendas_qs.values('Pedido').distinct().count() or 1
+    
+    ticket_valor = float(total_faturamento) / total_pedidos
+    ticket_medio_formatado = "{:,.2f}".format(ticket_valor).replace(",", "X").replace(".", ",").replace("X", ".")
+
+    # --- 2. PROJEÇÃO DE FECHAMENTO (BASEADA EM DIAS ÚTEIS) ---
+    hoje = date.today()
+    primeiro_dia_mes = date(hoje.year, hoje.month, 1)
+    
+    # Descobrir o último dia do mês para o cálculo total
+    ultimo_dia_valor = calendar.monthrange(hoje.year, hoje.month)[1]
+    ultimo_dia_mes = date(hoje.year, hoje.month, ultimo_dia_valor)
+
+    # Contagens de dias úteis
+    dias_uteis_decorridos = contar_dias_uteis(primeiro_dia_mes, hoje)
+    total_dias_uteis_mes = contar_dias_uteis(primeiro_dia_mes, ultimo_dia_mes)
+
+    # Cálculo da Média Diária Real (Garantindo que não divida por zero)
+    divisor = max(dias_uteis_decorridos, 1)
+    media_diaria_util = float(total_faturamento) / divisor
+    
+    # Projeção: Média Diária Útil * Total de Dias Úteis do Mês
+    projecao_valor = media_diaria_util * total_dias_uteis_mes
+    progresso_percentual = int((dias_uteis_decorridos / total_dias_uteis_mes) * 100)
+
+    # Formatação dos novos cards
+    media_diaria_str = "{:,.2f}".format(media_diaria_util).replace(",", "X").replace(".", ",").replace("X", ".")
+    projecao_final_str = "{:,.2f}".format(projecao_valor).replace(",", "X").replace(".", ",").replace("X", ".")
+
+    # --- 3. RANKINGS (FORMATADOS) ---
+    top_produtos_raw = vendas_qs.values('Produto_Codigo', 'Produto_Descricao').annotate(
+        total_gerado=Sum('Total'), 
+        qtd_vendida=Sum('Quantidade')
+    ).order_by('-total_gerado')[:10]
+
+    top_produtos_formatados = []
+    for p in top_produtos_raw:
+        valor_str = "{:,.2f}".format(float(p['total_gerado'])).replace(",", "X").replace(".", ",").replace("X", ".")
+        top_produtos_formatados.append({
+            'codigo': p['Produto_Codigo'], 'descricao': p['Produto_Descricao'],
+            'qtd': p['qtd_vendida'], 'total_formatado': valor_str
+        })
+
+    top_clientes_raw = vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(
+        total_gasto=Sum('Total')
+    ).order_by('-total_gasto')[:10]
+
+    top_clientes_formatados = []
+    for c in top_clientes_raw:
+        valor_str = "{:,.2f}".format(float(c['total_gasto'])).replace(",", "X").replace(".", ",").replace("X", ".")
+        top_clientes_formatados.append({
+            'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': valor_str
+        })
+
+    # --- 4. GRÁFICO ---
+    dados_grafico = vendas_qs.values('Emissao').annotate(total_dia=Sum('Total')).order_by('Emissao')
+    l_diario = [d['Emissao'].strftime('%d/%m') for d in dados_grafico]
+    v_diario = [float(d['total_dia']) for d in dados_grafico]
+
+    contexto = {
+        'ticket_medio': ticket_medio_formatado,
+        'total_itens_faturados': total_itens,
+        'total_pedidos_reais': total_pedidos,
+        'media_diaria': media_diaria_str,
+        'projecao_final': projecao_final_str,
+        'progresso_mes': progresso_percentual,
+        'top_produtos': top_produtos_formatados,
+        'top_clientes': top_clientes_formatados,
+        'labels_diario': json.dumps(l_diario),
+        'valores_diario': json.dumps(v_diario),
+    }
+    
+    return render(request, 'analise/dashboard_analise.html', contexto)

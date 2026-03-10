@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    :root {
+        --accent: #4361ee;
+        --accent-soft: rgba(67, 97, 238, 0.1);
+        --bg-light: #f8f9fc;
+        --text-main: #2b2d42;
+        --text-muted: #8d99ae;
+    }
+
+    body { 
+        background-color: var(--bg-light); 
+        font-family: 'Inter', -apple-system, sans-serif;
+    }
+
+    /* Container de Upload */
+    .upload-container {
+        max-width: 700px;
+        margin: 3rem auto;
+    }
+
+    .upload-card {
+        background: white;
+        border-radius: 20px;
+        border: none;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.05);
+        padding: 2.5rem;
+    }
+
+    /* Área de Dropzone Visual */
+    .dropzone-area {
+        border: 2px dashed #cbd5e0;
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        background: #fcfcfd;
+        cursor: pointer;
+        position: relative;
+        margin-bottom: 2rem;
+    }
+
+    .dropzone-area:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+    }
+
+    .upload-icon {
+        font-size: 3rem;
+        color: var(--accent);
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .file-input-hidden {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    /* Painel de Informações de Layout */
+    .layout-info {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1.25rem;
+        border: 1px solid #edf2f7;
+        margin-bottom: 2rem;
+    }
+
+    .layout-info h6 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        margin-bottom: 0.75rem;
+    }
+
+    .column-badge {
+        display: inline-block;
+        background: white;
+        border: 1px solid #e2e8f0;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-main);
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+
+    /* Botões */
+    .btn-process {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 0.8rem 2rem;
+        border-radius: 12px;
+        font-weight: 600;
+        width: 100%;
+        transition: all 0.3s;
+    }
+
+    .btn-process:hover {
+        background: #3a0ca3;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(67, 97, 238, 0.2);
+    }
+
+    .btn-back {
+        display: block;
+        text-align: center;
+        margin-top: 1.5rem;
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .btn-back:hover { color: var(--text-main); }
+</style>
+
+<div class="container">
+    <div class="upload-container">
+        
+        <div class="text-center mb-4">
+            <h2 class="fw-bold">Sincronização de Vendas</h2>
+            <p class="text-muted">Importe o faturamento real do seu ERP para atualizar o Dashboard.</p>
+        </div>
+
+        <div class="card upload-card">
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="dropzone-area" id="dropzone">
+                    <input type="file" name="planilha_vendas" class="file-input-hidden" id="fileInput" required accept=".xlsx">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h5 class="fw-bold mb-1">Clique ou arraste o arquivo</h5>
+                    <p class="text-muted small mb-0" id="fileName">Apenas arquivos Excel (.xlsx)</p>
+                </div>
+
+                <div class="layout-info">
+                    <h6><i class="fas fa-info-circle me-1"></i> Layout esperado das colunas</h6>
+                    <div class="d-flex flex-wrap mt-2">
+                        <span class="column-badge">DATA</span>
+                        <span class="column-badge">CODIGO</span>
+                        <span class="column-badge">CLIENTE</span>
+                        <span class="column-badge">NOTA</span>
+                        <span class="column-badge">VALOR</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-process shadow-sm">
+                    <i class="fas fa-sync-alt me-2"></i> Processar Relatório
+                </button>
+                
+                <a href="{% url 'dashboard_admin' %}" class="btn-back">
+                    <i class="fas fa-arrow-left me-1"></i> Voltar ao Dashboard
+                </a>
+            </form>
+        </div>
+
+        <div class="mt-4 p-3 text-center" style="background: rgba(16, 185, 129, 0.05); border-radius: 12px; border: 1px dashed #10b981;">
+            <small class="text-success fw-bold">
+                <i class="fas fa-check-shield me-1"></i> O sistema atualizará registros existentes e evitará duplicatas automaticamente.
+            </small>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Pequeno script para mostrar o nome do arquivo selecionado
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('fileName');
+    const dropzone = document.getElementById('dropzone');
+
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            fileNameDisplay.innerText = "Arquivo selecionado: " + this.files[0].name;
+            fileNameDisplay.classList.remove('text-muted');
+            fileNameDisplay.classList.add('text-primary', 'fw-bold');
+            dropzone.style.borderColor = 'var(--accent)';
+            dropzone.style.background = 'var(--accent-soft)';
+        }
+    });
+</script>
+
+{% endblock %}

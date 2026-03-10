@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from decimal import Decimal
+from django.db.models import Count
 # Modelo para UF
 class wefixhub_uf (models.Model):
     uf_id = models.AutoField(primary_key=True)
@@ -21,6 +22,16 @@ class wefixhub_uf (models.Model):
 
 # Modelo para Clientes
 class WfClient(models.Model):
+    def get_frequent_items(self, limit=5):
+        # Importação dentro do método para evitar import circular, 
+        # já que ItemPedido geralmente aponta para WfClient via Pedido
+        from .models import ItemPedido 
+        
+        return ItemPedido.objects.filter(pedido__cliente=self) \
+            .values('produto__product_id', 'produto__product_code', 'produto__product_description') \
+            .annotate(vezes_comprado=models.Count('id')) \
+            .order_by('-vezes_comprado')[:limit]
+    
     # Opções de frete (copiadas do Pedido)
     FRETE_CHOICES = [
         ('SEDEX', 'Sedex'),
@@ -114,6 +125,22 @@ class Product(models.Model):
 
     def __str__(self):
         return self.product_description or self.product_code or ''
+
+    def get_recommendations(self, limit=5):
+        """
+        Retorna produtos que frequentemente são comprados junto com este.
+        """
+        # 1. Pega os IDs de todos os pedidos que contêm este produto
+        pedidos_ids = self.itens_do_pedido.values_list('pedido_id', flat=True)
+
+        # 2. Busca outros itens que estão nesses mesmos pedidos, excluindo o próprio produto
+        recomendacoes = ItemPedido.objects.filter(pedido_id__in=pedidos_ids) \
+            .exclude(produto_id=self.product_id) \
+            .values('produto_id', 'produto__product_description', 'produto__product_code') \
+            .annotate(frequencia=Count('produto_id')) \
+            .order_by('-frequencia')[:limit]
+
+        return recomendacoes
 
 # Modelo de Pedido
 class Pedido(models.Model):
@@ -266,3 +293,26 @@ class ItemPedidoIgnorado(models.Model):
 
     def __str__(self):
         return f"Erro: {self.codigo_produto} - {self.motivo_erro}"
+    
+# models.py
+class VendaReal(models.Model):
+    # Identificação da Nota
+    Emissao = models.DateField(db_index=True, verbose_name="Emissão")
+    Codigo_Cliente = models.IntegerField(verbose_name="Código Cliente")
+    Pedido = models.CharField(max_length=50, verbose_name="Pedido")
+    
+    # Detalhamento do Item (As 1.400 linhas)
+    Produto_Codigo = models.CharField(max_length=50, verbose_name="Código do Produto")
+    Produto_Descricao = models.CharField(max_length=255, blank=True, null=True, verbose_name="Descrição")
+    Quantidade = models.IntegerField(verbose_name="Quantidade")
+    Unitario = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Unitário")
+    Total = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Total Item")
+    
+    # Campos Auxiliares
+    cliente_nome = models.CharField(max_length=255, blank=True, null=True)
+    upload_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_vendas_reais'
+        # Agora a chave única inclui o Produto_Codigo, permitindo múltiplos itens por pedido
+        unique_together = ('Emissao', 'Codigo_Cliente', 'Pedido', 'Produto_Codigo')

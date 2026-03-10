@@ -12,7 +12,14 @@ urlpatterns = [
     path('dashboard/', include('wefixhub.admin_urls')),
     path('accounts/', include('django.contrib.auth.urls')),
     path('pedido/<int:pedido_id>/whatsapp-excel/', views.exportar_detalhes_pedido_whatsapp_excel, name='exportar_detalhes_pedido_whatsapp_excel'),
+    path('analise/vendas-detalhadas/', views.listar_vendas_reais, name='listar_vendas_reais'),
+    path('analise/vendas-detalhadas/exportar/', views.exportar_vendas_reais_excel, name='exportar_vendas_reais_excel'),
+    path('analise/upload-vendas/', views.upload_vendas_reais, name='upload_vendas_reais'),
+    path('analise/graficos/', views.dashboard_analise, name='dashboard_analise'),
     # Rotas do cliente
+   
+    # ... suas rotas existentes
+    path('sugestoes/', views.sugestoes_compra, name='sugestoes_compra'),
     path('', views.home, name='home'),
     path('carrinho/', views.carrinho, name='carrinho'),
     path('remover-item/<int:product_id>/', views.remover_item_carrinho, name='remover_item'),

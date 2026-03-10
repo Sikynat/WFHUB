@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .metric-card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); transition: transform 0.2s; }
+    .metric-card:hover { transform: translateY(-5px); }
+    .text-label { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+</style>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-dark mb-0">Análise de Inteligência ERP</h2>
+        <a href="{% url 'dashboard_admin' %}" class="btn btn-light border shadow-sm px-4" style="border-radius: 10px;">
+            <i class="fas fa-arrow-left me-2"></i>Dashboard
+        </a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="metric-card p-4 bg-primary text-white">
+                <div class="text-label opacity-75">Ticket Médio</div>
+                <h2 class="fw-bold mb-0">R$ {{ ticket_medio }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="metric-card p-4 bg-success text-white">
+                <div class="text-label opacity-75">Itens Faturados</div>
+                <h2 class="fw-bold mb-0">{{ total_itens_faturados }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="metric-card p-4 bg-dark text-white">
+                <div class="text-label opacity-75">Pedidos Únicos</div>
+                <h2 class="fw-bold mb-0">{{ total_pedidos_reais }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="metric-card p-4 border-start border-4 border-info">
+                <div class="text-label text-info">Média Diária de Vendas</div>
+                <h3 class="fw-bold mb-1">R$ {{ media_diaria }}</h3>
+                <div class="progress mt-2" style="height: 6px;">
+                    <div class="progress-bar bg-info" style="width: {{ progresso_mes }}%"></div>
+                </div>
+                <small class="text-muted">Mês está em {{ progresso_mes }}% do tempo total.</small>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="metric-card p-4 border-start border-4 border-warning">
+                <div class="text-label text-warning">Projeção de Fechamento</div>
+                <h3 class="fw-bold mb-1" style="color: #f59e0b;">R$ {{ projecao_final }}</h3>
+                <small class="text-muted">Estimativa baseada no ritmo atual de faturamento.</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="metric-card p-4">
+                <h5 class="fw-bold mb-4"><i class="fas fa-chart-line text-primary me-2"></i> Evolução Diária</h5>
+                <div style="height: 350px;">
+                    <canvas id="graficoVendas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="metric-card p-4 h-100">
+                <h5 class="fw-bold mb-3"><i class="fas fa-box text-primary me-2"></i> Top 10 Produtos</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle small">
+                        <thead><tr><th>Produto</th><th class="text-center">Qtd</th><th class="text-end">Total</th></tr></thead>
+                        <tbody>
+                            {% for p in top_produtos %}
+                            <tr>
+                                <td><span class="fw-bold d-block">{{ p.codigo }}</span><span class="text-muted">{{ p.descricao|truncatechars:35 }}</span></td>
+                                <td class="text-center">{{ p.qtd }}</td>
+                                <td class="text-end fw-bold text-success">R$ {{ p.total_formatado }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="metric-card p-4 h-100">
+                <h5 class="fw-bold mb-3"><i class="fas fa-users text-info me-2"></i> Top 10 Clientes</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle small">
+                        <thead><tr><th>Cliente</th><th class="text-end">Faturamento</th></tr></thead>
+                        <tbody>
+                            {% for c in top_clientes %}
+                            <tr>
+                                <td><span class="fw-bold d-block">{{ c.codigo }}</span><span class="text-muted">{{ c.nome|truncatechars:40 }}</span></td>
+                                <td class="text-end fw-bold text-dark">R$ {{ c.total_formatado }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('graficoVendas').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ labels_diario|safe }},
+            datasets: [{
+                data: {{ valores_diario|safe }},
+                borderColor: '#4361ee',
+                backgroundColor: 'rgba(67, 97, 238, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { 
+                y: { ticks: { callback: v => 'R$ ' + v.toLocaleString('pt-BR') } } 
+            }
+        }
+    });
+</script>
+{% endblock %}

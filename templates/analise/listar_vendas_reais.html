@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+    :root {
+        --accent: #4361ee;
+        --bg-light: #f8f9fc;
+        --border-color: #edf2f7;
+    }
+    body { background-color: var(--bg-light); font-family: 'Inter', sans-serif; }
+
+    /* Cards e Containers */
+    .filter-card { background: white; border-radius: 16px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); padding: 1.5rem; }
+    .table-container { background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); overflow: hidden; margin-top: 2rem; }
+
+    /* Tabela */
+    .table thead th { background-color: #fcfcfd; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; color: #8d99ae; border-bottom: 1px solid var(--border-color); padding: 1rem 1.5rem; }
+    .table tbody td { padding: 1.2rem 1.5rem; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }
+    
+    .badge-pedido { background: rgba(67, 97, 238, 0.1); color: var(--accent); font-weight: 600; padding: 5px 12px; border-radius: 8px; }
+    .price-total { font-weight: 700; color: #10b981; }
+
+    /* Paginação Customizada */
+    .pagination .page-link { color: var(--accent); border: 1px solid var(--border-color); padding: 0.6rem 1rem; transition: all 0.2s; }
+    .pagination .page-item.active .page-link { background-color: var(--accent); border-color: var(--accent); color: white; }
+    .pagination .page-link:hover { background-color: #f1f4ff; }
+</style>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0">Histórico de Vendas ERP</h3>
+            <p class="text-muted small">Mostrando {{ vendas.start_index }}-{{ vendas.end_index }} de {{ vendas.paginator.count }} registros.</p>
+        </div>
+        <a href="{% url 'dashboard_admin' %}" class="btn btn-light border px-3" style="border-radius: 10px;">
+            <i class="fas fa-chevron-left me-2"></i>Voltar
+        </a>
+    </div>
+
+    <div class="filter-card">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <input type="text" name="pedido" class="form-control" style="border-radius:10px;" placeholder="🔍 Nº do Pedido" value="{{ request.GET.pedido }}">
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="produto" class="form-control" style="border-radius:10px;" placeholder="📦 Produto..." value="{{ request.GET.produto }}">
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="cliente" class="form-control" style="border-radius:10px;" placeholder="👤 Cliente..." value="{{ request.GET.cliente }}">
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary w-100" style="border-radius: 10px;">Filtrar</button>
+                <a href="{% url 'exportar_vendas_reais_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success" style="border-radius: 10px;">
+                    <i class="fas fa-file-excel">Exportar</i>
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Emissão</th>
+                    <th>Pedido</th>
+                    <th>Cliente</th>
+                    <th>Produto / Descrição</th>
+                    <th class="text-center">Qtd</th>
+                    <th class="text-end">Unitário</th>
+                    <th class="text-end">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for venda in vendas %}
+                <tr>
+                    <td class="text-muted">{{ venda.Emissao|date:"d/m/Y" }}</td>
+                    <td><span class="badge-pedido">#{{ venda.Pedido }}</span></td>
+                    <td>
+                        <div class="fw-bold">{{ venda.cliente_nome }}</div>
+                        <div class="small text-muted">{{ venda.Codigo_Cliente }}</div>
+                    </td>
+                    <td>
+                        <div class="fw-bold text-dark">{{ venda.Produto_Codigo }}</div>
+                        <div class="small text-muted text-truncate" style="max-width: 280px;" title="{{ venda.Produto_Descricao }}">
+                            {{ venda.Produto_Descricao }}
+                        </div>
+                    </td>
+                    <td class="text-center fw-bold">{{ venda.Quantidade }}</td>
+                    <td class="text-end text-muted">R$ {{ venda.unit_str }}</td>
+                    <td class="text-end price-total">R$ {{ venda.total_str }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center py-5 text-muted">Nenhum registro encontrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if vendas.has_other_pages %}
+    <div class="d-flex justify-content-center mt-4 mb-5">
+        <nav>
+            <ul class="pagination shadow-sm" style="border-radius: 10px; overflow: hidden;">
+                {% if vendas.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-angle-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ vendas.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Anterior</a>
+                    </li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link px-4">Página {{ vendas.number }} de {{ vendas.paginator.num_pages }}</span>
+                </li>
+
+                {% if vendas.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ vendas.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Próxima</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ vendas.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-angle-double-right"></i>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

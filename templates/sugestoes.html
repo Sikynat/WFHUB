@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}Sugestões de Reabastecimento{% endblock %}
+
+{% block content %}
+<style>
+    /* ----- VARIÁREIS E ESTILOS DE INTERFACE ----- */
+    :root {
+        --cor-fundo: #16001c;
+        --cor-componente: #212529;
+        --cor-borda: #495057;
+        --cor-texto: #f8f9fa;
+        --cor-destaque: #9747e8;
+        --cor-sucesso: #28a745;
+    }
+
+    .header-sugestoes {
+        background: linear-gradient(90deg, #34124a 0%, #16001c 100%);
+        padding: 2rem;
+        border-radius: 1rem;
+        border-left: 5px solid var(--cor-destaque);
+        margin-bottom: 2rem;
+    }
+
+    .card-sugestao {
+        background-color: var(--cor-componente);
+        border: 1px solid var(--cor-borda);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .card-sugestao:hover {
+        border-color: var(--cor-destaque);
+        transform: translateY(-8px);
+        box-shadow: 0 10px 20px rgba(151, 71, 232, 0.2);
+    }
+
+    /* Badge de popularidade/frequência */
+    .badge-frequencia {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(151, 71, 232, 0.1);
+        color: var(--cor-destaque);
+        border: 1px solid var(--cor-destaque);
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-radius: 20px;
+    }
+
+    .btn-add-fast {
+        background-color: var(--cor-destaque);
+        border: none;
+        font-weight: 600;
+        transition: 0.2s;
+    }
+
+    .btn-add-fast:hover {
+        background-color: #783ae3;
+        letter-spacing: 1px;
+    }
+
+    .input-qtd-sugestao {
+        background-color: #16191c !important;
+        border: 1px solid #495057 !important;
+        color: white !important;
+        text-align: center;
+    }
+
+    /* Animação de sucesso ao adicionar */
+    .added-success {
+        border-color: var(--cor-sucesso) !important;
+        background-color: rgba(40, 167, 69, 0.05) !important;
+    }
+</style>
+
+<div class="container-fluid py-4">
+    
+    <div class="header-sugestoes shadow-sm">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="display-6 fw-bold"><span style="color: var( --cor-texto);">Reposição</span> <span style="color: var(--cor-destaque);">Inteligente</span></h1>
+                <p class="lead mb-0">Analisamos seus últimos pedidos para sugerir o que não pode faltar hoje.</p>
+            </div>
+            <div class="col-md-4 text-md-end d-none d-md-block">
+                <i class='bx bx-brain' style="font-size: 5rem; color: var(--cor-destaque); opacity: 0.5;"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
+        {% for item in itens_frequentes %}
+        <div class="col" id="card-wrap-{{ item.produto__product_id }}">
+            <div class="card h-100 card-sugestao p-3">
+                <span class="badge-frequencia">
+                    <i class='bx bxs-hot'></i> Frequentemente comprado
+                </span>
+                
+                <div class="card-body d-flex flex-column text-center mt-3">
+                    <h6 class="text-uppercase ls-1" style="color: var(--cor-destaque); font-size: 0.8rem;">
+                        Cod: {{ item.produto__product_code }}
+                    </h6>
+                    <h5 class="card-title text-white mb-3 fw-bold">
+                        {{ item.produto__product_description }}
+                    </h6>
+                    
+                    <div class="mt-auto">
+                        <div class="d-flex align-items-center justify-content-center mb-3">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="adjustQtd('{{ item.produto__product_id }}', -1)">-</button>
+                            <input type="number" 
+                                   id="qtd_{{ item.produto__product_id }}" 
+                                   value="1" 
+                                   min="1" 
+                                   class="form-control form-control-sm mx-2 input-qtd-sugestao" 
+                                   style="width: 60px;">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="adjustQtd('{{ item.produto__product_id }}', 1)">+</button>
+                        </div>
+
+                        <button class="btn btn-add-fast w-100 py-2 text-white" 
+                                onclick="adicionarComAnimacao('{{ item.produto__product_id }}', '{{ item.produto__product_code }}')">
+                            <i class='bx bx-cart-add'></i> ADICIONAR
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <div class="card bg-dark border-secondary p-5">
+                <i class='bx bx-info-circle mb-3' style="font-size: 3rem; color: var(--cor-destaque);"></i>
+                <h4>Ainda estamos aprendendo seu perfil...</h4>
+                <p class="text-muted">Continue realizando pedidos para que nossa inteligência possa sugerir os melhores itens para você.</p>
+                <a href="{% url 'home' %}" class="btn btn-primary mt-3">Ver Catálogo Geral</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="mt-5 d-flex justify-content-between align-items-center border-top pt-4">
+        <a href="{% url 'home' %}" class="btn btn-outline-light">
+            <i class='bx bx-arrow-back'></i> Voltar ao Catálogo
+        </a>
+        <a href="{% url 'carrinho' %}" class="btn btn-success px-4 fw-bold shadow">
+            FINALIZAR PEDIDO <i class='bx bx-check-double'></i>
+        </a>
+    </div>
+</div>
+
+<script>
+    // Função para ajustar quantidade nos botões +/-
+    function adjustQtd(id, delta) {
+        const input = document.getElementById('qtd_' + id);
+        let val = parseInt(input.value) + delta;
+        if (val < 1) val = 1;
+        input.value = val;
+    }
+
+    // Função de adição com feedback visual
+    function adicionarComAnimacao(id, codigo) {
+        const qtd = document.getElementById('qtd_' + id).value;
+        const cardWrap = document.getElementById('card-wrap-' + id).querySelector('.card-sugestao');
+        
+        // Simula a lógica do seu localStorage para compatibilidade
+        const itemData = {
+            quantidade: parseInt(qtd),
+            valor: 0 
+        };
+        localStorage.setItem('quantidade_' + id, JSON.stringify(itemData));
+
+        // Feedback Visual
+        cardWrap.classList.add('added-success');
+        const btn = cardWrap.querySelector('.btn-add-fast');
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = "<i class='bx bx-check'></i> ADICIONADO!";
+        btn.classList.replace('btn-add-fast', 'btn-success');
+
+        setTimeout(() => {
+            cardWrap.classList.remove('added-success');
+            btn.innerHTML = originalText;
+            btn.classList.replace('btn-success', 'btn-add-fast');
+        }, 2000);
+    }
+</script>
+{% endblock %}

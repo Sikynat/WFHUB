@@ -4,76 +4,158 @@
 {% block title %}Fazer Upload de Pedido{% endblock %}
 
 {% block content %}
-<div class="container my-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8 col-md-10">
+<style>
+    :root {
+        --accent: #4361ee;
+        --accent-soft: rgba(67, 97, 238, 0.08);
+        --bg-light: #f8f9fc;
+        --text-main: #2b2d42;
+        --text-muted: #8d99ae;
+        --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+    }
 
-            <div class="card shadow-lg p-4">
-                <div class="card-body">
-                    <h1 class="text-center mb-5 display-4 fw-bold text-dark">Upload de Pedido</h1>
+    body { background-color: var(--bg-light); font-family: 'Inter', sans-serif; }
+
+    .upload-card {
+        background: white;
+        border-radius: 20px;
+        border: none;
+        box-shadow: var(--card-shadow);
+        overflow: hidden;
+    }
+
+    /* Estilo para labels e inputs */
+    .form-label { font-weight: 600; color: var(--text-main); font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .form-control, .form-select {
+        border-radius: 12px;
+        border: 1px solid #edf2f7;
+        padding: 0.75rem 1rem;
+        transition: all 0.2s;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    /* Dropzone customizada */
+    .dropzone-area {
+        border: 2px dashed #cbd5e0;
+        border-radius: 16px;
+        padding: 2.5rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        background: #fcfcfd;
+        cursor: pointer;
+        position: relative;
+    }
+    .dropzone-area:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .file-input-hidden { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+    /* Seções internas */
+    .section-title {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .section-title::after { content: ""; flex: 1; height: 1px; background: #edf2f7; }
+
+    /* Select2 custom fix */
+    .select2-container--bootstrap-5 .select2-selection {
+        border-radius: 12px !important;
+        border: 1px solid #edf2f7 !important;
+        height: calc(3.5rem + 2px) !important;
+        padding: 0.75rem !important;
+    }
+</style>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="fw-bold mb-1">Upload de Pedido</h2>
+                    <p class="text-muted small">Converta planilhas em pedidos processados no sistema.</p>
+                </div>
+                <a href="{% url 'dashboard_admin' %}" class="btn btn-light border px-3" style="border-radius: 10px;">
+                    <i class="fas fa-chevron-left me-2"></i>Voltar
+                </a>
+            </div>
+
+            <div class="card upload-card">
+                <div class="card-body p-4 p-md-5">
                     
-                    <h4 class="card-title fw-semibold text-secondary mb-3"><i class="bi bi-person-fill me-2"></i>Selecione o Cliente</h4>
-                    <form id="cliente-form" method="get" class="mb-4">
-                        <div class="input-group">
-                            {{ form_cliente.cliente }}
-                            <button type="submit" class="btn btn-primary px-4">Confirmar</button>
+                    <div class="section-title">1. Identificação do Cliente</div>
+                    <form id="cliente-form" method="get" class="mb-5">
+                        <div class="row g-3">
+                            <div class="col-md-9">
+                                {{ form_cliente.cliente }}
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-primary w-100 h-100 fw-bold" style="border-radius: 12px;">
+                                    Confirmar
+                                </button>
+                            </div>
                         </div>
                     </form>
 
                     {% if cliente_selecionado %}
-                        <div class="alert alert-success bg-success-subtle text-success py-3" role="alert">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-check-circle-fill fs-4 me-3"></i>
-                                <span>Cliente selecionado: <strong class="fw-bold">{{ cliente_selecionado.client_name }}</strong> (Código: {{ cliente_selecionado.client_code }})</span>
+                        <div class="d-flex align-items-center p-3 mb-5" style="background: #f0fdf4; border-radius: 16px; border: 1px solid #bbf7d0;">
+                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div>
+                                <div class="text-success small fw-bold text-uppercase">Cliente Selecionado</div>
+                                <div class="fw-bold text-dark">{{ cliente_selecionado.client_name }} <span class="text-muted fw-normal">(#{{ cliente_selecionado.client_code }})</span></div>
                             </div>
                         </div>
 
-                        <hr class="my-4">
-                        
-                        <h4 class="card-title fw-semibold text-secondary mb-4"><i class="bi bi-cloud-arrow-up-fill me-2"></i>Envie a Planilha</h4>
-                        <form method="post" enctype="multipart/form-data" >
+                        <form method="post" enctype="multipart/form-data">
                             {% csrf_token %}
                             <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
-                            
-                            <div class="row g-4 mb-4">
+
+                            <div class="section-title">2. Logística e Preferências</div>
+                            <div class="row g-4 mb-5">
                                 <div class="col-md-6">
-                                    <label for="{{ upload_form.data_expedicao.id_for_label }}" class="form-label fw-bold">Data de Expedição</label>
+                                    <label class="form-label">Data de Expedição</label>
                                     {{ upload_form.data_expedicao }}
                                 </div>
-                                
                                 <div class="col-md-6">
-                                    <label for="{{ upload_form.nota_fiscal.id_for_label }}" class="form-label fw-bold">Nota Fiscal</label>
+                                    <label class="form-label">Nota Fiscal</label>
                                     {{ upload_form.nota_fiscal }}
                                 </div>
-                                
                                 <div class="col-md-6">
-                                    <label for="{{ upload_form.frete_option.id_for_label }}" class="form-label fw-bold">Opção de Frete</label>
+                                    <label class="form-label">Opção de Frete</label>
                                     {{ upload_form.frete_option }}
                                 </div>
-                                
                                 <div class="col-md-6" id="endereco-field">
-                                    <label for="{{ upload_form.endereco_selecionado.id_for_label }}" class="form-label fw-bold">Endereço de Entrega</label>
+                                    <label class="form-label">Endereço de Entrega</label>
                                     {{ upload_form.endereco_selecionado }}
                                 </div>
-                                
                                 <div class="col-12">
-                                    <label for="{{ upload_form.observacao.id_for_label }}" class="form-label fw-bold">Observação</label>
+                                    <label class="form-label">Observação do Pedido</label>
                                     {{ upload_form.observacao_preferencia }}
-                                    <div class="form-text text-muted">Essa observação será incluída no pedido.</div>
-                                </div>
-                            </div>
-                            
-                            <hr class="my-4">
-                            <div class="row">
-                                <div class="col-12">
-                                    <label for="{{ upload_form.planilha_pedido.id_for_label }}" class="form-label fw-bold">Fazer Upload da Planilha de Pedido</label>
-                                    {{ upload_form.planilha_pedido }}
-                                    <div class="form-text text-muted">Arquivo .xlsx ou .csv com as colunas "código" e "quantidade".</div>
                                 </div>
                             </div>
 
-                            <div class="mt-5 text-center">
-                                <button type="submit" class="btn btn-success btn-lg px-5"><i class="bi bi-check-circle me-2"></i>Processar Pedido</button>
+                            <div class="section-title">3. Arquivo do Pedido</div>
+                            <div class="dropzone-area mb-5" id="dropzone">
+                                <input type="file" name="planilha_pedido" class="file-input-hidden" id="fileInput" required accept=".xlsx,.csv">
+                                <i class="fas fa-file-import mb-3 text-primary" style="font-size: 2.5rem;"></i>
+                                <h5 class="fw-bold mb-1" id="fileName">Selecione a Planilha de Pedido</h5>
+                                <p class="text-muted small mb-0">Arraste o arquivo .xlsx ou .csv com "código" e "quantidade"</p>
+                            </div>
+
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-success btn-lg px-5 shadow-sm" style="border-radius: 14px; font-weight: 700;">
+                                    <i class="fas fa-rocket me-2"></i>Processar e Gerar Pedido
+                                </button>
                             </div>
                         </form>
                     {% endif %}
@@ -85,6 +167,18 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Feedback do nome do arquivo
+        const fileInput = document.getElementById('fileInput');
+        const fileNameDisplay = document.getElementById('fileName');
+        if (fileInput) {
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    fileNameDisplay.innerText = this.files[0].name;
+                    fileNameDisplay.classList.add('text-primary');
+                }
+            });
+        }
+
         {% if cliente_selecionado %}
         const freteSelect = document.getElementById('id_frete_option');
         const enderecoField = document.getElementById('endereco-field');
@@ -112,42 +206,18 @@
             notaFiscalSelect.value = "{{ cliente_selecionado.nota_fiscal_preferencia }}";
         }
 
-        const enderecoSelect = document.getElementById('id_endereco_selecionado');
-        {% if initial_data.endereco_padrao_id %}
-        if (enderecoSelect) {
-            enderecoSelect.value = "{{ initial_data.endereco_padrao_id }}";
-        }
-        {% endif %}
-
         if (dataExpedicaoInput && !dataExpedicaoInput.value) {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
-            dataExpedicaoInput.value = `${yyyy}-${mm}-${dd}`;
+            const today = new Date().toISOString().split('T')[0];
+            dataExpedicaoInput.value = today;
         }
         {% endif %}
-    });
 
-    document.addEventListener('DOMContentLoaded', function() {
-        const enderecoSelect = document.getElementById('id_endereco_selecionado');
-        if (enderecoSelect) {
-            $(enderecoSelect).select2({
-                theme: "bootstrap-5",
-                placeholder: "Selecione ou digite um endereço",
-                allowClear: true
-            });
-        }
-        
-        const clienteSelect = document.getElementById('id_cliente');
-        if (clienteSelect) {
-            $(clienteSelect).select2({
-                theme: "bootstrap-5",
-                placeholder: "Selecione um cliente",
-                allowClear: true
-            });
-        }
+        // Inicialização do Select2
+        $('.form-select, #id_cliente').select2({
+            theme: "bootstrap-5",
+            width: '100%',
+            placeholder: "Selecione..."
+        });
     });
 </script>
-
 {% endblock %}
