@@ -2734,31 +2734,46 @@ def upload_vendas_reais(request):
     if request.method == 'POST' and request.FILES.get('planilha_vendas'):
         file = request.FILES['planilha_vendas']
         try:
-            # Lemos a planilha original detalhada
             df = pd.read_excel(file)
             
-            with transaction.atomic():
-                for _, row in df.iterrows():
-                    cod_cliente = int(row['Código_Cliente'])
-                    
-                    # Busca o nome do cliente para o histórico
-                    cliente_obj = WfClient.objects.filter(client_code=cod_cliente).first()
-                    nome = cliente_obj.client_name if cliente_obj else f"Cod: {cod_cliente}"
+            # 1. Carregamos todos os nomes de clientes em um dicionário (Cache em memória)
+            # Isso evita milhares de SELECTs individuais
+            clientes_dict = {
+                str(c.client_code): c.client_name 
+                for c in WfClient.objects.all().only('client_code', 'client_name')
+            }
 
-                    VendaReal.objects.update_or_create(
-                        Emissao=pd.to_datetime(row['Emissão'], dayfirst=True).date(),
-                        Codigo_Cliente=cod_cliente,
-                        Pedido=str(row['Pedido']),
-                        Produto_Codigo=str(row['Produto_Código']),
-                        defaults={
-                            'cliente_nome': nome,
-                            'Produto_Descricao': str(row['Produto_Descrição']),
-                            'Quantidade': int(row['Quantidade']),
-                            'Unitario': Decimal(str(row['Unitário'])),
-                            'Total': Decimal(str(row['Total'])),
-                        }
-                    )
-            messages.success(request, f'Sucesso! {len(df)} itens de venda importados individualmente.')
+            novas_vendas = []
+            
+            # 2. Processamento rápido no loop (apenas Python, sem banco)
+            for _, row in df.iterrows():
+                cod_cliente_str = str(int(row['Código_Cliente']))
+                nome_cliente = clientes_dict.get(cod_cliente_str, f"Cod: {cod_cliente_str}")
+
+                # Criamos a instância do objeto (sem salvar ainda)
+                venda = VendaReal(
+                    Emissao=pd.to_datetime(row['Emissão'], dayfirst=True).date(),
+                    Codigo_Cliente=int(row['Código_Cliente']),
+                    Pedido=str(row['Pedido']),
+                    Produto_Codigo=str(row['Produto_Código']),
+                    cliente_nome=nome_cliente,
+                    Produto_Descricao=str(row['Produto_Descrição']),
+                    Quantidade=int(row['Quantidade']),
+                    Unitario=Decimal(str(row['Unitário'])),
+                    Total=Decimal(str(row['Total'])),
+                )
+                novas_vendas.append(venda)
+
+            # 3. Salvamento em Lote (Atomico e Único)
+            with transaction.atomic():
+                # Opcional: Limpar dados antigos se for uma carga total
+                # VendaReal.objects.all().delete() 
+                
+                # Salva de 500 em 500 para não estourar a memória do banco
+                VendaReal.objects.bulk_create(novas_vendas, batch_size=500)
+
+            messages.success(request, f'Sucesso! {len(novas_vendas)} itens importados com alta performance.')
+            
         except Exception as e:
             messages.error(request, f'Erro ao processar: {e}')
         return redirect('dashboard_admin')
