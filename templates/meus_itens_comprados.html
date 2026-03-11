@@ -36,7 +36,7 @@
                     <tr>
                         <th>Cód. Produto</th>
                         <th>Descrição</th>
-                        <th>Última Qtd Comprada</th>
+                        <th>Última Compra</th> <th>Qtd</th>
                         <th>Preço Unit. (Histórico)</th>
                         <th class="text-center">Ação</th>
                     </tr>
@@ -46,7 +46,7 @@
                     <tr>
                         <td><span class="badge url-badge bg-light text-dark border">{{ venda.Produto_Codigo }}</span></td>
                         <td>{{ venda.Produto_Descricao }}</td>
-                        <td>{{ venda.Quantidade }}</td>
+                        <td>{{ venda.Emissao|date:"d/m/Y" }}</td> <td>{{ venda.Quantidade }}</td>
                         <td class="text-success fw-bold">R$ {{ venda.unit_str }}</td>
                         <td class="text-center">
                             <a href="{% url 'home' %}?codigo={{ venda.Produto_Codigo }}" 
@@ -58,8 +58,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center py-5">
-                            <i class='bx bx-info-circle fs-1 text-muted'></i>
+                        <td colspan="6" class="text-center py-5"> <i class='bx bx-info-circle fs-1 text-muted'></i>
                             <p class="mt-2">Nenhum produto encontrado no seu histórico de compras.</p>
                         </td>
                     </tr>
