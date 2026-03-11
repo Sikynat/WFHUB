@@ -2997,19 +2997,28 @@ def meus_itens_comprados(request):
     except WfClient.DoesNotExist:
         return redirect('home')
 
-    # 1. Agrupamento compatível com MySQL:
-    # Filtramos as vendas do cliente e agrupamos pelo código do produto.
-    # Usamos o Max('id') ou Max('Emissao') para garantir que pegamos referências únicas.
+    # --- NOVO: CÁLCULO DO EFETIVO (MÊS VIGENTE) ---
+    hoje = timezone.localdate()
+    total_efetivo_mes = VendaReal.objects.filter(
+        Codigo_Cliente=cliente.client_code,
+        Emissao__year=hoje.year,
+        Emissao__month=hoje.month
+    ).aggregate(total=Sum('Total'))['total'] or Decimal('0.00')
+
+    # Formatação do Efetivo para o padrão R$ 0.000,00
+    efetivo_formatado = "{:,.2f}".format(float(total_efetivo_mes)).replace(",", "X").replace(".", ",").replace("X", ".")
+    # ----------------------------------------------
+
+    # Lógica de agrupamento compatível com MySQL (mantida)
     vendas_ids = VendaReal.objects.filter(
         Codigo_Cliente=cliente.client_code
     ).values('Produto_Codigo').annotate(
         ultima_venda=Max('id')
     ).values_list('ultima_venda', flat=True)
 
-    # 2. Buscamos os objetos completos baseados nos IDs únicos encontrados
     vendas_qs = VendaReal.objects.filter(id__in=vendas_ids).order_by('Produto_Descricao')
 
-    # 3. Filtros de busca (conforme seu padrão)
+    # Filtros de busca
     filtro_produto = request.GET.get('produto', '').strip()
     if filtro_produto:
         vendas_qs = vendas_qs.filter(
@@ -3017,20 +3026,21 @@ def meus_itens_comprados(request):
             Q(Produto_Descricao__icontains=filtro_produto)
         )
 
-    # 4. Paginação (50 itens por página)
+    # Paginação
     paginator = Paginator(vendas_qs, 50)
     page_number = request.GET.get('page', 1)
     vendas_paginadas = paginator.get_page(page_number)
 
-    # 5. Formatação blindada de valores
+    # Formatação blindada de valores da tabela
     for v in vendas_paginadas:
         v.unit_str = "{:,.2f}".format(float(v.Unitario)).replace(",", "X").replace(".", ",").replace("X", ".")
-        v.total_str = "{:,.2f}".format(float(v.Total)).replace(",", "X").replace(".", ",").replace("X", ".")
 
     contexto = {
         'titulo': 'Meus Itens Comprados',
         'vendas': vendas_paginadas,
         'cliente_logado': cliente,
+        'efetivo_mes': efetivo_formatado, # Novo dado no contexto
+        'mes_nome': hoje.strftime('%B').capitalize() # Opcional: nome do mês
     }
     return render(request, 'meus_itens_comprados.html', contexto)
 
