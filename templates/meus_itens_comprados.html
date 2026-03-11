@@ -7,8 +7,11 @@
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="text-dark"><i class='bx bx-search-alt'></i> Meus Itens Comprados</h2>
-        <div class="text-end">
-            <span class="badge bg-secondary">Código Cliente: {{ cliente_logado.client_code }}</span>
+        <div class="text-end d-flex gap-2">
+            <a href="{% url 'exportar_meus_itens_excel' %}" class="btn btn-success shadow-sm">
+                <i class='bx bx-spreadsheet'></i> Exportar para Excel
+            </a>
+            <span class="badge bg-secondary d-flex align-items-center">Código Cliente: {{ cliente_logado.client_code }}</span>
         </div>
     </div>
 
@@ -34,9 +37,11 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-dark">
                     <tr>
+                        <th>Pedido ERP</th>
                         <th>Cód. Produto</th>
                         <th>Descrição</th>
-                        <th>Última Compra</th> <th>Qtd</th>
+                        <th>Data</th>
+                        <th>Qtd</th>
                         <th>Preço Unit. (Histórico)</th>
                         <th class="text-center">Ação</th>
                     </tr>
@@ -44,9 +49,11 @@
                 <tbody>
                     {% for venda in vendas %}
                     <tr>
+                        <td><span class="text-muted small">#{{ venda.Pedido }}</span></td>
                         <td><span class="badge url-badge bg-light text-dark border">{{ venda.Produto_Codigo }}</span></td>
                         <td>{{ venda.Produto_Descricao }}</td>
-                        <td>{{ venda.Emissao|date:"d/m/Y" }}</td> <td>{{ venda.Quantidade }}</td>
+                        <td>{{ venda.Emissao|date:"d/m/Y" }}</td>
+                        <td>{{ venda.Quantidade }}</td>
                         <td class="text-success fw-bold">R$ {{ venda.unit_str }}</td>
                         <td class="text-center">
                             <a href="{% url 'home' %}?codigo={{ venda.Produto_Codigo }}" 
@@ -58,7 +65,8 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-5"> <i class='bx bx-info-circle fs-1 text-muted'></i>
+                        <td colspan="7" class="text-center py-5">
+                            <i class='bx bx-info-circle fs-1 text-muted'></i>
                             <p class="mt-2">Nenhum produto encontrado no seu histórico de compras.</p>
                         </td>
                     </tr>

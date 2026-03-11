@@ -3033,3 +3033,45 @@ def meus_itens_comprados(request):
         'cliente_logado': cliente,
     }
     return render(request, 'meus_itens_comprados.html', contexto)
+
+@login_required
+def exportar_meus_itens_excel(request):
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    # 1. Filtra todas as vendas do cliente logado no ERP
+    vendas_qs = VendaReal.objects.filter(
+        Codigo_Cliente=cliente.client_code
+    ).order_by('-Emissao', '-Pedido')
+
+    # 2. Prepara os dados para o DataFrame (Pandas)
+    data = []
+    for v in vendas_qs:
+        data.append({
+            'Emissão': v.Emissao.strftime('%d/%m/%Y'),
+            'Pedido ERP': v.Pedido,
+            'Cód. Produto': v.Produto_Codigo,
+            'Descrição': v.Produto_Descricao,
+            'Quantidade': v.Quantidade,
+            'Unitário': float(v.Unitario),
+            'Total Item': float(v.Total),
+        })
+
+    # 3. Criação do Excel em memória (usando o padrão BytesIO que você já utiliza)
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Meu Histórico de Compras')
+        
+    output.seek(0)
+
+    # 4. Resposta HTTP para download
+    filename = f"historico_compras_{cliente.client_code}_{timezone.now().strftime('%Y%m%d')}.xlsx"
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    return response

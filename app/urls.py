@@ -20,6 +20,8 @@ urlpatterns = [
    
     # ... suas rotas existentes
     # Em urls.py
+    # Em urls.py
+    path('meu-historico/exportar/', views.exportar_meus_itens_excel, name='exportar_meus_itens_excel'),
     path('meu-historico-compras/', views.meus_itens_comprados, name='meus_itens_comprados'),
     path('sugestoes/', views.sugestoes_compra, name='sugestoes_compra'),
     path('', views.home, name='home'),
