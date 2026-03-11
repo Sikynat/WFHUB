@@ -19,6 +19,8 @@ urlpatterns = [
     # Rotas do cliente
    
     # ... suas rotas existentes
+    # Em urls.py
+    path('meu-historico-compras/', views.meus_itens_comprados, name='meus_itens_comprados'),
     path('sugestoes/', views.sugestoes_compra, name='sugestoes_compra'),
     path('', views.home, name='home'),
     path('carrinho/', views.carrinho, name='carrinho'),

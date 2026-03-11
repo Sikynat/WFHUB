@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-dark"><i class='bx bx-search-alt'></i> Meus Itens Comprados</h2>
+        <div class="text-end">
+            <span class="badge bg-secondary">Código Cliente: {{ cliente_logado.client_code }}</span>
+        </div>
+    </div>
+
+    <div class="card mb-4 border-0 shadow-sm">
+        <div class="card-body bg-light">
+            <form method="GET" class="row g-2">
+                <div class="col-md-10">
+                    <input type="text" name="produto" class="form-control" 
+                           placeholder="Digite o código ou nome do produto que você já comprou..." 
+                           value="{{ request.GET.produto }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class='bx bx-filter-alt'></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Cód. Produto</th>
+                        <th>Descrição</th>
+                        <th>Última Qtd Comprada</th>
+                        <th>Preço Unit. (Histórico)</th>
+                        <th class="text-center">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for venda in vendas %}
+                    <tr>
+                        <td><span class="badge url-badge bg-light text-dark border">{{ venda.Produto_Codigo }}</span></td>
+                        <td>{{ venda.Produto_Descricao }}</td>
+                        <td>{{ venda.Quantidade }}</td>
+                        <td class="text-success fw-bold">R$ {{ venda.unit_str }}</td>
+                        <td class="text-center">
+                            <a href="{% url 'home' %}?codigo={{ venda.Produto_Codigo }}" 
+                               class="btn btn-sm btn-dark" 
+                               data-bs-toggle="tooltip" title="Ver preço atual e comprar">
+                                <i class='bx bx-cart-add'></i> Comprar
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5">
+                            <i class='bx bx-info-circle fs-1 text-muted'></i>
+                            <p class="mt-2">Nenhum produto encontrado no seu histórico de compras.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if vendas.has_other_pages %}
+    <nav aria-label="Navegação de páginas" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if vendas.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ vendas.previous_page_number }}&produto={{ request.GET.produto }}">Anterior</a>
+                </li>
+            {% endif %}
+
+            <li class="page-item active"><span class="page-link">{{ vendas.number }}</span></li>
+
+            {% if vendas.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ vendas.next_page_number }}&produto={{ request.GET.produto }}">Próximo</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

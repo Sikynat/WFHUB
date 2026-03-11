@@ -2989,3 +2989,47 @@ def dashboard_analise(request):
     }
     
     return render(request, 'analise/dashboard_analise.html', contexto)
+
+@login_required
+def meus_itens_comprados(request):
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    # 1. Agrupamento compatível com MySQL:
+    # Filtramos as vendas do cliente e agrupamos pelo código do produto.
+    # Usamos o Max('id') ou Max('Emissao') para garantir que pegamos referências únicas.
+    vendas_ids = VendaReal.objects.filter(
+        Codigo_Cliente=cliente.client_code
+    ).values('Produto_Codigo').annotate(
+        ultima_venda=Max('id')
+    ).values_list('ultima_venda', flat=True)
+
+    # 2. Buscamos os objetos completos baseados nos IDs únicos encontrados
+    vendas_qs = VendaReal.objects.filter(id__in=vendas_ids).order_by('Produto_Descricao')
+
+    # 3. Filtros de busca (conforme seu padrão)
+    filtro_produto = request.GET.get('produto', '').strip()
+    if filtro_produto:
+        vendas_qs = vendas_qs.filter(
+            Q(Produto_Codigo__icontains=filtro_produto) | 
+            Q(Produto_Descricao__icontains=filtro_produto)
+        )
+
+    # 4. Paginação (50 itens por página)
+    paginator = Paginator(vendas_qs, 50)
+    page_number = request.GET.get('page', 1)
+    vendas_paginadas = paginator.get_page(page_number)
+
+    # 5. Formatação blindada de valores
+    for v in vendas_paginadas:
+        v.unit_str = "{:,.2f}".format(float(v.Unitario)).replace(",", "X").replace(".", ",").replace("X", ".")
+        v.total_str = "{:,.2f}".format(float(v.Total)).replace(",", "X").replace(".", ",").replace("X", ".")
+
+    contexto = {
+        'titulo': 'Meus Itens Comprados',
+        'vendas': vendas_paginadas,
+        'cliente_logado': cliente,
+    }
+    return render(request, 'meus_itens_comprados.html', contexto)
