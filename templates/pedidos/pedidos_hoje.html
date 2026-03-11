@@ -1,94 +1,166 @@
 {% extends 'base.html' %}
-
 {% block title %}{{ titulo }}{% endblock %}
 
 {% block content %}
+<style>
+    :root {
+        --glass-bg: rgba(255, 255, 255, 0.9);
+        --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+        --accent-blue: #4361ee;
+        --accent-red: #ef4444;
+        --text-main: #2b2d42;
+        --text-muted: #8d99ae;
+    }
 
-<div class="container mt-5">
+    body { background-color: #f8f9fc; color: var(--text-main); font-family: 'Inter', sans-serif; }
+
+    /* Cabeçalho de Seção */
+    .section-header { margin-bottom: 2rem; padding: 1rem 0; }
+    .section-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); position: relative; padding-left: 1rem; }
+    .section-title::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 4px; }
+    .title-hoje::before { background-color: var(--accent-blue); }
+    .title-atrasado::before { background-color: var(--accent-red); }
+
+    /* Cards Estilo SaaS */
+    .order-card {
+        background: white;
+        border: none;
+        border-radius: 16px;
+        box-shadow: var(--card-shadow);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        overflow: hidden;
+    }
+    .order-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.08); }
+
+    .card-header-custom {
+        padding: 1.25rem;
+        background: rgba(248, 249, 252, 0.5);
+        border-bottom: 1px solid rgba(0,0,0,0.03);
+    }
+
+    .order-badge { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; padding: 0.5rem 1rem; border-radius: 8px; }
+
+    /* Estilo da Lista de Informações */
+    .info-list li { margin-bottom: 0.75rem; display: flex; align-items: start; gap: 10px; color: var(--text-main); font-size: 0.9rem; }
+    .info-icon { color: var(--accent-blue); width: 20px; opacity: 0.8; }
+    .info-label { color: var(--text-muted); font-weight: 500; min-width: 90px; }
+
+    /* Alertas Personalizados */
+    .empty-state {
+        background: white;
+        border-radius: 16px;
+        padding: 3rem;
+        box-shadow: var(--card-shadow);
+        border: 1px dashed #edf2f7;
+    }
+</style>
+
+<div class="container py-4">
+
+    {# SEÇÃO: PEDIDOS ATRASADOS #}
     {% if pedidos_atrasados %}
-        <div class="mb-5">
-            <h2 class="display-6 fw-bold mb-4 text-center text-danger">Pedidos Atrasados (Prioridade)</h2>
-            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                {% for pedido in pedidos_atrasados %}
-                <div class="col">
-                    <div class="card h-100 shadow-sm border-2 border-danger rounded-3"> <div class="card-body d-flex flex-column">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="card-title fw-bold text-primary mb-0">Pedido #{{ pedido.id }}</h5>
-                                <span class="badge text-uppercase py-2 px-3 rounded-pill bg-danger">
-                                    ATRASADO
-                                </span>
-                            </div>
-                            
-                            <h6 class="card-subtitle mb-3 text-muted">Cliente: {{ pedido.cliente.client_code }}</h6>
-                            
-                            <ul class="list-unstyled mb-4 small">
-                                <li><strong>Razão Social:</strong> {{ pedido.cliente.client_name }}</li>
-                                <li class="fw-bold text-danger"><strong>Data de Envio:</strong> {{ pedido.data_envio_solicitada|date:"d/m/Y" }}</li>
-                                <li><strong>Status Atual:</strong> {{ pedido.get_status_display }}</li>
-                                <li><strong>Frete:</strong> {{ pedido.get_frete_option_display }}</li>
-                            </ul>
-                            
-                            <div class="mt-auto">
-                                <a href="{% url 'detalhes_pedido_admin' pedido.id %}" class="btn btn-outline-danger w-100 btn-sm fw-bold">
-                                    Ver Detalhes e Resolver
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        <hr class="my-5"> {% endif %}
+    <div class="section-header">
+        <h2 class="section-title title-atrasado">Prioridade: Pedidos Atrasados</h2>
+        <p class="text-muted small mb-0">Itens que ultrapassaram a data de envio solicitada.</p>
+    </div>
 
-    <h2 class="display-6 fw-bold mb-4 text-center">Agendados para Hoje</h2>
-    <p class="lead text-muted text-center mb-5">{{ data_hoje|date:"d/m/Y" }}</p>
-    
-    {% if pedidos_hoje %}
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            {% for pedido in pedidos_hoje %}
-            <div class="col">
-                <div class="card h-100 shadow-sm border-0 rounded-3">
-                    <div class="card-body d-flex flex-column">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="card-title fw-bold text-primary mb-0">Pedido #{{ pedido.id }}</h5>
-                            <span class="badge text-uppercase py-2 px-3 rounded-pill bg-info">
-                                {{ pedido.get_status_display }}
-                            </span>
-                        </div>
-                        
-                        <h6 class="card-subtitle mb-3 text-muted">Cliente: {{ pedido.cliente.client_code }}</h6>
-                        
-                        <ul class="list-unstyled mb-4 small">
-                            <li><strong>Razão Social:</strong> {{ pedido.cliente.client_name }}</li>
-                            <li><strong>Endereço:</strong> {{ pedido.endereco }}</li>
-                            <li><strong>Frete:</strong> {{ pedido.get_frete_option_display }}</li>
-                            <li><strong>Nota Fiscal:</strong> {{ pedido.get_nota_fiscal_display }}</li>
-                        </ul>
-                        
-                        <div class="mt-auto">
-                            <a href="{% url 'detalhes_pedido_admin' pedido.id %}" class="btn btn-outline-primary w-100 btn-sm fw-bold">
-                                Ver Detalhes
-                            </a>
-                        </div>
+    <div class="row g-4 mb-5">
+        {% for pedido in pedidos_atrasados %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card order-card h-100">
+                <div class="card-header-custom d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-primary">#{{ pedido.id }}</span>
+                    <span class="order-badge bg-danger-subtle text-danger">ATRASADO</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Cliente</small>
+                        <span class="fw-bold">{{ pedido.cliente.client_code }} - {{ pedido.cliente.client_name }}</span>
                     </div>
+                    
+                    <ul class="list-unstyled info-list">
+                        <li>
+                            <i class="fas fa-calendar-exclamation info-icon text-danger"></i>
+                            <span class="info-label">Expedição:</span>
+                            <span class="text-danger fw-bold">{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-truck info-icon"></i>
+                            <span class="info-label">Frete:</span>
+                            <span>{{ pedido.get_frete_option_display }}</span>
+                        </li>
+                    </ul>
+
+                    <a href="{% url 'detalhes_pedido_admin' pedido.id %}" class="btn btn-outline-danger w-100 mt-2" style="border-radius: 10px;">
+                        Ver e Resolver
+                    </a>
                 </div>
             </div>
-            {% endfor %}
         </div>
-    {% else %}
-        {% if not pedidos_atrasados %}
-            <div class="alert alert-success text-center py-4 rounded-3 mt-5" role="alert">
-                <h4 class="alert-heading fw-bold">Tudo em Dia!</h4>
-                <p class="mb-0">Não há pedidos para hoje e nenhuma pendência atrasada.</p>
-            </div>
-        {% else %}
-            <div class="alert alert-info text-center py-4 rounded-3" role="alert">
-                <h4 class="alert-heading fw-bold">Nenhum Pedido para Hoje!</h4>
-                <p class="mb-0">Não há pedidos agendados para saída na data de hoje.</p>
-            </div>
-        {% endif %}
+        {% endfor %}
+    </div>
     {% endif %}
-</div>
 
+    {# SEÇÃO: AGENDADOS PARA HOJE #}
+    <div class="section-header d-flex justify-content-between align-items-end">
+        <div>
+            <h2 class="section-title title-hoje">Agendados para Hoje</h2>
+            <p class="text-muted small mb-0">Saídas previstas para {{ data_hoje|date:"d/m/Y" }}.</p>
+        </div>
+        <span class="badge bg-white text-primary border px-3 py-2 shadow-sm" style="border-radius: 8px;">
+            {{ pedidos_hoje|length }} Pedidos
+        </span>
+    </div>
+
+    {% if pedidos_hoje %}
+    <div class="row g-4">
+        {% for pedido in pedidos_hoje %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card order-card h-100">
+                <div class="card-header-custom d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-primary">#{{ pedido.id }}</span>
+                    <span class="order-badge bg-primary-subtle text-primary">{{ pedido.get_status_display }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Cliente</small>
+                        <span class="fw-bold">{{ pedido.cliente.client_code }} - {{ pedido.cliente.client_name }}</span>
+                    </div>
+
+                    <ul class="list-unstyled info-list">
+                        <li>
+                            <i class="fas fa-map-marker-alt info-icon"></i>
+                            <span>{{ pedido.endereco|default:"Retirada/Ônibus" }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-file-invoice-dollar info-icon"></i>
+                            <span class="info-label">NF:</span>
+                            <span>{{ pedido.get_nota_fiscal_display }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-shipping-fast info-icon"></i>
+                            <span class="info-label">Frete:</span>
+                            <span>{{ pedido.get_frete_option_display }}</span>
+                        </li>
+                    </ul>
+
+                    <a href="{% url 'detalhes_pedido_admin' pedido.id %}" class="btn btn-primary w-100 mt-2" style="border-radius: 10px; background-color: var(--accent-blue);">
+                        Processar Pedido
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state text-center mt-4">
+        <div class="mb-3">
+            <i class="fas fa-check-circle text-success fa-3x opacity-50"></i>
+        </div>
+        <h4 class="fw-bold text-secondary">Nenhum agendamento para hoje</h4>
+        <p class="text-muted mb-0">Todos os pedidos estão processados ou não há saídas previstas.</p>
+    </div>
+    {% endif %}
+
+</div>
 {% endblock %}

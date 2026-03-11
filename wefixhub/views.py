@@ -1416,44 +1416,61 @@ def pedidos_para_hoje(request):
 
 @staff_member_required
 def gerar_pedido_manual(request):
+  
+    # 1. Lógica de Limpeza (DEVE vir antes de qualquer outra coisa)
+    if 'limpar' in request.GET:
+        cliente_id = request.GET.get('cliente')
+        # Redireciona para a mesma página apenas com o ID do cliente, limpando os filtros
+        return redirect(f"{reverse('gerar_pedido_manual')}?cliente={cliente_id}")
+
     cliente_selecionado = None
+    # Usamos request.GET para manter o estado do formulário de seleção de cliente
     form_cliente = SelectClientForm(request.GET or None)
     product_list = []
     query_params = request.GET.copy()
     preco_exibido = 'todos'
-    
-    # Dicionário para armazenar dados iniciais para o template
     initial_data = {}
 
+    # Remove o parâmetro de página para não quebrar os filtros de busca
     if 'page' in query_params:
         query_params.pop('page')
 
-    if form_cliente.is_valid():
+    # 2. Identificação do Cliente
+    # Tentamos pegar o cliente tanto pelo form quanto direto pelo GET (para o redirecionamento do 'limpar')
+    cliente_id_get = request.GET.get('cliente')
+    
+    if form_cliente.is_valid() and form_cliente.cleaned_data.get('cliente'):
         cliente_selecionado = form_cliente.cleaned_data['cliente']
-        # Se um cliente for selecionado, pega as preferências dele
-        if cliente_selecionado:
-            initial_data['frete_preferencia'] = cliente_selecionado.frete_preferencia
-            initial_data['nota_fiscal_preferencia'] = cliente_selecionado.nota_fiscal_preferencia
-        # NOVO CÓDIGO: Busca o endereço padrão e adiciona ao initial_data
-            endereco_padrao = Endereco.objects.filter(cliente=cliente_selecionado, is_default=True).first()
-            if endereco_padrao:
-                initial_data['endereco_padrao_id'] = endereco_padrao.id
-
+    elif cliente_id_get:
+        cliente_selecionado = get_object_or_404(WfClient, pk=cliente_id_get)
+        # Atualiza o form para mostrar o cliente correto no select
+        form_cliente = SelectClientForm(initial={'cliente': cliente_selecionado})
 
     context = {
         'form_cliente': form_cliente,
         'cliente_selecionado': cliente_selecionado,
-        'initial_data': initial_data, # Adiciona o dicionário com os dados iniciais
+        'initial_data': initial_data,
         'query_params': query_params,
         'preco_exibido': preco_exibido,
     }
     
+    # 3. Processamento de Produtos se houver cliente
     if cliente_selecionado:
+        # Preferências do Cliente
+        initial_data['frete_preferencia'] = cliente_selecionado.frete_preferencia
+        initial_data['nota_fiscal_preferencia'] = cliente_selecionado.nota_fiscal_preferencia
+        
+        endereco_padrao = Endereco.objects.filter(cliente=cliente_selecionado, is_default=True).first()
+        if endereco_padrao:
+            initial_data['endereco_padrao_id'] = endereco_padrao.id
+
         enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_selecionado)
         
+        # Filtros de Produtos
         hoje = timezone.localdate()
         products = Product.objects.filter(date_product=hoje).order_by('product_code')
 
+        # Captura dos filtros do GET
         codigo = request.GET.get('codigo')
         descricao = request.GET.get('descricao')
         grupo = request.GET.get('grupo')
@@ -1468,23 +1485,24 @@ def gerar_pedido_manual(request):
         if marca:
             products = products.filter(product_brand__icontains=marca)
         
-        estado_cliente = cliente_selecionado.client_state.uf_name
+        # Lógica de Preço baseada no Estado
+        estado_cliente = cliente_selecionado.client_state.uf_name.upper()
         preco_exibido = estado_cliente.lower()
 
+        # Formatação de valores
         for product in products:
             if estado_cliente == 'SP':
-                if product.product_value_sp is not None:
+                if product.product_value_sp:
                     product.valor_sp_formatado = f"R$ {product.product_value_sp:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 else:
                     product.valor_sp_formatado = "N/A"
             elif estado_cliente == 'ES':
-                if product.product_value_es is not None:
+                if product.product_value_es:
                     product.valor_es_formatado = f"R$ {product.product_value_es:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 else:
                     product.valor_es_formatado = "N/A"
-            else:
-                product.valor_formatado = "N/A"
             
+        # Paginação
         paginator = Paginator(products, 30)
         page_number = request.GET.get('page')
         product_list = paginator.get_page(page_number)
@@ -1493,6 +1511,7 @@ def gerar_pedido_manual(request):
             'enderecos': enderecos_do_cliente,
             'preco_exibido': preco_exibido,
             'product_list': product_list,
+            'initial_data': initial_data,
         })
     
     return render(request, 'gerar_pedido_manual.html', context)

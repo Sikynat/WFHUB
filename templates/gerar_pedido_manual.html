@@ -1,328 +1,333 @@
 {% extends 'base.html' %}
-{% block title %}Gerar Pedido Manual{% endblock %}
+{% block title %}{{ titulo }}{% endblock %}
 
 {% block content %}
+<style>
+    :root {
+        --accent-blue: #4361ee;
+        --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+        --text-main: #2b2d42;
+        --text-muted: #8d99ae;
+    }
 
-    <style>
-        .infobott {
-            margin-top: 30px;
-            margin-bottom: 30px;
-        }
-    </style>
+    body { background-color: #f8f9fc; color: var(--text-main); font-family: 'Inter', sans-serif; }
+    .wrapper-fluid { width: 100%; padding: 0 40px; }
 
+    .step-card {
+        background: white; border: none; border-radius: 16px;
+        box-shadow: var(--card-shadow); margin-bottom: 1.5rem;
+    }
+    .step-number {
+        background: var(--accent-blue); color: white;
+        width: 30px; height: 30px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-weight: bold; margin-right: 12px; font-size: 0.85rem;
+    }
 
-    <h1>Gerar Pedido Manual</h1>
+    .product-table-container {
+        background: white; border-radius: 16px; box-shadow: var(--card-shadow);
+        overflow: hidden; border: 1px solid rgba(0,0,0,0.02);
+    }
+    .table thead th {
+        background: #f8f9fc; text-transform: uppercase;
+        font-size: 0.75rem; letter-spacing: 0.5px; color: var(--text-muted);
+        padding: 1.2rem; border-bottom: 1px solid #edf2f7;
+    }
+    .table tbody td { padding: 1rem 1.2rem; vertical-align: middle; border-bottom: 1px solid #f1f5f9; }
 
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">Passo 1: Selecione o Cliente</h5>
-            <form method="get" class="d-flex align-items-end">
+    .summary-sidebar {
+        position: sticky; top: 20px;
+        background: white; border-radius: 16px; padding: 1.5rem;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08); border: 1px solid rgba(67, 97, 238, 0.1);
+        min-width: 320px;
+    }
+
+    .input-quantidade {
+        max-width: 80px; border-radius: 8px; border: 1px solid #edf2f7;
+        text-align: center; font-weight: 600; padding: 0.4rem;
+    }
+</style>
+
+<div class="wrapper-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">Gerar Pedido Manual</h2>
+        {% if cliente_selecionado %}
+            <span class="badge bg-primary-subtle text-primary px-3 py-2" style="border-radius: 10px;">
+                <i class="fas fa-user-check me-2"></i>{{ cliente_selecionado.client_name }}
+            </span>
+        {% endif %}
+    </div>
+
+    <div class="card step-card p-4">
+        <h5 class="fw-bold mb-3 small text-uppercase text-muted"><span class="step-number">1</span>Cliente</h5>
+        <form method="get" class="d-flex align-items-end">
+            <div style="flex-grow: 1;">
                 {{ form_cliente.cliente }}
-                <button type="submit" class="btn btn-primary ms-2">Selecionar</button>
-            </form>
-        </div>
+            </div>
+            <button type="submit" class="btn btn-primary ms-2 px-4 fw-bold" style="border-radius: 10px; height: 38px;">Selecionar</button>
+        </form>
     </div>
 
     {% if cliente_selecionado %}
-        <p>
-            Cliente selecionado: <strong>{{ cliente_selecionado.client_name }}</strong>
-            (Código: {{ cliente_selecionado.client_code }})
-        </p>
+    <div class="row g-4">
+        <div class="col-xl-9 col-lg-8">
+            <div class="card step-card p-4">
+                <h5 class="fw-bold mb-3 small text-uppercase text-muted"><span class="step-number">2</span>Catálogo de Produtos</h5>
+                
+                <form id="filtro-produtos-form" method="get" action="{% url 'gerar_pedido_manual' %}">
+                    <input type="hidden" name="cliente" value="{{ cliente_selecionado.client_id }}">
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="small fw-bold text-muted mb-1">Código</label>
+                            <input type="text" name="codigo" class="form-control shadow-none" placeholder="Ex: C1001" value="{{ request.GET.codigo|default:'' }}">
+                        </div>
+                        <div class="col-md-9">
+                            <label class="small fw-bold text-muted mb-1">O que procura?</label>
+                            <input type="text" name="descricao" class="form-control shadow-none" placeholder="Descrição do produto..." value="{{ request.GET.descricao|default:'' }}">
+                        </div>
+                    </div>
 
-        <h2>Produtos para Pedido</h2>
-
-        <form action="" method="get" class="mb-3">
-             <div class="input-group">
-                <input type="hidden" name="cliente" value="{{ cliente_selecionado.client_id }}">
-                <input type="text" name="codigo" placeholder="Código" class="form-control" value="{{ request.GET.codigo }}">
-                <input type="text" name="descricao" placeholder="Descrição" class="form-control" value="{{ request.GET.descricao }}">
-                <input type="text" name="grupo" placeholder="Grupo" class="form-control" value="{{ request.GET.grupo }}">
-                <input type="text" name="marca" placeholder="Marca" class="form-control" value="{{ request.GET.marca }}">
-                <button type="submit" class="btn btn-success">Filtrar</button>
-                <a href="?cliente={{ cliente_selecionado.client_id }}" class="btn btn-warning">Limpar Filtro</a>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="small fw-bold text-muted mb-1">Grupo</label>
+                            <input type="text" name="grupo" class="form-control shadow-none" value="{{ request.GET.grupo|default:'' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="small fw-bold text-muted mb-1">Marca</label>
+                            <input type="text" name="marca" class="form-control shadow-none" value="{{ request.GET.marca|default:'' }}">
+                        </div>
+                        <div class="col-md-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-success flex-grow-1 fw-bold" style="border-radius: 10px;">
+                                <i class="fas fa-filter me-2"></i> Filtrar
+                            </button>
+                            <a href="{% url 'gerar_pedido_manual' %}?cliente={{ cliente_selecionado.client_id }}" 
+                               class="btn btn-outline-secondary px-3 d-flex align-items-center justify-content-center" 
+                               style="border-radius: 10px; min-width: 120px;"
+                               onclick="window.location.href=this.href; return false;">
+                                <i class="fas fa-sync-alt me-2"></i> Limpar
+                            </a>
+                        </div>
+                    </div>
+                </form>
             </div>
-        </form>
 
-        <hr>
-        
-        <div class="table-responsive">
-             <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Código do Produto</th>
-                        <th>Descrição do Produto</th>
-                        <th>Grupo</th>
-                        <th>Marca</th>
-                        <th>Valor ({{ preco_exibido|upper }})</th>
-                        <th>Quantidade</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for product in product_list %}
-                    <tr>
-                        <td>{{ product.product_code }}</td>
-                        <td>{{ product.product_description }}</td>
-                        <td>{{ product.product_group }}</td>
-                        <td>{{ product.product_brand }}</td>
-                        {% if preco_exibido == 'sp' %}
-                            <td class="product-value" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                        {% elif preco_exibido == 'es' %}
-                            <td class="product-value" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+            <div class="product-table-container">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Grupo / Marca</th>
+                            <th>Preço ({{ preco_exibido|upper }})</th>
+                            <th>Qtd</th>
+                            <th class="text-end">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in product_list %}
+                        <tr>
+                            <td style="max-width: 300px;">
+                                <div class="fw-bold text-primary">{{ product.product_code }}</div>
+                                <div class="small text-muted">{{ product.product_description }}</div>
+                            </td>
+                            <td class="small text-muted">
+                                {{ product.product_group|default:"-" }} / {{ product.product_brand|default:"-" }}
+                            </td>
+                            
+                            {% if preco_exibido == 'sp' %}
+                                <td class="product-value fw-bold" data-value="{{ product.product_value_sp|default:'0' }}">
+                                    {% if product.product_value_sp > 0 %}{{ product.valor_sp_formatado }}{% else %}<span class="badge bg-danger-subtle text-danger">SEM ESTOQUE</span>{% endif %}
+                                </td>
+                            {% elif preco_exibido == 'es' %}
+                                <td class="product-value fw-bold" data-value="{{ product.product_value_es|default:'0' }}">
+                                    {% if product.product_value_es > 0 %}{{ product.valor_es_formatado }}{% else %}<span class="badge bg-danger-subtle text-danger">SEM ESTOQUE</span>{% endif %}
+                                </td>
+                            {% endif %}
+
+                            <td>
+                                <input type="number" 
+                                       name="quantidade_{{ product.product_id }}" 
+                                       id="quantidade_{{ product.product_id }}" 
+                                       min="0" 
+                                       class="form-control input-quantidade"
+                                       {% if preco_exibido == 'sp' and not product.product_value_sp or preco_exibido == 'es' and not product.product_value_es %} disabled {% endif %}>
+                            </td>
+                            <td class="text-end fw-bold">
+                                <span id="total_{{ product.product_id }}">R$ 0,00</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if product_list.has_other_pages %}
+            <div class="mt-4">
+                <nav><ul class="pagination pagination-sm justify-content-center">
+                    {% for i in product_list.paginator.page_range %}
+                        {% if product_list.number == i %}
+                            <li class="page-item active"><span class="page-link shadow-none">{{ i }}</span></li>
+                        {% elif i > product_list.number|add:'-3' and i < product_list.number|add:'3' %}
+                            <li class="page-item"><a class="page-link border-0 shadow-sm" href="?{{ query_params.urlencode }}&page={{ i }}">{{ i }}</a></li>
                         {% endif %}
-                        <td>
-                            <input
-                                type="number"
-                                name="quantidade_{{ product.product_id }}"
-                                id="quantidade_{{ product.product_id }}"
-                                min="0"
-                                class="form-control sm input-quantidade">
-                        </td>
-                        <td>
-                            <span id="total_{{ product.product_id }}">R$ 0,00</span>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7">Nenhum produto cadastrado.</td>
-                    </tr>
                     {% endfor %}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="6" class="text-end"><strong>Total Geral:</strong></td>
-                        <td><strong id="grand-total">R$ 0,00</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
+                </ul></nav>
+            </div>
+            {% endif %}
         </div>
 
-        {% if product_list.has_other_pages %}
-    <nav aria-label="Navegação da página">
-        <ul class="pagination justify-content-center">
-            
-            {% if product_list.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page=1">Primeira</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.previous_page_number }}">Anterior</a>
-                </li>
-            {% endif %}
+        <div class="col-xl-3 col-lg-4">
+            <form id="gerar-pedido-form" action="{% url 'processar_pedido_manual' %}" method="post">
+                {% csrf_token %}
+                <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
+                <input type="hidden" name="cart_data" id="cart-data-input">
 
-            {% for i in product_list.paginator.page_range %}
-                {% if product_list.number == i %}
-                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
-                {% elif i > product_list.number|add:'-3' and i < product_list.number|add:'3' %}
-                    <li class="page-item">
-                        <a class="page-link" href="?{{ query_params.urlencode }}&page={{ i }}">{{ i }}</a>
-                    </li>
-                {% endif %}
-            {% endfor %}
-
-            {% if product_list.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.next_page_number }}">Próxima</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?{{ query_params.urlencode }}&page={{ product_list.paginator.num_pages }}">Última</a>
-                </li>
-            {% endif %}
-
-        </ul>
-    </nav>
-{% endif %}
-
-        <form id="gerar-pedido-form" action="{% url 'processar_pedido_manual' %}" method="post">
-            {% csrf_token %}
-            <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
-            <input type="hidden" name="cart_data" id="cart-data-input">
-            
-            <div class="card mb-4 mt-4">
-                <div class="card-body">
-                    <h5 class="card-title">Detalhes de Envio</h5>
+                <div class="summary-sidebar">
+                    <h5 class="fw-bold mb-4 small text-uppercase text-muted"><span class="step-number">3</span>Finalização</h5>
+                    
                     <div class="mb-3">
-                        <label for="endereco_selecionado" class="form-label">Endereço de Entrega:</label>
-                        <select id="endereco_selecionado" name="endereco_selecionado" class="form-control" required>
+                        <label class="small fw-bold text-muted mb-1">Endereço de Entrega</label>
+                        <select name="endereco_selecionado" id="endereco_selecionado" class="form-select border-0 bg-light py-2 shadow-none" required>
                             {% if enderecos %}
-                                <option value="">Selecione um endereço</option>
+                                <option value="">Selecione...</option>
                                 {% for endereco in enderecos %}
-                                    <option value="{{ endereco.id }}">{{ endereco.logradouro }}, {{ endereco.numero }} - {{ endereco.cidade }}</option>
+                                    <option value="{{ endereco.id }}">{{ endereco.logradouro }}, {{ endereco.numero }}</option>
                                 {% endfor %}
                             {% else %}
-                                <option value="">Nenhum endereço cadastrado para este cliente.</option>
+                                <option value="">Sem endereços cadastrados</option>
                             {% endif %}
                         </select>
                     </div>
 
                     <div class="mb-3">
-                        <label for="data_envio" class="form-label">Data de Envio Solicitada:</label>
-                        <input type="date" id="data_envio" name="data_envio" class="form-control" required>
+                        <label class="small fw-bold text-muted mb-1">Data de Envio</label>
+                        <input type="date" name="data_envio" id="data_envio" class="form-control border-0 bg-light py-2 shadow-none" required>
                     </div>
+
                     <div class="mb-3">
-                        <label for="frete_option" class="form-label">Opção de Frete:</label>
-                        <select id="frete_option" name="frete_option" class="form-control" required>
-                            <option value="">Selecione uma opção de frete</option>
+                        <label class="small fw-bold text-muted mb-1">Frete</label>
+                        <select name="frete_option" id="frete_option" class="form-select border-0 bg-light py-2 shadow-none" required>
                             <option value="SEDEX">Sedex</option>
                             <option value="CORREIOS">Correios</option>
                             <option value="ONIBUS">Ônibus</option>
                             <option value="TRANSPORTADORA">Transportadora</option>
-                            <option value="RETIRADA">Retirada</option>  </select>
+                            <option value="RETIRADA">Retirada</option>
                         </select>
                     </div>
 
                     <div class="mb-3">
-                    <label for="nota_fiscal" class="form-label">Opção de Nota Fiscal:</label>
-                    <select id="nota_fiscal" name="nota_fiscal" class="form-control" required>
-                        <option value="">Selecione uma opção</option>
-                        <option value="COM">Com Nota Fiscal</option>
-                        <option value="SEM">Sem Nota Fiscal</option>
-                    </select>
-                </div>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">Gerar Pedido</button>
-            <a href="#" class="btn btn-warning" onclick="limparCache()">Limpar Carrinho</a>
-        </form>
+                        <label class="small fw-bold text-muted mb-1">Nota Fiscal</label>
+                        <select name="nota_fiscal" id="nota_fiscal" class="form-select border-0 bg-light py-2 shadow-none" required>
+                            <option value="COM">Com Nota Fiscal</option>
+                            <option value="SEM">Sem Nota Fiscal</option>
+                        </select>
+                    </div>
 
-        {% else %}
-        <p>Por favor, selecione um cliente para começar a gerar um pedido.</p>
+                    <div class="mb-4">
+                        <label class="small fw-bold text-muted mb-1">Observação</label>
+                        <textarea name="observacao" rows="2" class="form-control border-0 bg-light shadow-none" placeholder="Opcional..."></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-light rounded-3 border">
+                        <span class="small fw-bold text-muted">Total:</span>
+                        <span class="fs-4 fw-bold text-primary" id="grand-total">R$ 0,00</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-3 mb-2 fw-bold shadow-sm" style="border-radius: 12px;">
+                        <i class="fas fa-check-circle me-2"></i>Gerar Pedido
+                    </button>
+                    <button type="button" onclick="limparCache()" class="btn btn-link w-100 text-muted small text-decoration-none">
+                        Limpar Carrinho
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
     {% endif %}
+</div>
 
-    <p class="infobott">Verifique as informações antes de confirmar o pedido!</p>
+<script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const quantidadeInputs = document.querySelectorAll('.input-quantidade');
+        const grandTotalElement = document.getElementById('grand-total');
 
-    <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-            const grandTotalElement = document.getElementById('grand-total');
+        loadAndCalculateTotals();
 
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('pedido_gerado') === 'sucesso') {
-                localStorage.clear();
-            }
-
-            loadAndCalculateTotals();
-
-            // --- CÓDIGO PARA PRÉ-SELECIONAR PREFERÊNCIAS DO CLIENTE ---
-            const freteSelect = document.getElementById('frete_option');
-            const notaFiscalSelect = document.getElementById('nota_fiscal');
-            const enderecoSelect = document.getElementById('endereco_selecionado');
-            {% if cliente_selecionado %}
-                {% if cliente_selecionado.frete_preferencia %}
-                    freteSelect.value = "{{ cliente_selecionado.frete_preferencia }}";
-                {% endif %}
-                {% if cliente_selecionado.nota_fiscal_preferencia %}
-                    notaFiscalSelect.value = "{{ cliente_selecionado.nota_fiscal_preferencia }}";
-                {% endif %}
-                {% if initial_data.endereco_padrao_id %}
-                    if (enderecoSelect) {
-                        enderecoSelect.value = "{{ initial_data.endereco_padrao_id }}";
-                    }
-                {% endif %}
+        // Preferências do cliente (vêm do backend)
+        const freteSelect = document.getElementById('frete_option');
+        const notaFiscalSelect = document.getElementById('nota_fiscal');
+        const enderecoSelect = document.getElementById('endereco_selecionado');
+        {% if cliente_selecionado %}
+            {% if initial_data.frete_preferencia %} freteSelect.value = "{{ initial_data.frete_preferencia }}"; {% endif %}
+            {% if initial_data.nota_fiscal_preferencia %} notaFiscalSelect.value = "{{ initial_data.nota_fiscal_preferencia }}"; {% endif %}
+            {% if initial_data.endereco_padrao_id %}
+                if (enderecoSelect) enderecoSelect.value = "{{ initial_data.endereco_padrao_id }}";
             {% endif %}
-            // --- FIM DO CÓDIGO DE PRÉ-SELEÇÃO ---
+        {% endif %}
 
-            document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
-                const cartData = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('quantidade_')) {
-                        const savedItem = localStorage.getItem(key);
-                        if (savedItem) {
-                            try {
-                                const itemData = JSON.parse(savedItem);
-                                if (itemData.quantidade > 0) {
-                                    cartData[key.split('_')[1]] = itemData.quantidade;
-                                }
-                            } catch (error) {
-                                console.error('Erro ao processar item do localStorage:', error);
-                            }
-                        }
-                    }
+        document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
+            const cartData = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('quantidade_')) {
+                    const savedItem = JSON.parse(localStorage.getItem(key));
+                    if (savedItem.quantidade > 0) cartData[key.split('_')[1]] = savedItem.quantidade;
                 }
-                document.getElementById('cart-data-input').value = JSON.stringify(cartData);
-            });
-
-
-            function loadAndCalculateTotals() {
-                quantidadeInputs.forEach(input => {
-                    const savedItem = localStorage.getItem(input.id);
-                    if (savedItem) {
-                        try {
-                            const itemData = JSON.parse(savedItem);
-                            if (itemData && itemData.quantidade > 0) {
-                                input.value = itemData.quantidade;
-                            } else {
-                                input.value = 0;
-                            }
-                        } catch (e) {
-                            input.value = 0;
-                        }
-                    }
-                    updateTotals(input);
-                });
             }
+            document.getElementById('cart-data-input').value = JSON.stringify(cartData);
+        });
 
-            function updateTotals(inputElement) {
-                const row = inputElement.closest('tr');
-                const valorUnitarioElement = row.querySelector('.product-value');
-
-                if (!valorUnitarioElement) {
-                    return;
-                }
-                
-                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
-                const quantidade = parseFloat(inputElement.value);
-
-                if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
-                    const total = valorUnitario * quantidade;
-                    row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-                }
-
-                updateGrandTotal();
-            }
-
-            function updateGrandTotal() {
-                let totalGeral = 0;
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('quantidade_')) {
-                        const savedItem = localStorage.getItem(key);
-                        if (savedItem) {
-                            try {
-                                const itemData = JSON.parse(savedItem);
-                                if (!isNaN(itemData.valor) && !isNaN(itemData.quantidade)) {
-                                    totalGeral += itemData.valor * itemData.quantidade;
-                                }
-                            } catch (e) {
-                                // Ignora itens mal formatados
-                            }
-                        }
-                    }
-                }
-                grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
-            }
-
+        function loadAndCalculateTotals() {
             quantidadeInputs.forEach(input => {
-                input.addEventListener('input', (e) => {
-                    const row = e.target.closest('tr');
-                    const valorUnitarioElement = row.querySelector('.product-value');
-                    const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
-                    
-                    const itemData = {
-                        quantidade: parseFloat(e.target.value),
-                        valor: valorUnitario
-                    };
-                    localStorage.setItem(e.target.id, JSON.stringify(itemData));
-                    
-                    updateTotals(e.target);
-                });
+                const savedItem = JSON.parse(localStorage.getItem(input.id));
+                if (savedItem) input.value = savedItem.quantidade > 0 ? savedItem.quantidade : 0;
+                updateTotals(input);
+            });
+        }
+
+        function updateTotals(inputElement) {
+            const row = inputElement.closest('tr');
+            const valUnitElement = row.querySelector('.product-value');
+            if (!valUnitElement) return;
+            const valUnit = parseFloat(valUnitElement.dataset.value.replace(',', '.'));
+            
+            if (valUnit <= 0) {
+                inputElement.disabled = true;
+                row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = "Indisponível";
+                return;
+            }
+            const qtd = parseFloat(inputElement.value) || 0;
+            row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${(valUnit * qtd).toFixed(2).replace('.', ',')}`;
+            updateGrandTotal();
+        }
+
+        function updateGrandTotal() {
+            let total = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('quantidade_')) {
+                    const item = JSON.parse(localStorage.getItem(key));
+                    if (item.valor > 0) total += item.valor * item.quantidade;
+                }
+            }
+            grandTotalElement.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+        }
+
+        quantidadeInputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const row = e.target.closest('tr');
+                const valUnitElement = row.querySelector('.product-value');
+                if (!valUnitElement) return;
+                const val = parseFloat(valUnitElement.dataset.value.replace(',', '.'));
+                localStorage.setItem(e.target.id, JSON.stringify({ 
+                    quantidade: parseFloat(e.target.value) || 0, 
+                    valor: val 
+                }));
+                updateTotals(e.target);
             });
         });
-        
-        function limparCache() {
-            localStorage.clear();
-            location.reload();
-        }
-    </script>
+    });
+
+    function limparCache() { localStorage.clear(); location.reload(); }
+</script>
 {% endblock %}
