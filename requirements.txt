@@ -29,3 +29,4 @@ xlsxwriter==3.2.9
 django-storages
 boto3
 cryptography
+pdfplumber
