@@ -2329,166 +2329,115 @@ def marcar_pedido_finalizado(request, pedido_id):
     return redirect('detalhes_pedido_admin', pedido_id=pedido_id)
 
 # views.py (ADICIONE AO SEU ARQUIVO)
-from django.db.models import Sum, Count, F, Q, Case, When, Value, ExpressionWrapper, DecimalField, Subquery, OuterRef, CharField
-
-
-
 
 
 @staff_member_required
 def analise_dados_dashboard(request):
+    # --- 1. Definição de Período ---
     periodo_geral_solicitado = 'periodo_geral' in request.GET
-    
-    # --- 1. Definição Inicial das Variáveis do Filtro ---
     data_fim_str = request.GET.get('data_fim')
     data_inicio_str = request.GET.get('data_inicio')
     
-    # --- 2. Lógica de Conversão e Definição de Data ---
-    if data_fim_str and not periodo_geral_solicitado:
-        try:
-            data_fim = datetime.strptime(data_fim_str, '%d/%m/%Y').date()
-        except ValueError:
-            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
-    else:
-        data_fim = timezone.localdate()
-        
-    if periodo_geral_solicitado:
-        # Quando 'Todo o Histórico' é clicado, forçamos as datas para exibição
-        data_inicio = datetime(2000, 1, 1).date()
-        data_inicio_display = data_inicio.strftime('%Y-%m-%d')
-        data_fim_display = data_fim.strftime('%Y-%m-%d')
-    elif data_inicio_str and data_fim_str: 
-        # Lógica para filtro customizado
-        try:
-            data_inicio = datetime.strptime(data_inicio_str, '%d/%m/%Y').date()
-        except ValueError:
-            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
-            
-        data_inicio_display = data_inicio_str
-        data_fim_display = data_fim_str
-    else:
-        # Período padrão (90 dias)
-        data_inicio = data_fim - timedelta(days=90)
-        data_inicio_display = data_inicio.strftime('%Y-%m-%d')
-        data_fim_display = data_fim.strftime('%Y-%m-%d')
-        
-    CAMPO_DATA_FILTRO = 'pedido__data_envio_solicitada' 
-    
-    # --- 3. EXPRESSÕES REUTILIZÁVEIS DE VALOR ---
-    valor_unitario_preferencial = Coalesce(
-        F('valor_unitario_sp'), F('valor_unitario_es'), Value(Decimal('0.00'), output_field=DecimalField()) 
-    )
-    calculo_total_preferencial = ExpressionWrapper(
-        F('quantidade') * valor_unitario_preferencial, output_field=DecimalField() 
-    )
-    calculo_total_itempedido_es = ExpressionWrapper(
-        F('quantidade') * Coalesce(F('valor_unitario_es'), Value(Decimal('0.00'), output_field=DecimalField())), 
-        output_field=DecimalField()
-    )
+    def parse_date(date_str, default):
+        if not date_str: return default
+        for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
+            try: return datetime.strptime(date_str, fmt).date()
+            except ValueError: continue
+        return default
 
-    # --- 4. QuerySet Base (Histórico) ---
-    base_queryset_com_dados = ItemPedido.objects.exclude(
-        pedido__status='CANCELADO'
-    )
+    data_fim = timezone.localdate() if not data_fim_str or periodo_geral_solicitado else parse_date(data_fim_str, timezone.localdate())
+    data_inicio = datetime(2000, 1, 1).date() if periodo_geral_solicitado else parse_date(data_inicio_str, data_fim - timedelta(days=90))
+
+    # --- 2. FATURAMENTO REAL ERP (VendaReal) ---
+    # Aqui corrigimos o erro dos 915k aplicando o exclude de segurança
+    vendas_erp_qs = VendaReal.objects.exclude(Produto_Codigo__icontains='TOTAL')
     
-    # --- 5. QuerySet Filtrado (ANOTAÇÃO DE VALOR) ---
-    itens_filtrados = base_queryset_com_dados
-    
-    # APLICA O FILTRO DE DATA SOMENTE SE NÃO ESTIVER NO MODO HISTÓRICO TOTAL
     if not periodo_geral_solicitado:
-        itens_filtrados = itens_filtrados.filter(
-            **{f'{CAMPO_DATA_FILTRO}__gte': data_inicio, 
-               f'{CAMPO_DATA_FILTRO}__lte': data_fim}
-        ).exclude(
-            **{f'{CAMPO_DATA_FILTRO}__isnull': True} 
-        )
+        vendas_erp_qs = vendas_erp_qs.filter(Emissao__range=(data_inicio, data_fim))
     
-    # ANOTA O VALOR NO QUERYSET FINAL
+    total_faturamento_erp = vendas_erp_qs.aggregate(total=Sum('Total'))['total'] or Decimal('0.00')
+
+    # --- 3. Sugestões ERP para Cliente Específico ---
+    cliente_id_analise = request.GET.get('cliente')
+    sugestoes_erp = []
+    lista_clientes_filtro = WfClient.objects.only('client_id', 'client_name').order_by('client_name')
+
+    if cliente_id_analise:
+        try:
+            cliente_obj = WfClient.objects.get(pk=cliente_id_analise)
+            sugestoes_erp = VendaReal.objects.filter(
+                Codigo_Cliente=cliente_obj.client_code
+            ).exclude(Produto_Codigo__icontains='TOTAL').values(
+                'Produto_Codigo', 'Produto_Descricao'
+            ).annotate(
+                total_qtd=Sum('Quantidade'),
+                vezes_faturado=Count('id')
+            ).order_by('-total_qtd')[:10]
+        except WfClient.DoesNotExist:
+            pass
+
+    # --- 4. QuerySet Base do SITE (ItemPedido) ---
+    CAMPO_DATA_FILTRO = 'pedido__data_envio_solicitada'
+    base_queryset = ItemPedido.objects.select_related(
+        'pedido', 'pedido__cliente', 'produto', 'pedido__cliente__client_state'
+    ).exclude(pedido__status='CANCELADO')
+
+    if not periodo_geral_solicitado:
+        itens_filtrados = base_queryset.filter(
+            **{f"{CAMPO_DATA_FILTRO}__gte": data_inicio, f"{CAMPO_DATA_FILTRO}__lte": data_fim}
+        ).exclude(**{f"{CAMPO_DATA_FILTRO}__isnull": True})
+    else:
+        itens_filtrados = base_queryset
+
+    # Anotação de valores do site
+    valor_unit_pref = Coalesce(F('valor_unitario_sp'), F('valor_unitario_es'), Value(0, output_field=DecimalField()))
     itens_filtrados = itens_filtrados.annotate(
-        valor_total_item=calculo_total_preferencial 
+        valor_total_item=ExpressionWrapper(F('quantidade') * valor_unit_pref, output_field=DecimalField())
     )
 
-    # --- 6. Clientes que Mais Compraram (SEPARAÇÃO POR ESTADO) ---
-    def get_top_clients_by_state(uf_name):
-        return itens_filtrados.filter(
-            pedido__cliente__client_state__uf_name=uf_name
-        ).values(
-            'pedido__cliente__client_id',
-        ).annotate(
-            nome=F('pedido__cliente__client_name'),  
-            codigo=F('pedido__cliente__client_code'),
-            total_gasto=Sum('valor_total_item'), 
-            estado=Value(uf_name, output_field=CharField()), 
-            num_pedidos=Count('pedido__id', distinct=True) 
-        ).order_by('-total_gasto')[:5]
+    # --- 5. Rankings e Agregações ---
+    # Totais do Site
+    totais_site = itens_filtrados.aggregate(
+        total_periodo=Sum('valor_total_item'),
+        total_sp=Sum('valor_total_item', filter=Q(pedido__cliente__client_state__uf_name='SP')),
+        total_es=Sum('valor_total_item', filter=Q(pedido__cliente__client_state__uf_name='ES'))
+    )
 
-    clientes_top_sp = list(get_top_clients_by_state('SP'))
-    clientes_top_es = list(get_top_clients_by_state('ES'))
-    
-    # --- 7. Produtos Mais Vendidos ---
+    # NOVO: Produtos Mais Vendidos (Recuperado)
     produtos_top = itens_filtrados.values(
-        'produto__product_code', 
-        'produto__product_description'
-    ).annotate(
-        total_vendido=Sum('quantidade')
-    ).order_by('-total_vendido')[:5]
-    
-    # --- 8. Últimas Compras (placeholder) ---
-    clientes_com_ultima_compra = [] 
-    
-    # --- 9. TOTAIS DE VENDA POR CLIENTE/ESTADO (para os cartões) ---
-    total_vendas_sp_clientes = itens_filtrados.filter(
-        pedido__cliente__client_state__uf_name='SP'
-    ).aggregate(
-        total=Sum('valor_total_item')
-    )['total'] or Decimal('0.00')
+        'produto__product_code', 'produto__product_description'
+    ).annotate(total_vendido=Sum('quantidade')).order_by('-total_vendido')[:10]
 
-    total_vendas_es_clientes = itens_filtrados.filter(
-        pedido__cliente__client_state__uf_name='ES'
-    ).annotate(
-        valor_total_item_es=calculo_total_itempedido_es 
-    ).aggregate(
-        total=Sum('valor_total_item_es')
-    )['total'] or Decimal('0.00')
-    
-    # NOVO: Total Geral Filtrado (Soma de todos os estados no período)
-    total_vendas_periodo_calculado = itens_filtrados.aggregate(
-        total=Sum('valor_total_item')
-    )['total'] or Decimal('0.00')
-    
-    # --- 10. Vendas por Mês (Incluindo ES) ---
+    def get_top_clients(uf):
+        return list(itens_filtrados.filter(pedido__cliente__client_state__uf_name=uf)
+            .values('pedido__cliente__client_id', 'pedido__cliente__client_name', 'pedido__cliente__client_code')
+            .annotate(total_gasto=Sum('valor_total_item'), num_pedidos=Count('pedido__id', distinct=True))
+            .order_by('-total_gasto')[:5])
+
+    # --- 6. Vendas por Mês (Recuperado) ---
     vendas_por_mes = itens_filtrados.annotate(
-        mes_ano=TruncMonth(CAMPO_DATA_FILTRO),
-    ).values('mes_ano').annotate(
-        total_vendas=Sum('valor_total_item'),
-        total_vendas_es=Sum(calculo_total_itempedido_es)
-    ).order_by('mes_ano')
-    
-    # --- 11. Total Geral Histórico (TESTE) ---
-    # Este valor é o valor real do banco (usado para o card amarelo)
-    total_historico_teste = total_vendas_periodo_calculado 
-    
-    # --- 12. Montagem do Contexto ---
+        mes_ano=TruncMonth(CAMPO_DATA_FILTRO)
+    ).values('mes_ano').annotate(total_vendas=Sum('valor_total_item')).order_by('mes_ano')
+
     contexto = {
         'titulo': 'Dashboard de Análise de Dados',
-        'data_inicio': data_inicio_display, 
-        'data_fim': data_fim_display,
-        'clientes_top_sp': clientes_top_sp,
-        'clientes_top_es': clientes_top_es,
-        'produtos_top': produtos_top,
-        'clientes_com_ultima_compra': clientes_com_ultima_compra,
+        'data_inicio': data_inicio.strftime('%Y-%m-%d'),
+        'data_fim': data_fim.strftime('%Y-%m-%d'),
+        'total_faturamento_erp': total_faturamento_erp,  # VALOR REAL ERP (914k corrigido)
+        'total_vendas_periodo_calculado': totais_site['total_periodo'] or 0, # VALOR SITE
+        'total_vendas_sp_clientes': totais_site['total_sp'] or 0,
+        'total_vendas_es_clientes': totais_site['total_es'] or 0,
+        'clientes_top_sp': get_top_clients('SP'),
+        'clientes_top_es': get_top_clients('ES'),
+        'produtos_top': produtos_top,  # Ranking de produtos recuperado
         'vendas_por_mes': vendas_por_mes,
-        'total_vendas_sp_clientes': total_vendas_sp_clientes, 
-        'total_vendas_es_clientes': total_vendas_es_clientes, 
-        'total_vendas_periodo_calculado': total_vendas_periodo_calculado,
-        'total_historico_teste': total_historico_teste,
-        'periodo_geral_ativo': periodo_geral_solicitado
+        'sugestoes_erp': sugestoes_erp,
+        'lista_clientes_filtro': lista_clientes_filtro,
+        'cliente_selecionado_id': cliente_id_analise,
+        'periodo_geral_ativo': periodo_geral_solicitado,
     }
-    
     return render(request, 'analise/analise_dashboard.html', contexto)
 
-
-# Função cliente upload
 
 
 @login_required
@@ -2499,6 +2448,19 @@ def upload_pedido_cliente(request):
     except WfClient.DoesNotExist:
         messages.error(request, 'Seu usuário não possui um perfil de cliente vinculado.')
         return redirect('home')
+    
+    codigo_cliente_analise = request.GET.get('cliente_codigo') # Exemplo
+
+    sugestoes_erp = []
+    if codigo_cliente_analise:
+        sugestoes_erp = VendaReal.objects.filter(
+            Codigo_Cliente=codigo_cliente_analise
+        ).values(
+            'Produto_Codigo', 'Produto_Descricao'
+        ).annotate(
+            total_qtd=Sum('Quantidade'),
+            vezes_faturado=Count('id')
+        ).order_by('-total_qtd')[:10]
 
     # Dados iniciais baseados nas preferências do cliente
     initial_data = {
@@ -2770,13 +2732,16 @@ def upload_vendas_reais(request):
     if request.method == 'POST' and request.FILES.get('planilha_vendas'):
         file = request.FILES['planilha_vendas']
         try:
+            # Lemos a planilha garantindo que o pandas não crie linhas fantasmas
             df = pd.read_excel(file)
-            
-            # OTIMIZAÇÃO: Remove duplicatas dentro da própria planilha antes de processar
-            # Isso evita processar linhas idênticas desnecessariamente.
-            df = df.drop_duplicates(subset=['Emissão', 'Código_Cliente', 'Pedido', 'Produto_Código'])
-            
-            # 1. Carregamos todos os nomes de clientes em um dicionário (Cache em memória)
+            df = df.dropna(how='all')  # Remove linhas completamente vazias
+
+            # 1. LIMPEZA DE SEGURANÇA
+            # Para o Dashboard bater com o Excel, limpamos o que estava no banco antes
+            with transaction.atomic():
+                VendaReal.objects.all().delete() 
+
+            # 2. CACHE DE CLIENTES (Performance)
             clientes_dict = {
                 str(c.client_code): c.client_name 
                 for c in WfClient.objects.all().only('client_code', 'client_name')
@@ -2784,8 +2749,12 @@ def upload_vendas_reais(request):
 
             novas_vendas = []
             
-            # 2. Processamento rápido no loop
+            # 3. PROCESSAMENTO
             for _, row in df.iterrows():
+                # Validação básica para evitar erros de conversão em células vazias
+                if pd.isna(row['Código_Cliente']) or pd.isna(row['Total']):
+                    continue
+
                 cod_cliente_str = str(int(row['Código_Cliente']))
                 nome_cliente = clientes_dict.get(cod_cliente_str, f"Cod: {cod_cliente_str}")
 
@@ -2802,19 +2771,17 @@ def upload_vendas_reais(request):
                 )
                 novas_vendas.append(venda)
 
-            # 3. Salvamento em Lote com tratamento de duplicatas
-            with transaction.atomic():
-                # ignore_conflicts=True: Se o registro já existir no banco, ele pula e continua o próximo
-                VendaReal.objects.bulk_create(
-                    novas_vendas, 
-                    batch_size=500, 
-                    ignore_conflicts=True
-                )
-
-            messages.success(request, f'Importação finalizada. Itens novos adicionados com sucesso.')
+            # 4. SALVAMENTO EM LOTE
+            if novas_vendas:
+                with transaction.atomic():
+                    VendaReal.objects.bulk_create(novas_vendas, batch_size=500)
+                messages.success(request, f'Sucesso! {len(novas_vendas)} itens importados. O dashboard agora reflete exatamente esta planilha.')
+            else:
+                messages.warning(request, 'Nenhum dado válido encontrado na planilha.')
             
         except Exception as e:
-            messages.error(request, f'Erro ao processar: {e}')
+            messages.error(request, f'Erro crítico ao processar: {e}')
+        
         return redirect('dashboard_admin')
 
     return render(request, 'analise/upload_vendas_reais.html')

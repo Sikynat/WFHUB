@@ -11,6 +11,7 @@
     .nav-pills .nav-link.active { background-color: #4361ee; color: white; box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3); }
     /* Estilo para os cards de clientes por dia */
     .day-card { border-top: 4px solid #4361ee; background: #f8fafc; }
+    .bg-soft-primary { background-color: rgba(67, 97, 238, 0.1); }
 </style>
 
 <div class="container-fluid py-4">
@@ -23,40 +24,43 @@
 
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body bg-light rounded shadow-sm py-3">
-            <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="small fw-bold text-muted mb-1 text-uppercase" style="font-size: 0.65rem;">Mês de Referência</label>
-                    <select name="mes" class="form-select border-0 shadow-sm">
-                        <option value="1" {% if mes_atual == 1 %}selected{% endif %}>Janeiro</option>
-                        <option value="2" {% if mes_atual == 2 %}selected{% endif %}>Fevereiro</option>
-                        <option value="3" {% if mes_atual == 3 %}selected{% endif %}>Março</option>
-                        <option value="4" {% if mes_atual == 4 %}selected{% endif %}>Abril</option>
-                        <option value="5" {% if mes_atual == 5 %}selected{% endif %}>Maio</option>
-                        <option value="6" {% if mes_atual == 6 %}selected{% endif %}>Junho</option>
-                        <option value="7" {% if mes_atual == 7 %}selected{% endif %}>Julho</option>
-                        <option value="8" {% if mes_atual == 8 %}selected{% endif %}>Agosto</option>
-                        <option value="9" {% if mes_atual == 9 %}selected{% endif %}>Setembro</option>
-                        <option value="10" {% if mes_atual == 10 %}selected{% endif %}>Outubro</option>
-                        <option value="11" {% if mes_atual == 11 %}selected{% endif %}>Novembro</option>
-                        <option value="12" {% if mes_atual == 12 %}selected{% endif %}>Dezembro</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="small fw-bold text-muted mb-1 text-uppercase" style="font-size: 0.65rem;">Ano</label>
-                    <select name="ano" class="form-select border-0 shadow-sm">
-                        {% for ano in lista_anos %}
-                            <option value="{{ ano }}" {% if ano_atual == ano %}selected{% endif %}>{{ ano }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <button type="submit" class="btn btn-primary w-100 shadow-sm fw-bold">
-                        <i class="fas fa-filter me-2"></i>Filtrar Resultados
-                    </button>
-                </div>
-            </form>
+    <form method="GET" class="row g-2 align-items-end">
+
+
+        <div class="col-md-3">
+            <label class="small fw-bold text-muted mb-1 text-uppercase" style="font-size: 0.65rem;">Mês de Referência</label>
+            <select name="mes" class="form-select border-0 shadow-sm">
+                <option value="1" {% if mes_atual == 1 %}selected{% endif %}>Janeiro</option>
+                <option value="2" {% if mes_atual == 2 %}selected{% endif %}>Fevereiro</option>
+                <option value="3" {% if mes_atual == 3 %}selected{% endif %}>Março</option>
+                <option value="4" {% if mes_atual == 4 %}selected{% endif %}>Abril</option>
+                <option value="5" {% if mes_atual == 5 %}selected{% endif %}>Maio</option>
+                <option value="6" {% if mes_atual == 6 %}selected{% endif %}>Junho</option>
+                <option value="7" {% if mes_atual == 7 %}selected{% endif %}>Julho</option>
+                <option value="8" {% if mes_atual == 8 %}selected{% endif %}>Agosto</option>
+                <option value="9" {% if mes_atual == 9 %}selected{% endif %}>Setembro</option>
+                <option value="10" {% if mes_atual == 10 %}selected{% endif %}>Outubro</option>
+                <option value="11" {% if mes_atual == 11 %}selected{% endif %}>Novembro</option>
+                <option value="12" {% if mes_atual == 12 %}selected{% endif %}>Dezembro</option>
+            </select>
         </div>
-    </div>
+
+        <div class="col-md-3">
+            <label class="small fw-bold text-muted mb-1 text-uppercase" style="font-size: 0.65rem;">Ano</label>
+            <select name="ano" class="form-select border-0 shadow-sm">
+                {% for ano in lista_anos %}
+                    <option value="{{ ano }}" {% if ano_atual == ano %}selected{% endif %}>{{ ano }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100 shadow-sm fw-bold">
+                <i class="fas fa-filter me-2"></i>Filtrar Resultados
+            </button>
+        </div>
+    </form>
+</div>
 
     <ul class="nav nav-pills mb-4 gap-2" id="pills-tab" role="tablist">
         <li class="nav-item">
@@ -64,6 +68,7 @@
                 <i class="fas fa-chart-line me-2"></i>Visão Comercial
             </button>
         </li>
+     
         <li class="nav-item">
             <button class="nav-link" id="pills-logistica-tab" data-bs-toggle="pill" data-bs-target="#pills-logistica" type="button" role="tab">
                 <i class="fas fa-truck-loading me-2"></i>Logística & Heatmap
@@ -77,6 +82,8 @@
     </ul>
 
     <div class="tab-content" id="pills-tabContent">
+
+        
         
         <div class="tab-pane fade show active" id="pills-comercial" role="tabpanel">
             <div class="row g-3 mb-4">
@@ -183,7 +190,6 @@
                                         <th>Cliente</th>
                                         <th class="text-center">Faturado no Período</th>
                                         <th class="text-end">Histórico Total</th>
-                                      
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -193,7 +199,6 @@
                                         <td class="fw-bold">{{ c.nome|truncatechars:60 }}</td>
                                         <td class="text-center fw-bold text-danger">R$ {{ c.mes_atual_formatado }}</td>
                                         <td class="text-end text-muted">R$ {{ c.total_formatado }}</td>
-                                      
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -204,59 +209,55 @@
             </div>
         </div>
 
-       
         <div class="tab-pane fade" id="pills-logistica" role="tabpanel">
-    <div class="row g-4">
-        <div class="col-12">
-            <div class="metric-card p-4">
-                <h5 class="fw-bold mb-4 text-dark"><i class="fas fa-calendar-week text-info me-2"></i> Concentração Logística Semanal</h5>
-                <div style="height: 350px;">
-                    <canvas id="graficoSemana"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-12">
-            <h5 class="fw-bold mb-3 mt-2 text-dark">
-                <i class="fas fa-truck-moving text-primary me-2"></i> Comportamento de compra semanal
-            </h5>
-            <div class="row g-3">
-                {% for item in ranking_logistica_dia %}
-                <div class="col-md">
-                    <div class="metric-card h-100 border-0 shadow-sm" style="background: #fdfdfd; border-radius: 12px; overflow: hidden;">
-                        <div class="p-2 text-center {% if item.clientes %}bg-primary text-white{% else %}bg-light text-muted{% endif %}" style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
-                            {{ item.dia }}
-                        </div>
-                        
-                        <div class="p-3">
-                            {% for c in item.clientes %}
-                            <div class="mb-3 p-2 border-start border-3 {% if forloop.first %}border-warning{% else %}border-info{% endif %}" style="background: white; box-shadow: 2px 2px 8px rgba(0,0,0,0.02); border-radius: 4px;">
-                                <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <span class="text-dark fw-bold" style="font-size: 0.75rem; line-height: 1.2;">{{ c.nome|truncatechars:22 }}</span>
-                                    {% if forloop.first %}
-                                        <i class="fas fa-star text-warning" style="font-size: 0.6rem;" title="Principal do dia"></i>
-                                    {% endif %}
-                                </div>
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <span class="badge bg-light text-primary fw-bold" style="font-size: 0.65rem;">
-                                        R$ {{ c.valor }}
-                                    </span>
-                                </div>
-                            </div>
-                            {% empty %}
-                            <div class="text-center py-4 opacity-50">
-                                <i class="fas fa-box-open d-block mb-2 text-muted"></i>
-                                <span class="text-muted small italic" style="font-size: 0.7rem;">Sem faturamento</span>
-                            </div>
-                            {% endfor %}
+            <div class="row g-4">
+                <div class="col-12">
+                    <div class="metric-card p-4">
+                        <h5 class="fw-bold mb-4 text-dark"><i class="fas fa-calendar-week text-info me-2"></i> Concentração Logística Semanal</h5>
+                        <div style="height: 350px;">
+                            <canvas id="graficoSemana"></canvas>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
+
+                <div class="col-12">
+                    <h5 class="fw-bold mb-3 mt-2 text-dark">
+                        <i class="fas fa-truck-moving text-primary me-2"></i> Comportamento de compra semanal
+                    </h5>
+                    <div class="row g-3">
+                        {% for item in ranking_logistica_dia %}
+                        <div class="col-md">
+                            <div class="metric-card h-100 border-0 shadow-sm" style="background: #fdfdfd; border-radius: 12px; overflow: hidden;">
+                                <div class="p-2 text-center {% if item.clientes %}bg-primary text-white{% else %}bg-light text-muted{% endif %}" style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
+                                    {{ item.dia }}
+                                </div>
+                                <div class="p-3">
+                                    {% for c in item.clientes %}
+                                    <div class="mb-3 p-2 border-start border-3 {% if forloop.first %}border-warning{% else %}border-info{% endif %}" style="background: white; box-shadow: 2px 2px 8px rgba(0,0,0,0.02); border-radius: 4px;">
+                                        <div class="d-flex justify-content-between align-items-start mb-1">
+                                            <span class="text-dark fw-bold" style="font-size: 0.75rem; line-height: 1.2;">Cod: {{ c.codigo }}</span>
+                                            {% if forloop.first %}
+                                                <i class="fas fa-star text-warning" style="font-size: 0.6rem;" title="Principal do dia"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <span class="badge bg-light text-primary fw-bold" style="font-size: 0.65rem;">R$ {{ c.valor }}</span>
+                                        </div>
+                                    </div>
+                                    {% empty %}
+                                    <div class="text-center py-4 opacity-50">
+                                        <i class="fas fa-box-open d-block mb-2 text-muted"></i>
+                                        <span class="text-muted small italic" style="font-size: 0.7rem;">Sem faturamento</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
         <div class="tab-pane fade" id="pills-saude" role="tabpanel">
             <div class="row">
@@ -278,21 +279,16 @@
                                         <th class="text-center">Sem comprar há</th>
                                         <th class="text-center">Status de Atraso</th>
                                         <th class="text-end">Última Compra</th>
-                                       
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for c in saude_base %}
                                     <tr>
-                                        <td>
-                                            <strong>{{ c.nome }}</strong><br>
-                                            <span class="text-muted small">Cód: {{ c.codigo }}</span>
-                                        </td>
+                                        <td><strong>{{ c.nome }}</strong><br><span class="text-muted small">Cód: {{ c.codigo }}</span></td>
                                         <td class="text-center">{{ c.media_habito }} dias</td>
                                         <td class="text-center fw-bold text-danger">{{ c.dias_sem_comprar }} dias</td>
                                         <td class="text-center"><span class="badge bg-danger-subtle text-danger">+{{ c.atraso }} dias</span></td>
                                         <td class="text-end text-muted">{{ c.ultima_data }}</td>
-                                    
                                     </tr>
                                     {% empty %}
                                     <tr><td colspan="6" class="text-center py-4 text-muted">Toda a base está com o hábito de compra em dia! 🚀</td></tr>
