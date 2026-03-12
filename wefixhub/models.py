@@ -316,3 +316,26 @@ class VendaReal(models.Model):
         db_table = 'wf_vendas_reais'
         # Agora a chave única inclui o Produto_Codigo, permitindo múltiplos itens por pedido
         unique_together = ('Emissao', 'Codigo_Cliente', 'Pedido', 'Produto_Codigo')
+
+
+class StatusPedidoERP(models.Model):
+    # Dados extraídos do PDF
+    emissao = models.DateField(verbose_name="Data de Emissão")
+    numero_pedido = models.CharField(max_length=50, db_index=True, verbose_name="Número do Pedido")
+    cod_cliente = models.CharField(max_length=20, verbose_name="Cód. Cliente")
+    nome_cliente = models.CharField(max_length=255, verbose_name="Nome do Cliente")
+    situacao = models.CharField(max_length=100, verbose_name="Situação/Status")
+    expedido = models.BooleanField(default=False, verbose_name="Expedido?")
+    
+    # Metadados para controle de histórico
+    data_importacao = models.DateTimeField(auto_now_add=True, verbose_name="Data do Upload")
+    
+    class Meta:
+        db_table = 'wf_status_pedidos_erp'
+        verbose_name = 'Status Pedido ERP'
+        verbose_name_plural = 'Status Pedidos ERP'
+        # Ordenação padrão: mais recentes primeiro
+        ordering = ['-data_importacao', '-numero_pedido']
+
+    def __str__(self):
+        return f"Pedido {self.numero_pedido} - {self.situacao}"

@@ -17,122 +17,48 @@
         font-family: 'Inter', -apple-system, sans-serif;
     }
 
-    /* Título e Header */
-    .dashboard-header {
-        margin-bottom: 2rem;
-        padding: 1rem 0;
-    }
+    .dashboard-header { margin-bottom: 2rem; padding: 1rem 0; }
 
-    /* Cards de Métricas Estilo SaaS */
     .metric-card {
-        background: white;
-        border: none;
-        border-radius: 16px;
-        box-shadow: var(--card-shadow);
-        transition: all 0.3s ease;
-        overflow: hidden;
-        position: relative;
+        background: white; border: none; border-radius: 16px;
+        box-shadow: var(--card-shadow); transition: all 0.3s ease;
+        overflow: hidden; position: relative;
     }
 
-    .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
-    }
+    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08); }
 
     .metric-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.25rem;
-        margin-bottom: 1rem;
+        width: 48px; height: 48px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.25rem; margin-bottom: 1rem;
     }
 
-    .metric-value {
-        font-size: 1.75rem;
-        font-weight: 700;
-        margin-bottom: 0.25rem;
-        color: var(--text-main);
-    }
+    .metric-value { font-size: 1.75rem; font-weight: 700; color: var(--text-main); }
+    .metric-label { color: var(--text-muted); font-weight: 500; font-size: 0.875rem; text-transform: uppercase; }
 
-    .metric-label {
-        color: var(--text-muted);
-        font-weight: 500;
-        font-size: 0.875rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
+    .faturamento-card { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); color: white; }
+    .faturamento-card .metric-label, .faturamento-card .metric-value { color: white; }
 
-    /* Card de Faturamento Especial (Destaque) */
-    .faturamento-card {
-        background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
-        color: white;
-    }
-
-    .faturamento-card .metric-label {
-        color: rgba(255, 255, 255, 0.7);
-    }
-
-    .faturamento-card .metric-value {
-        color: white;
-    }
-
-    /* Grid de Status Minimalista */
     .status-pill {
-        background: white;
-        border-radius: 12px;
-        padding: 1.25rem;
-        border: 1px solid rgba(0,0,0,0.03);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        background: white; border-radius: 12px; padding: 1.25rem;
+        border: 1px solid rgba(0,0,0,0.03); box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        display: flex; justify-content: space-between; align-items: center;
     }
 
-    .status-count {
-        font-weight: 700;
-        font-size: 1.25rem;
-    }
+    .status-count { font-weight: 700; font-size: 1.25rem; }
+    .status-name { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
 
-    .status-name {
-        font-size: 0.85rem;
-        color: var(--text-muted);
-        font-weight: 500;
-    }
-
-    /* Botões de Ação Rápida */
     .action-btn {
-        background: white;
-        border-radius: 12px;
-        padding: 1rem;
-        border: 1px solid #edf2f7;
-        text-decoration: none;
-        color: var(--text-main);
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        background: white; border-radius: 12px; padding: 1rem; border: 1px solid #edf2f7;
+        text-decoration: none; color: var(--text-main); transition: all 0.2s;
+        display: flex; align-items: center; gap: 12px;
     }
 
-    .action-btn:hover {
-        background: #f1f5f9;
-        color: var(--accent-color);
-        border-color: var(--accent-color);
-    }
-
-    .action-icon {
-        color: var(--accent-color);
-        background: rgba(67, 97, 238, 0.1);
-        padding: 8px;
-        border-radius: 8px;
-    }
-
+    .action-btn:hover { background: #f1f5f9; color: var(--accent-color); border-color: var(--accent-color); }
+    .action-icon { color: var(--accent-color); background: rgba(67, 97, 238, 0.1); padding: 8px; border-radius: 8px; }
 </style>
 
 <div class="container py-4">
-    
     <div class="dashboard-header d-flex justify-content-between align-items-center">
         <div>
             <h2 class="fw-bold mb-0">Overview Administrativo</h2>
@@ -148,27 +74,21 @@
     <div class="row g-4 mb-5">
         <div class="col-md-4">
             <div class="card metric-card p-4">
-                <div class="metric-icon" style="background: rgba(67, 97, 238, 0.1); color: #4361ee;">
-                    <i class="fas fa-users"></i>
-                </div>
+                <div class="metric-icon" style="background: rgba(67, 97, 238, 0.1); color: #4361ee;"><i class="fas fa-users"></i></div>
                 <div class="metric-label">Total de Clientes</div>
                 <div class="metric-value">{{ total_clientes }}</div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card metric-card p-4">
-                <div class="metric-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
-                    <i class="fas fa-shopping-cart"></i>
-                </div>
+                <div class="metric-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-shopping-cart"></i></div>
                 <div class="metric-label">Pedidos do Site</div>
                 <div class="metric-value">{{ total_pedidos }}</div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card metric-card faturamento-card p-4">
-                <div class="metric-icon" style="background: rgba(255, 255, 255, 0.2); color: white;">
-                    <i class="fas fa-wallet"></i>
-                </div>
+                <div class="metric-icon" style="background: rgba(255, 255, 255, 0.2); color: white;"><i class="fas fa-wallet"></i></div>
                 <div class="metric-label">Faturamento Real (ERP)</div>
                 <div class="metric-value">R$ {{ total_vendas }}</div>
                 <div class="mt-3 d-flex gap-3">
@@ -184,76 +104,98 @@
         <div class="col-md-4">
             <a href="{% url 'dashboard_analise' %}" class="action-btn shadow-sm">
                 <div class="action-icon"><i class="fas fa-chart-pie"></i></div>
-                <div>
-                    <div class="fw-bold">Inteligência de Dados</div>
-                    <div class="small text-muted">Rankings e Tendências</div>
-                </div>
+                <div><div class="fw-bold">Inteligência de Dados</div><div class="small text-muted">Rankings e Tendências</div></div>
             </a>
         </div>
         <div class="col-md-4">
             <a href="{% url 'listar_vendas_reais' %}" class="action-btn shadow-sm">
                 <div class="action-icon"><i class="fas fa-history"></i></div>
-                <div>
-                    <div class="fw-bold">Histórico ERP</div>
-                    <div class="small text-muted">Auditoria de Vendas</div>
-                </div>
+                <div><div class="fw-bold">Histórico ERP</div><div class="small text-muted">Auditoria de Vendas</div></div>
             </a>
         </div>
         <div class="col-md-4">
-            <a href="{% url 'exportar_pedidos_excel' %}" class="action-btn shadow-sm">
-                <div class="action-icon"><i class="fas fa-download"></i></div>
-                <div>
-                    <div class="fw-bold">Exportar Site</div>
-                    <div class="small text-muted">Download XLS de Pedidos</div>
-                </div>
+            <a href="{% url 'upload_status_pdf' %}" class="action-btn shadow-sm">
+                <div class="action-icon" style="background-color: #e74c3c; color: white;"><i class="fas fa-file-pdf"></i></div>
+                <div><div class="fw-bold">Status Logística</div><div class="small text-muted">Importar PDF do ERP</div></div>
+            </a>
+        </div>
+    </div>
+    <div class="col-md-4">
+    <a href="{% url 'listar_status_erp' %}" class="action-btn shadow-sm">
+        <div class="action-icon" style="background-color: rgba(16, 185, 129, 0.1); color: #10b981;">
+            <i class="fas fa-list-check"></i>
+        </div>
+        <div>
+            <div class="fw-bold">Monitoramento ERP</div>
+            <div class="small text-muted">Auditoria de Status Importados</div>
+        </div>
+    </a>
+
+</div>
+
+    <hr>
+    
+
+    <h5 class="fw-bold mb-3">Fluxo de Pedidos (Site)</h5>
+    <div class="row g-3 mb-5">
+        <div class="col-md-3"><div class="status-pill"><span class="status-name">Pendentes</span><span class="status-count text-danger">{{ pedidos_pendentes }}</span></div></div>
+        <div class="col-md-3"><div class="status-pill"><span class="status-name">Orçamentos</span><span class="status-count text-warning">{{ pedidos_orcamento }}</span></div></div>
+        <div class="col-md-3"><div class="status-pill"><span class="status-name">Financ/Crédito</span><span class="status-count text-info">{{ pedidos_adc }}</span></div></div>
+        <div class="col-md-3"><div class="status-pill"><span class="status-name">Separação</span><span class="status-count text-primary">{{ pedidos_separacao }}</span></div></div>
+        <div class="col-md-3"><div class="status-pill"><span class="status-name">Expedição</span><span class="status-count text-dark">{{ pedidos_expedicao }}</span></div></div>
+        <div class="col-md-3"><div class="status-pill"><span class="status-name">Concluídos</span><span class="status-count text-success">{{ pedidos_concluidos }}</span></div></div>
+        <div class="col-md-3"><div class="status-pill" style="border-left: 4px solid #ef4444;"><span class="status-name">Atrasados</span><span class="status-count text-danger">{{ pedidos_atrasados }}</span></div></div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0">Tabela de Controle</h5>
+        <div class="btn-group shadow-sm">
+            <a href="{% url 'dashboard_admin' %}" class="btn btn-sm btn-white {% if not filtro_ativo %}active{% endif %}" style="border: 1px solid #edf2f7;">Recentes</a>
+            <a href="{% url 'dashboard_admin' %}?filtro=sincronizados" class="btn btn-sm btn-white {% if filtro_ativo == 'sincronizados' %}active{% endif %}" style="border: 1px solid #edf2f7;">
+                <i class="fas fa-sync-alt me-1 text-primary"></i> Sincronizados ERP
             </a>
         </div>
     </div>
 
-    <h5 class="fw-bold mb-3">Fluxo de Pedidos (Site)</h5>
-    <div class="row g-3">
-        <div class="col-md-3">
-            <div class="status-pill">
-                <span class="status-name">Pendentes</span>
-                <span class="status-count text-danger">{{ pedidos_pendentes }}</span>
-            </div>
+    <div class="card metric-card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4 border-0">Pedido</th>
+                        <th class="border-0">Cliente</th>
+                        <th class="border-0">Data</th>
+                        <th class="border-0">Status</th>
+                        <th class="text-end pe-4 border-0">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pedido in pedidos_recentes %}
+                    <tr {% if pedido.is_sincronizado %}class="table-success"{% endif %}>
+                        <td class="ps-4 fw-bold">#{{ pedido.id }}</td>
+                        <td>{{ pedido.cliente.client_name }}</td>
+                        <td class="text-muted small">{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <span class="badge rounded-pill 
+                                {% if pedido.status == 'FINALIZADO' %}bg-success
+                                {% elif pedido.status == 'PENDENTE' %}bg-danger
+                                {% else %}bg-primary{% endif %}">
+                                {{ pedido.status_display }}
+                            </span>
+                        </td>
+                        <td class="text-end pe-4 fw-bold">R$ {{ pedido.total_str }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center py-4 text-muted">Nenhum pedido encontrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        <div class="col-md-3">
-            <div class="status-pill">
-                <span class="status-name">Orçamentos</span>
-                <span class="status-count text-warning">{{ pedidos_orcamento }}</span>
-            </div>
+        {% if not filtro_ativo %}
+        <div class="card-footer bg-white text-center py-3 border-0">
+            <a href="{% url 'todos_os_pedidos' %}" class="text-decoration-none small fw-bold">Ver todos os pedidos do site</a>
         </div>
-        <div class="col-md-3">
-            <div class="status-pill">
-                <span class="status-name">Financ/Crédito</span>
-                <span class="status-count text-info">{{ pedidos_adc }}</span>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="status-pill">
-                <span class="status-name">Separação</span>
-                <span class="status-count text-primary">{{ pedidos_separacao }}</span>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="status-pill">
-                <span class="status-name">Expedição</span>
-                <span class="status-count text-dark">{{ pedidos_expedicao }}</span>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="status-pill">
-                <span class="status-name">Concluídos</span>
-                <span class="status-count text-success">{{ pedidos_concluidos }}</span>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="status-pill" style="border-left: 4px solid #ef4444;">
-                <span class="status-name">Atrasados</span>
-                <span class="status-count text-danger">{{ pedidos_atrasados }}</span>
-            </div>
-        </div>
+        {% endif %}
     </div>
 
 </div>

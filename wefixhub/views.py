@@ -69,8 +69,9 @@ from decimal import Decimal
 import json
 import calendar
 from datetime import date
-
-
+from .models import StatusPedidoERP
+import pdfplumber
+import re
 
 try:
     # Tenta definir o locale ideal
@@ -680,59 +681,75 @@ import locale
 
 @staff_member_required
 def dashboard_admin(request):
+    # --- NOVO: Lógica de Filtro ---
+    filtro = request.GET.get('filtro')
+    hoje = timezone.localdate()
+
     # 1. CÁLCULO DO FATURAMENTO REAL (ERP)
     total_faturamento_real = VendaReal.objects.aggregate(
         total=Sum('Total')
     )['total'] or Decimal('0.00')
-
-    # FORMATANDO O VALOR PARA STRING (Evita erro de casas decimais no HTML)
     faturamento_formatado = "{:,.2f}".format(float(total_faturamento_real)).replace(",", "X").replace(".", ",").replace("X", ".")
 
     # 2. MÉTRICAS DO SITE
     total_clientes = WfClient.objects.count()
     total_pedidos = Pedido.objects.count()
     
-    pedidos_pendentes = Pedido.objects.filter(status='PENDENTE').count()
-    pedidos_concluidos = Pedido.objects.filter(status='FINALIZADO').count()
-    pedidos_orcamento = Pedido.objects.filter(status='ORCAMENTO').count()
-    pedidos_adc = Pedido.objects.filter(status='FINANCEIRO').count()
-    pedidos_separacao = Pedido.objects.filter(status='SEPARACAO').count()
-    pedidos_expedicao = Pedido.objects.filter(status='EXPEDICAO').count()
-    pedidos_atrasados = Pedido.objects.filter(status='ATRASADO').count()
+    # Contagens para os cards de status
+    metricas_status = {
+        'pendentes': Pedido.objects.filter(status='PENDENTE').count(),
+        'concluidos': Pedido.objects.filter(status='FINALIZADO').count(),
+        'orcamento': Pedido.objects.filter(status='ORCAMENTO').count(),
+        'adc': Pedido.objects.filter(status='FINANCEIRO').count(),
+        'separacao': Pedido.objects.filter(status='SEPARACAO').count(),
+        'expedicao': Pedido.objects.filter(status='EXPEDICAO').count(),
+        'atrasados': Pedido.objects.filter(status='ATRASADO').count(),
+    }
     
-    # 3. PEDIDOS RECENTES (FORMATANDO OS VALORES DA TABELA TAMBÉM)
-    pedidos_recentes_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
+    # 3. FILTRAGEM DE PEDIDOS (PARA A TABELA)
+    # Se o filtro 'sincronizados' estiver ativo, mostra pedidos atualizados hoje nos status do ERP
+    if filtro == 'sincronizados':
+        status_erp = ['SEPARACAO', 'EXPEDICAO', 'FINALIZADO']
+        # Nota: Filtramos por pedidos que foram modificados hoje
+        pedidos_qs = Pedido.objects.filter(
+            status__in=status_erp, 
+            data_criacao__date=hoje # No seu modelo atual, usamos data_criacao como referência
+        ).order_by('-data_criacao')[:20]
+    else:
+        pedidos_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
+    
     pedidos_com_total = []
-    
-    for pedido in pedidos_recentes_qs:
+    for pedido in pedidos_qs:
         total_pedido = float(pedido.get_total_geral() or 0)
-        # Formata cada subtotal da tabela recente
         total_p_formatado = "{:,.2f}".format(total_pedido).replace(",", "X").replace(".", ",").replace("X", ".")
         
         pedidos_com_total.append({
             'id': pedido.id,
             'cliente': pedido.cliente,
             'data_criacao': pedido.data_criacao,
-            'total_str': total_p_formatado # Enviamos como string formatada
+            'status': pedido.status,
+            'status_display': pedido.get_status_display(),
+            'total_str': total_p_formatado,
+            'is_sincronizado': filtro == 'sincronizados'
         })
         
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': total_clientes,
         'total_pedidos': total_pedidos,
-        'total_vendas': faturamento_formatado, # String: "662.061,12"
+        'total_vendas': faturamento_formatado,
         'pedidos_recentes': pedidos_com_total,
-        'pedidos_pendentes': pedidos_pendentes,
-        'pedidos_concluidos': pedidos_concluidos,
-        'pedidos_orcamento': pedidos_orcamento,
-        'pedidos_adc': pedidos_adc,
-        'pedidos_separacao': pedidos_separacao,
-        'pedidos_expedicao': pedidos_expedicao,
-        'pedidos_atrasados': pedidos_atrasados,
+        'pedidos_pendentes': metricas_status['pendentes'],
+        'pedidos_concluidos': metricas_status['concluidos'],
+        'pedidos_orcamento': metricas_status['orcamento'],
+        'pedidos_adc': metricas_status['adc'],
+        'pedidos_separacao': metricas_status['separacao'],
+        'pedidos_expedicao': metricas_status['expedicao'],
+        'pedidos_atrasados': metricas_status['atrasados'],
+        'filtro_ativo': filtro,
     }
     
     return render(request, 'dashboard.html', contexto)
-
 
 
 
@@ -2755,8 +2772,11 @@ def upload_vendas_reais(request):
         try:
             df = pd.read_excel(file)
             
+            # OTIMIZAÇÃO: Remove duplicatas dentro da própria planilha antes de processar
+            # Isso evita processar linhas idênticas desnecessariamente.
+            df = df.drop_duplicates(subset=['Emissão', 'Código_Cliente', 'Pedido', 'Produto_Código'])
+            
             # 1. Carregamos todos os nomes de clientes em um dicionário (Cache em memória)
-            # Isso evita milhares de SELECTs individuais
             clientes_dict = {
                 str(c.client_code): c.client_name 
                 for c in WfClient.objects.all().only('client_code', 'client_name')
@@ -2764,12 +2784,11 @@ def upload_vendas_reais(request):
 
             novas_vendas = []
             
-            # 2. Processamento rápido no loop (apenas Python, sem banco)
+            # 2. Processamento rápido no loop
             for _, row in df.iterrows():
                 cod_cliente_str = str(int(row['Código_Cliente']))
                 nome_cliente = clientes_dict.get(cod_cliente_str, f"Cod: {cod_cliente_str}")
 
-                # Criamos a instância do objeto (sem salvar ainda)
                 venda = VendaReal(
                     Emissao=pd.to_datetime(row['Emissão'], dayfirst=True).date(),
                     Codigo_Cliente=int(row['Código_Cliente']),
@@ -2783,15 +2802,16 @@ def upload_vendas_reais(request):
                 )
                 novas_vendas.append(venda)
 
-            # 3. Salvamento em Lote (Atomico e Único)
+            # 3. Salvamento em Lote com tratamento de duplicatas
             with transaction.atomic():
-                # Opcional: Limpar dados antigos se for uma carga total
-                # VendaReal.objects.all().delete() 
-                
-                # Salva de 500 em 500 para não estourar a memória do banco
-                VendaReal.objects.bulk_create(novas_vendas, batch_size=500)
+                # ignore_conflicts=True: Se o registro já existir no banco, ele pula e continua o próximo
+                VendaReal.objects.bulk_create(
+                    novas_vendas, 
+                    batch_size=500, 
+                    ignore_conflicts=True
+                )
 
-            messages.success(request, f'Sucesso! {len(novas_vendas)} itens importados com alta performance.')
+            messages.success(request, f'Importação finalizada. Itens novos adicionados com sucesso.')
             
         except Exception as e:
             messages.error(request, f'Erro ao processar: {e}')
@@ -3084,4 +3104,164 @@ def exportar_meus_itens_excel(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     response['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
+
+@staff_member_required
+def upload_status_pdf(request):
+    if request.method == 'POST' and request.FILES.get('pdf_file'):
+        pdf_file = request.FILES['pdf_file']
+        novos_status_preparados = []
+        
+        # Mapeamento expandido para incluir o bloqueio de preço
+        MAP_SINC_STATUS = {
+            '4-Bloqueado Separação': 'SEPARACAO',
+            '6-Pronto para Faturar': 'EXPEDICAO',
+            '8-Faturado': 'FINALIZADO',
+            '2-Bloqueado Crédito': 'FINANCEIRO',
+            '1-Bloqueado Preço': 'PRECO',  # Adicionado para evitar 'não identificado' 
+        }
+
+        try:
+            import pdfplumber
+            from datetime import datetime
+            from django.db import transaction
+            import re
+
+            with pdfplumber.open(pdf_file) as pdf:
+                for pagina in pdf.pages:
+                    tabela = pagina.extract_table({"vertical_strategy": "text", "horizontal_strategy": "text", "snap_tolerance": 4})
+                    if not tabela: continue
+                        
+                    for linha in tabela:
+                        l = [str(c).strip() for c in linha if c and str(c).strip() != ""]
+                        
+                        # Uma linha válida DEVE começar com a data (dd/mm/aaaa) [cite: 39, 40]
+                        if len(l) >= 4 and re.match(r'\d{2}/\d{2}/\d{4}', l[0]) and l[1].isdigit():
+                            
+                            # Juntamos TUDO para garantir que palavras picadas sejam achadas [cite: 76, 77]
+                            linha_texto = " ".join(l).upper()
+
+                            # --- IDENTIFICAÇÃO DO STATUS (Hieraquia Corrigida) ---
+                            # Crédito e Preço devem ser checados primeiro 
+                            if any(x in linha_texto for x in ['CREAITA', 'CREDITO', 'CRÉDITO', 'BLOQUENDA']):
+                                status_pdf = '2-Bloqueado Crédito'
+                            elif 'PREÇO' in linha_texto or 'PRECO' in linha_texto:
+                                status_pdf = '1-Bloqueado Preço'  # Correção aplicada 
+                            elif 'EPARAÇ' in linha_texto:
+                                status_pdf = '4-Bloqueado Separação'
+                            elif 'PRONTO' in linha_texto:
+                                status_pdf = '6-Pronto para Faturar'
+                            elif any(x in linha_texto for x in ['FATURADO', '8=', '8-']):
+                                status_pdf = '8-Faturado'
+                            else:
+                                status_pdf = "Status não identificado"
+
+                            # --- EXTRAÇÃO DO CLIENTE (Pulando Charles/Vendedor) ---
+                            miolo_cliente = " ".join(l[3:-1]) 
+                            
+                            match_cliente = re.search(r'(\d+)\s*[-–—]\s*([A-Z\s&]{3,})', miolo_cliente)
+                            
+                            if match_cliente:
+                                cod_c = match_cliente.group(1)
+                                nome_c = match_cliente.group(2).strip()
+                            else:
+                                match_fallback = re.search(r'(\d+)\s+([A-Z\s&]{4,})', miolo_cliente)
+                                cod_c = match_fallback.group(1) if match_fallback else ""
+                                nome_c = match_fallback.group(2).strip() if match_fallback else miolo_cliente
+
+                            # Limpeza de nomes e ruídos (CPFs/Datas) [cite: 40, 41]
+                            nome_c = nome_c.replace("  ", " ").replace("CARL OS", "CARLOS").replace("AL VES", "ALVES")
+                            nome_c = re.sub(r'\s*\d{11}.*', '', nome_c) 
+                            nome_c = re.sub(r'\d{2}/\d{2}/\d{4}.*', '', nome_c).strip()
+
+                            novos_status_preparados.append({
+                                'emissao': datetime.strptime(l[0], '%d/%m/%Y').date(),
+                                'numero_pedido': l[1],
+                                'cod_cliente': cod_c,
+                                'nome_cliente': nome_c[:255],
+                                'situacao': status_pdf,
+                                'expedido': any(x in l[-1].upper() for x in ['SIM', 'SIRM', 'SI']) # [cite: 39]
+                            })
+
+            if novos_status_preparados:
+                with transaction.atomic():
+                    for data in novos_status_preparados:
+                        # Limpa para evitar duplicados [cite: 40, 41]
+                        StatusPedidoERP.objects.filter(numero_pedido=data['numero_pedido']).delete()
+                        StatusPedidoERP.objects.create(**data)
+                        
+                        pedido_site = Pedido.objects.filter(id=data['numero_pedido']).first()
+                        if pedido_site:
+                            novo_status_interno = MAP_SINC_STATUS.get(data['situacao'])
+                            if novo_status_interno:
+                                pedido_site.status = novo_status_interno
+                                pedido_site.save(update_fields=['status'])
+
+                messages.success(request, f"Sucesso! {len(novos_status_preparados)} pedidos processados.")
+            return redirect('dashboard_admin')
+
+        except Exception as e:
+            messages.error(request, f"Erro crítico: {str(e)}")
+            return redirect('dashboard_admin')
+
+    return render(request, 'analise/upload_status_pdf.html')
+
+
+@staff_member_required
+def listar_status_erp(request):
+    # 1. Busca todos os registros
+    status_qs = StatusPedidoERP.objects.all().order_by('-emissao', '-id')
+    
+    # 2. Filtro de busca por número do pedido
+    numero_pedido = request.GET.get('numero_pedido')
+    if numero_pedido:
+        status_qs = status_qs.filter(numero_pedido__icontains=numero_pedido)
+
+    # 3. CÁLCULO PARA OS CARDS DO TOPO
+    # Conta quantos registros únicos estão marcados como expedidos
+    total_expedidos = status_qs.filter(expedido=True).count()
+
+    # 4. Paginação (50 por página)
+    paginator = Paginator(status_qs, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    contexto = {
+        'titulo': 'Monitoramento de Status ERP',
+        'page_obj': page_obj,
+        'numero_pedido': numero_pedido,
+        'total_expedidos': total_expedidos, # Agora o template consegue ler este valor
+    }
+    return render(request, 'analise/listar_status_erp.html', contexto)
+
+@staff_member_required
+def exportar_status_erp_excel(request):
+    # 1. Pega os dados base (respeitando filtros de busca se houver)
+    status_qs = StatusPedidoERP.objects.all().order_by('-emissao', '-id')
+    
+    numero_pedido = request.GET.get('numero_pedido')
+    if numero_pedido:
+        status_qs = status_qs.filter(numero_pedido__icontains=numero_pedido)
+
+    # 2. Prepara a lista de dicionários para o Pandas
+    dados = []
+    for item in status_qs:
+        dados.append({
+            'Emissão ERP': item.emissao,
+            'Pedido': item.numero_pedido,
+            'Cód. Cliente': item.cod_cliente,
+            'Cliente': item.nome_cliente,
+            'Situação': item.situacao,
+            'Expedido': 'SIM' if item.expedido else 'NÃO'
+        })
+
+    # 3. Cria o DataFrame e o arquivo Excel
+    df = pd.DataFrame(dados)
+    
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=Relatorio_Status_ERP.xlsx'
+    
+    with pd.ExcelWriter(response, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Status')
+    
     return response

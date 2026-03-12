@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white d-flex align-items-center">
+                    <i class="fas fa-file-pdf me-2"></i>
+                    <h5 class="mb-0">Importar Status do ERP (PDF)</h5>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted small">
+                        Selecione o relatório de situação de pedidos exportado do ERP. 
+                        O sistema irá processar os status e atualizar o histórico automaticamente.
+                    </p>
+
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+                        <div class="mb-4">
+                            <label for="pdf_file" class="form-label fw-bold">Arquivo PDF</label>
+                            <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary" id="btnSubmit">
+                                <span id="btnText">Iniciar Processamento</span>
+                                <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                            </button>
+                            <a href="{% url 'dashboard_admin' %}" class="btn btn-light text-muted">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer bg-light border-0">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-info-circle text-info me-2"></i>
+                        <span class="text-muted" style="font-size: 0.85rem;">
+                            Dica: O sistema identifica automaticamente status de bloqueio e faturamento.
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('uploadForm').onsubmit = function() {
+        const btn = document.getElementById('btnSubmit');
+        const text = document.getElementById('btnText');
+        const spinner = document.getElementById('btnSpinner');
+
+        btn.disabled = true;
+        text.innerText = "Lendo PDF e Gravando Dados...";
+        spinner.classList.remove('d-none');
+    };
+</script>
+{% endblock %}

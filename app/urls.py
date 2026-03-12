@@ -16,6 +16,9 @@ urlpatterns = [
     path('analise/vendas-detalhadas/exportar/', views.exportar_vendas_reais_excel, name='exportar_vendas_reais_excel'),
     path('analise/upload-vendas/', views.upload_vendas_reais, name='upload_vendas_reais'),
     path('analise/graficos/', views.dashboard_analise, name='dashboard_analise'),
+    path('analise/upload-status-pdf/', views.upload_status_pdf, name='upload_status_pdf'),
+    path('analise/monitoramento-erp/', views.listar_status_erp, name='listar_status_erp'),
+    path('analise/exportar-erp-excel/', views.exportar_status_erp_excel, name='exportar_status_erp_excel'),
     # Rotas do cliente
    
     # ... suas rotas existentes
