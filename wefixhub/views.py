@@ -2918,18 +2918,34 @@ def exportar_vendas_reais_excel(request):
     response['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
-
 @staff_member_required
 def dashboard_analise(request):
-    vendas_qs = VendaReal.objects.all()
+    # --- FILTRO DE DATA ---
+    hoje = date.today()
+    mes_selecionado = int(request.GET.get('mes', hoje.month))
+    ano_selecionado = int(request.GET.get('ano', hoje.year))
+    
+    # --- TRAVA DE PERÍODO ---
+    vendas_qs = VendaReal.objects.filter(
+        Emissao__month=mes_selecionado, 
+        Emissao__year=ano_selecionado
+    )
 
-    # --- FUNÇÃO AUXILIAR: DIAS ÚTEIS (SEG A SEX) ---
+    # --- LÓGICA DE CALENDÁRIO ---
+    primeiro_dia_mes = date(ano_selecionado, mes_selecionado, 1)
+    ultimo_dia_valor = calendar.monthrange(ano_selecionado, mes_selecionado)[1]
+    ultimo_dia_mes = date(ano_selecionado, mes_selecionado, ultimo_dia_valor)
+
+    if mes_selecionado == hoje.month and ano_selecionado == hoje.year:
+        data_fim_calculo = hoje
+    else:
+        data_fim_calculo = ultimo_dia_mes
+
     def contar_dias_uteis(data_inicio, data_fim):
         dias = 0
         atual = data_inicio
         while atual <= data_fim:
-            if atual.weekday() < 5:  # 0=Seg, 1=Ter, 2=Qua, 3=Qui, 4=Sex
-                dias += 1
+            if atual.weekday() < 5: dias += 1
             atual += timedelta(days=1)
         return dias
 
@@ -2937,76 +2953,86 @@ def dashboard_analise(request):
     total_faturamento = vendas_qs.aggregate(total=Sum('Total'))['total'] or Decimal('0.00')
     total_itens = vendas_qs.aggregate(total=Sum('Quantidade'))['total'] or 0
     total_pedidos = vendas_qs.values('Pedido').distinct().count() or 1
-    
-    # Formatação do Faturamento Total (O que estava faltando)
     total_vendas_str = "{:,.2f}".format(float(total_faturamento)).replace(",", "X").replace(".", ",").replace("X", ".")
-    
-    ticket_valor = float(total_faturamento) / total_pedidos
+    ticket_valor = float(total_faturamento) / total_pedidos if total_pedidos > 0 else 0
     ticket_medio_formatado = "{:,.2f}".format(ticket_valor).replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # --- 2. PROJEÇÃO DE FECHAMENTO (BASEADA EM DIAS ÚTEIS) ---
-    hoje = date.today()
-    primeiro_dia_mes = date(hoje.year, hoje.month, 1)
-    
-    ultimo_dia_valor = calendar.monthrange(hoje.year, hoje.month)[1]
-    ultimo_dia_mes = date(hoje.year, hoje.month, ultimo_dia_valor)
-
-    dias_uteis_decorridos = contar_dias_uteis(primeiro_dia_mes, hoje)
+    # --- 2. PROJEÇÃO E MÉDIA ---
+    dias_uteis_decorridos = contar_dias_uteis(primeiro_dia_mes, data_fim_calculo)
     total_dias_uteis_mes = contar_dias_uteis(primeiro_dia_mes, ultimo_dia_mes)
-
     divisor = max(dias_uteis_decorridos, 1)
     media_diaria_util = float(total_faturamento) / divisor
-    
     projecao_valor = media_diaria_util * total_dias_uteis_mes
-    progresso_percentual = int((dias_uteis_decorridos / total_dias_uteis_mes) * 100)
-
+    progresso_percentual = int((dias_uteis_decorridos / total_dias_uteis_mes) * 100) if total_dias_uteis_mes > 0 else 0
     media_diaria_str = "{:,.2f}".format(media_diaria_util).replace(",", "X").replace(".", ",").replace("X", ".")
     projecao_final_str = "{:,.2f}".format(projecao_valor).replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # --- 3. RANKINGS ---
-    top_produtos_raw = vendas_qs.values('Produto_Codigo', 'Produto_Descricao').annotate(
-        total_gerado=Sum('Total'), 
-        qtd_vendida=Sum('Quantidade')
-    ).order_by('-total_gerado')[:10]
+    # --- 3. RANKINGS COMERCIAL ---
+    top_produtos_raw = vendas_qs.values('Produto_Codigo', 'Produto_Descricao').annotate(total_gerado=Sum('Total'), qtd_vendida=Sum('Quantidade')).order_by('-total_gerado')[:10]
+    top_produtos_formatados = [{'codigo': p['Produto_Codigo'], 'descricao': p['Produto_Descricao'], 'qtd': p['qtd_vendida'], 'total_formatado': "{:,.2f}".format(float(p['total_gerado'])).replace(",", "X").replace(".", ",").replace("X", ".")} for p in top_produtos_raw]
+    
+    top_clientes_raw = vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(total_gasto=Sum('Total')).order_by('-total_gasto')[:10]
+    top_clientes_formatados = [{'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': "{:,.2f}".format(float(c['total_gasto'])).replace(",", "X").replace(".", ",").replace("X", ".")} for c in top_clientes_raw]
 
-    top_produtos_formatados = []
-    for p in top_produtos_raw:
-        valor_str = "{:,.2f}".format(float(p['total_gerado'])).replace(",", "X").replace(".", ",").replace("X", ".")
-        top_produtos_formatados.append({
-            'codigo': p['Produto_Codigo'], 'descricao': p['Produto_Descricao'],
-            'qtd': p['qtd_vendida'], 'total_formatado': valor_str
-        })
+    # --- 4. RANKING ALERTA (< 50k) ---
+    vendas_por_cliente_periodo = vendas_qs.values('Codigo_Cliente').annotate(total_periodo=Sum('Total'))
+    mapa_vendas_periodo = {v['Codigo_Cliente']: v['total_periodo'] for v in vendas_por_cliente_periodo}
+    todos_clientes_historico = VendaReal.objects.values('Codigo_Cliente', 'cliente_nome').annotate(total_historico=Sum('Total'), ultima_compra=Max('Emissao')).order_by('-total_historico')
+    clientes_alerta = []
+    for c in todos_clientes_historico:
+        total_no_periodo = mapa_vendas_periodo.get(c['Codigo_Cliente'], Decimal('0.00'))
+        if total_no_periodo < 50000:
+            clientes_alerta.append({'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': "{:,.2f}".format(float(c['total_historico'])).replace(",", "X").replace(".", ",").replace("X", "."), 'mes_atual_formatado': "{:,.2f}".format(float(total_no_periodo)).replace(",", "X").replace(".", ",").replace("X", "."), 'ultima_data': c['ultima_compra'].strftime('%d/%m/%Y')})
+            if len(clientes_alerta) >= 10: break
 
-    top_clientes_raw = vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(
-        total_gasto=Sum('Total')
-    ).order_by('-total_gasto')[:10]
+    # --- 5. ANÁLISE LOGÍSTICA ---
+    dias_nomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    vendas_por_dia = [0.0] * 7
+    clientes_por_dia_acumulado = {i: {} for i in range(7)}
+    for v in vendas_qs:
+        dia_indice = v.Emissao.weekday()
+        vendas_por_dia[dia_indice] += float(v.Total)
+        nome_cli = v.cliente_nome or "Desconhecido"
+        clientes_por_dia_acumulado[dia_indice][nome_cli] = clientes_por_dia_acumulado[dia_indice].get(nome_cli, 0.0) + float(v.Total)
+    
+    ranking_logistica_dia = []
+    for i in range(7):
+        top_clientes_dia = sorted(clientes_por_dia_acumulado[i].items(), key=lambda x: x[1], reverse=True)[:3]
+        ranking_logistica_dia.append({'dia': dias_nomes[i], 'clientes': [{'nome': nome, 'valor': "{:,.2f}".format(valor).replace(",", "X").replace(".", ",").replace("X", ".")} for nome, valor in top_clientes_dia]})
 
-    top_clientes_formatados = []
-    for c in top_clientes_raw:
-        valor_str = "{:,.2f}".format(float(c['total_gasto'])).replace(",", "X").replace(".", ",").replace("X", ".")
-        top_clientes_formatados.append({
-            'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': valor_str
-        })
+    # --- 6. SAÚDE DA BASE (NOVO) ---
+    historico_total = VendaReal.objects.values('Codigo_Cliente', 'Emissao', 'cliente_nome').order_by('Codigo_Cliente', 'Emissao')
+    dados_habito = {}
+    for h in historico_total:
+        cod = h['Codigo_Cliente']
+        if cod not in dados_habito: dados_habito[cod] = {'nome': h['cliente_nome'], 'datas': set()}
+        dados_habito[cod]['datas'].add(h['Emissao'])
 
-    # --- 4. GRÁFICO ---
+    saude_base = []
+    for cod, info in dados_habito.items():
+        datas = sorted(list(info['datas']))
+        if len(datas) < 2: continue
+        intervalos = [(datas[i] - datas[i-1]).days for i in range(1, len(datas))]
+        media_habito = sum(intervalos) / len(intervalos)
+        dias_sem_comprar = (hoje - datas[-1]).days
+        if dias_sem_comprar > (media_habito * 1.2) and dias_sem_comprar > 7:
+            saude_base.append({'codigo': cod, 'nome': info['nome'], 'media_habito': round(media_habito), 'dias_sem_comprar': dias_sem_comprar, 'atraso': round(dias_sem_comprar - media_habito), 'ultima_data': datas[-1].strftime('%d/%m/%Y')})
+    saude_base = sorted(saude_base, key=lambda x: x['atraso'], reverse=True)[:15]
+
+    # --- 7. GRÁFICOS ---
     dados_grafico = vendas_qs.values('Emissao').annotate(total_dia=Sum('Total')).order_by('Emissao')
     l_diario = [d['Emissao'].strftime('%d/%m') for d in dados_grafico]
     v_diario = [float(d['total_dia']) for d in dados_grafico]
 
     contexto = {
-        'total_vendas': total_vendas_str,  # Agora o dado chega no HTML!
-        'ticket_medio': ticket_medio_formatado,
-        'total_itens_faturados': total_itens,
-        'total_pedidos_reais': total_pedidos,
-        'media_diaria': media_diaria_str,
-        'projecao_final': projecao_final_str,
-        'progresso_mes': progresso_percentual,
-        'top_produtos': top_produtos_formatados,
-        'top_clientes': top_clientes_formatados,
-        'labels_diario': json.dumps(l_diario),
-        'valores_diario': json.dumps(v_diario),
+        'total_vendas': total_vendas_str, 'ticket_medio': ticket_medio_formatado, 'total_itens_faturados': total_itens, 'total_pedidos_reais': total_pedidos,
+        'media_diaria': media_diaria_str, 'projecao_final': projecao_final_str, 'progresso_mes': progresso_percentual,
+        'top_produtos': top_produtos_formatados, 'top_clientes': top_clientes_formatados, 'clientes_inativos': clientes_alerta, 
+        'labels_diario': json.dumps(l_diario), 'valores_diario': json.dumps(v_diario),
+        'labels_semana': json.dumps(dias_nomes), 'valores_semana': json.dumps(vendas_por_dia),
+        'ranking_logistica_dia': ranking_logistica_dia, 'saude_base': saude_base,
+        'mes_atual': mes_selecionado, 'ano_atual': ano_selecionado, 'lista_anos': range(hoje.year - 2, hoje.year + 1),
     }
-    
     return render(request, 'analise/dashboard_analise.html', contexto)
 
 @login_required
