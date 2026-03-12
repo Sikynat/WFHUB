@@ -2938,6 +2938,9 @@ def dashboard_analise(request):
     total_itens = vendas_qs.aggregate(total=Sum('Quantidade'))['total'] or 0
     total_pedidos = vendas_qs.values('Pedido').distinct().count() or 1
     
+    # Formatação do Faturamento Total (O que estava faltando)
+    total_vendas_str = "{:,.2f}".format(float(total_faturamento)).replace(",", "X").replace(".", ",").replace("X", ".")
+    
     ticket_valor = float(total_faturamento) / total_pedidos
     ticket_medio_formatado = "{:,.2f}".format(ticket_valor).replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -2945,27 +2948,22 @@ def dashboard_analise(request):
     hoje = date.today()
     primeiro_dia_mes = date(hoje.year, hoje.month, 1)
     
-    # Descobrir o último dia do mês para o cálculo total
     ultimo_dia_valor = calendar.monthrange(hoje.year, hoje.month)[1]
     ultimo_dia_mes = date(hoje.year, hoje.month, ultimo_dia_valor)
 
-    # Contagens de dias úteis
     dias_uteis_decorridos = contar_dias_uteis(primeiro_dia_mes, hoje)
     total_dias_uteis_mes = contar_dias_uteis(primeiro_dia_mes, ultimo_dia_mes)
 
-    # Cálculo da Média Diária Real (Garantindo que não divida por zero)
     divisor = max(dias_uteis_decorridos, 1)
     media_diaria_util = float(total_faturamento) / divisor
     
-    # Projeção: Média Diária Útil * Total de Dias Úteis do Mês
     projecao_valor = media_diaria_util * total_dias_uteis_mes
     progresso_percentual = int((dias_uteis_decorridos / total_dias_uteis_mes) * 100)
 
-    # Formatação dos novos cards
     media_diaria_str = "{:,.2f}".format(media_diaria_util).replace(",", "X").replace(".", ",").replace("X", ".")
     projecao_final_str = "{:,.2f}".format(projecao_valor).replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # --- 3. RANKINGS (FORMATADOS) ---
+    # --- 3. RANKINGS ---
     top_produtos_raw = vendas_qs.values('Produto_Codigo', 'Produto_Descricao').annotate(
         total_gerado=Sum('Total'), 
         qtd_vendida=Sum('Quantidade')
@@ -2996,6 +2994,7 @@ def dashboard_analise(request):
     v_diario = [float(d['total_dia']) for d in dados_grafico]
 
     contexto = {
+        'total_vendas': total_vendas_str,  # Agora o dado chega no HTML!
         'ticket_medio': ticket_medio_formatado,
         'total_itens_faturados': total_itens,
         'total_pedidos_reais': total_pedidos,

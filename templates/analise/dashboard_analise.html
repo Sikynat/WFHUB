@@ -14,7 +14,6 @@
             <i class="fas fa-arrow-left me-2"></i>Dashboard
         </a>
     </div>
-
     <div class="row g-3 mb-4">
         <div class="col-md-4">
             <div class="metric-card p-4 bg-primary text-white">
@@ -30,8 +29,8 @@
         </div>
         <div class="col-md-4">
             <div class="metric-card p-4 bg-dark text-white">
-                <div class="text-label opacity-75">Pedidos Únicos</div>
-                <h2 class="fw-bold mb-0">{{ total_pedidos_reais }}</h2>
+                <div class="text-label opacity-75">Faturamento Real ERP</div>
+                <h2 class="fw-bold mb-0">R$ {{ total_vendas|default:"0,00" }}</h2>
             </div>
         </div>
     </div>
