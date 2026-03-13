@@ -2952,22 +2952,46 @@ def dashboard_analise(request):
             clientes_alerta.append({'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': "{:,.2f}".format(float(c['total_historico'])).replace(",", "X").replace(".", ",").replace("X", "."), 'mes_atual_formatado': "{:,.2f}".format(float(total_no_periodo)).replace(",", "X").replace(".", ",").replace("X", "."), 'ultima_data': c['ultima_compra'].strftime('%d/%m/%Y')})
             if len(clientes_alerta) >= 10: break
 
-    # --- 5. ANÁLISE LOGÍSTICA ---
+    # --- 5. ANÁLISE LOGÍSTICA (Ajustado para incluir o Código do Cliente) ---
     dias_nomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
     vendas_por_dia = [0.0] * 7
     clientes_por_dia_acumulado = {i: {} for i in range(7)}
+    
     for v in vendas_qs:
         dia_indice = v.Emissao.weekday()
         vendas_por_dia[dia_indice] += float(v.Total)
+        
+        cod_cli = v.Codigo_Cliente
         nome_cli = v.cliente_nome or "Desconhecido"
-        clientes_por_dia_acumulado[dia_indice][nome_cli] = clientes_por_dia_acumulado[dia_indice].get(nome_cli, 0.0) + float(v.Total)
+        
+        # Cria ou atualiza o dicionário usando o CÓDIGO como chave principal
+        if cod_cli not in clientes_por_dia_acumulado[dia_indice]:
+            clientes_por_dia_acumulado[dia_indice][cod_cli] = {'nome': nome_cli, 'valor': 0.0}
+        
+        clientes_por_dia_acumulado[dia_indice][cod_cli]['valor'] += float(v.Total)
     
     ranking_logistica_dia = []
     for i in range(7):
-        top_clientes_dia = sorted(clientes_por_dia_acumulado[i].items(), key=lambda x: x[1], reverse=True)[:3]
-        ranking_logistica_dia.append({'dia': dias_nomes[i], 'clientes': [{'nome': nome, 'valor': "{:,.2f}".format(valor).replace(",", "X").replace(".", ",").replace("X", ".")} for nome, valor in top_clientes_dia]})
+        # Ordena os clientes pelo valor faturado no dia
+        top_clientes_dia = sorted(
+            clientes_por_dia_acumulado[i].items(), 
+            key=lambda x: x[1]['valor'], 
+            reverse=True
+        )[:3]
+        
+        # Prepara os dados para o template
+        ranking_logistica_dia.append({
+            'dia': dias_nomes[i], 
+            'clientes': [
+                {
+                    'codigo': cod, 
+                    'nome': dados['nome'], 
+                    'valor': "{:,.2f}".format(dados['valor']).replace(",", "X").replace(".", ",").replace("X", ".")
+                } for cod, dados in top_clientes_dia
+            ]
+        })
 
-    # --- 6. SAÚDE DA BASE (NOVO) ---
+    # --- 6. SAÚDE DA BASE ---
     historico_total = VendaReal.objects.values('Codigo_Cliente', 'Emissao', 'cliente_nome').order_by('Codigo_Cliente', 'Emissao')
     dados_habito = {}
     for h in historico_total:
@@ -3001,6 +3025,7 @@ def dashboard_analise(request):
         'mes_atual': mes_selecionado, 'ano_atual': ano_selecionado, 'lista_anos': range(hoje.year - 2, hoje.year + 1),
     }
     return render(request, 'analise/dashboard_analise.html', contexto)
+
 
 @login_required
 def meus_itens_comprados(request):
