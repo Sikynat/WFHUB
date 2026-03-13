@@ -38,24 +38,51 @@
 
     <div class="filter-card">
         <form method="GET" class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-4 col-lg-2">
                 <input type="text" name="pedido" class="form-control" style="border-radius:10px;" placeholder="🔍 Nº do Pedido" value="{{ request.GET.pedido }}">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4 col-lg-2">
                 <input type="text" name="produto" class="form-control" style="border-radius:10px;" placeholder="📦 Produto..." value="{{ request.GET.produto }}">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4 col-lg-2">
                 <input type="text" name="cliente" class="form-control" style="border-radius:10px;" placeholder="👤 Cliente..." value="{{ request.GET.cliente }}">
             </div>
-            <div class="col-md-3 d-flex gap-2">
+            
+            <div class="col-md-4 col-lg-2">
+                <select name="mes" class="form-select form-control" style="border-radius:10px; cursor: pointer;">
+                    <option value="">🗓️ Todos os Meses</option>
+                    <option value="1" {% if request.GET.mes == '1' %}selected{% endif %}>Janeiro</option>
+                    <option value="2" {% if request.GET.mes == '2' %}selected{% endif %}>Fevereiro</option>
+                    <option value="3" {% if request.GET.mes == '3' %}selected{% endif %}>Março</option>
+                    <option value="4" {% if request.GET.mes == '4' %}selected{% endif %}>Abril</option>
+                    <option value="5" {% if request.GET.mes == '5' %}selected{% endif %}>Maio</option>
+                    <option value="6" {% if request.GET.mes == '6' %}selected{% endif %}>Junho</option>
+                    <option value="7" {% if request.GET.mes == '7' %}selected{% endif %}>Julho</option>
+                    <option value="8" {% if request.GET.mes == '8' %}selected{% endif %}>Agosto</option>
+                    <option value="9" {% if request.GET.mes == '9' %}selected{% endif %}>Setembro</option>
+                    <option value="10" {% if request.GET.mes == '10' %}selected{% endif %}>Outubro</option>
+                    <option value="11" {% if request.GET.mes == '11' %}selected{% endif %}>Novembro</option>
+                    <option value="12" {% if request.GET.mes == '12' %}selected{% endif %}>Dezembro</option>
+                </select>
+            </div>
+
+            <div class="col-md-4 col-lg-2">
+                <select name="ano" class="form-select form-control" style="border-radius:10px; cursor: pointer;">
+                    <option value="">📅 Todos os Anos</option>
+                    {% for ano in lista_anos %}
+                        <option value="{{ ano }}" {% if request.GET.ano == ano|stringformat:"i" %}selected{% endif %}>{{ ano }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-4 col-lg-2 d-flex gap-2">
                 <button type="submit" class="btn btn-primary w-100" style="border-radius: 10px;">Filtrar</button>
-                <a href="{% url 'exportar_vendas_reais_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success" style="border-radius: 10px;">
+                <a href="{% url 'exportar_vendas_reais_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success d-flex align-items-center justify-content-center px-3" style="border-radius: 10px;" title="Exportar para Excel">
                     <i class="fas fa-file-excel">Exportar</i>
                 </a>
             </div>
         </form>
     </div>
-
     <div class="table-container">
         <table class="table table-hover mb-0">
             <thead>

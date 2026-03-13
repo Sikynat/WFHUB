@@ -2736,12 +2736,23 @@ def upload_vendas_reais(request):
             df = pd.read_excel(file)
             df = df.dropna(how='all')  # Remove linhas completamente vazias
 
-            # 1. LIMPEZA DE SEGURANÇA
-            # Para o Dashboard bater com o Excel, limpamos o que estava no banco antes
-            with transaction.atomic():
-                VendaReal.objects.all().delete() 
+            # --- OTIMIZAÇÃO 1: CONVERSÃO DE DATA EM LOTE ---
+            # Converte a coluna inteira de uma vez (muito mais rápido que fazer linha a linha)
+            df['Emissão_dt'] = pd.to_datetime(df['Emissão'], dayfirst=True)
+            
+            # Descobre quais meses e anos únicos existem na planilha que você acabou de subir
+            # Formato: ['2026-01', '2026-02', ...]
+            meses_anos_na_planilha = df['Emissão_dt'].dt.strftime('%Y-%m').unique()
 
-            # 2. CACHE DE CLIENTES (Performance)
+            # --- OTIMIZAÇÃO 2: LIMPEZA INTELIGENTE ---
+            with transaction.atomic():
+                # Apaga APENAS os dados dos meses que vieram na planilha. 
+                # Preserva todo o restante do histórico no banco de dados.
+                for mes_ano in meses_anos_na_planilha:
+                    ano, mes = mes_ano.split('-')
+                    VendaReal.objects.filter(Emissao__year=int(ano), Emissao__month=int(mes)).delete()
+
+            # 2. CACHE DE CLIENTES (Performance mantida)
             clientes_dict = {
                 str(c.client_code): c.client_name 
                 for c in WfClient.objects.all().only('client_code', 'client_name')
@@ -2759,7 +2770,7 @@ def upload_vendas_reais(request):
                 nome_cliente = clientes_dict.get(cod_cliente_str, f"Cod: {cod_cliente_str}")
 
                 venda = VendaReal(
-                    Emissao=pd.to_datetime(row['Emissão'], dayfirst=True).date(),
+                    Emissao=row['Emissão_dt'].date(), # Usa a data já convertida e otimizada
                     Codigo_Cliente=int(row['Código_Cliente']),
                     Pedido=str(row['Pedido']),
                     Produto_Codigo=str(row['Produto_Código']),
@@ -2774,8 +2785,12 @@ def upload_vendas_reais(request):
             # 4. SALVAMENTO EM LOTE
             if novas_vendas:
                 with transaction.atomic():
-                    VendaReal.objects.bulk_create(novas_vendas, batch_size=500)
-                messages.success(request, f'Sucesso! {len(novas_vendas)} itens importados. O dashboard agora reflete exatamente esta planilha.')
+                    # Adicionado ignore_conflicts=True como blindagem extra contra duplicatas do ERP
+                    VendaReal.objects.bulk_create(novas_vendas, batch_size=500, ignore_conflicts=True)
+                
+                # Mensagem de sucesso amigável mostrando os meses afetados
+                meses_formatados = ", ".join(meses_anos_na_planilha)
+                messages.success(request, f'Sucesso! {len(novas_vendas)} itens importados. Histórico atualizado para: {meses_formatados}.')
             else:
                 messages.warning(request, 'Nenhum dado válido encontrado na planilha.')
             
@@ -2792,12 +2807,18 @@ from django.db.models import Q
 from .models import VendaReal
 from django.contrib.admin.views.decorators import staff_member_required
 
+from datetime import date # Certifique-se de que isso está nos seus imports no topo do arquivo
+
 @staff_member_required
 def listar_vendas_reais(request):
     # 1. Captura e limpa filtros
     filtro_pedido = request.GET.get('pedido', '').strip()
     filtro_produto = request.GET.get('produto', '').strip()
     filtro_cliente = request.GET.get('cliente', '').strip()
+    
+    # NOVOS FILTROS: Mês e Ano
+    filtro_mes = request.GET.get('mes', '').strip()
+    filtro_ano = request.GET.get('ano', '').strip()
 
     vendas_qs = VendaReal.objects.all().order_by('-Emissao', '-Pedido')
 
@@ -2814,6 +2835,12 @@ def listar_vendas_reais(request):
             Q(cliente_nome__icontains=filtro_cliente) | 
             Q(Codigo_Cliente__icontains=filtro_cliente)
         )
+        
+    # APLICAÇÃO DOS NOVOS FILTROS (com validação para evitar erros na URL)
+    if filtro_mes and filtro_mes.isdigit():
+        vendas_qs = vendas_qs.filter(Emissao__month=int(filtro_mes))
+    if filtro_ano and filtro_ano.isdigit():
+        vendas_qs = vendas_qs.filter(Emissao__year=int(filtro_ano))
 
     # 3. Paginação Robusta (50 itens)
     paginator = Paginator(vendas_qs, 50)
@@ -2825,21 +2852,37 @@ def listar_vendas_reais(request):
         v.unit_str = "{:,.2f}".format(float(v.Unitario)).replace(",", "X").replace(".", ",").replace("X", ".")
         v.total_str = "{:,.2f}".format(float(v.Total)).replace(",", "X").replace(".", ",").replace("X", ".")
 
+    # Otimização para o Template: Enviamos a lista de anos para o Select HTML
+    hoje = date.today()
+    lista_anos = range(hoje.year - 2, hoje.year + 1)
+
     contexto = {
         'titulo': 'Histórico Detalhado ERP',
         'vendas': vendas_paginadas,
+        # Enviamos os filtros de volta para o template para manter os inputs preenchidos
+        'filtro_pedido': filtro_pedido,
+        'filtro_produto': filtro_produto,
+        'filtro_cliente': filtro_cliente,
+        'filtro_mes': filtro_mes,
+        'filtro_ano': filtro_ano,
+        'lista_anos': lista_anos,
     }
     return render(request, 'analise/listar_vendas_reais.html', contexto)
 
 @staff_member_required
 def exportar_vendas_reais_excel(request):
     # 1. Captura os mesmos filtros da tela de listagem
-    filtro_pedido = request.GET.get('pedido')
-    filtro_produto = request.GET.get('produto')
-    filtro_cliente = request.GET.get('cliente')
+    filtro_pedido = request.GET.get('pedido', '').strip()
+    filtro_produto = request.GET.get('produto', '').strip()
+    filtro_cliente = request.GET.get('cliente', '').strip()
+    
+    # NOVOS FILTROS: Mês e Ano
+    filtro_mes = request.GET.get('mes', '').strip()
+    filtro_ano = request.GET.get('ano', '').strip()
 
     vendas_qs = VendaReal.objects.all().order_by('-Emissao')
 
+    # 2. Aplica Filtros Dinâmicos
     if filtro_pedido:
         vendas_qs = vendas_qs.filter(Pedido__icontains=filtro_pedido)
     if filtro_produto:
@@ -2852,8 +2895,14 @@ def exportar_vendas_reais_excel(request):
             Q(cliente_nome__icontains=filtro_cliente) | 
             Q(Codigo_Cliente__icontains=filtro_cliente)
         )
+        
+    # APLICAÇÃO DOS NOVOS FILTROS
+    if filtro_mes and filtro_mes.isdigit():
+        vendas_qs = vendas_qs.filter(Emissao__month=int(filtro_mes))
+    if filtro_ano and filtro_ano.isdigit():
+        vendas_qs = vendas_qs.filter(Emissao__year=int(filtro_ano))
 
-    # 2. Transforma o QuerySet em uma lista de dicionários para o Pandas
+    # 3. Transforma o QuerySet em uma lista de dicionários para o Pandas
     data = []
     for v in vendas_qs:
         data.append({
@@ -2868,7 +2917,7 @@ def exportar_vendas_reais_excel(request):
             'Total': float(v.Total),
         })
 
-    # 3. Criação do Excel em memória
+    # 4. Criação do Excel em memória
     df = pd.DataFrame(data)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -2876,8 +2925,11 @@ def exportar_vendas_reais_excel(request):
         
     output.seek(0)
 
-    # 4. Resposta HTTP para download
-    filename = f"vendas_reais_export_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    # 5. Resposta HTTP para download (Nome do arquivo dinâmico)
+    # Se filtrou por ano e mês, coloca no nome do arquivo (ex: vendas_reais_2026_02.xlsx)
+    periodo_str = f"_{filtro_ano}_{filtro_mes}" if filtro_ano and filtro_mes else ""
+    filename = f"vendas_reais{periodo_str}_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    
     response = HttpResponse(
         output.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
