@@ -131,18 +131,52 @@
     </div>
     {% endif %}
 
-    <h5 class="fw-bold mb-3 mt-2">Fluxo de Pedidos (Site)</h5>
+    <h5 class="fw-bold mb-3 mt-2"><i class="fas fa-satellite-dish me-2 text-primary"></i> Radar Logístico (Status do ERP)</h5>
     <div class="row g-3 mb-5">
-        <div class="col-12 col-sm-6 col-lg-3"><div class="status-pill"><span class="status-name">Pendentes</span><span class="status-count text-danger">{{ pedidos_pendentes }}</span></div></div>
-        <div class="col-12 col-sm-6 col-lg-3"><div class="status-pill"><span class="status-name">Orçamentos</span><span class="status-count text-warning">{{ pedidos_orcamento }}</span></div></div>
-        <div class="col-12 col-sm-6 col-lg-3"><div class="status-pill"><span class="status-name">Financ/Crédito</span><span class="status-count text-info">{{ pedidos_adc }}</span></div></div>
-        <div class="col-12 col-sm-6 col-lg-3"><div class="status-pill"><span class="status-name">Separação</span><span class="status-count text-primary">{{ pedidos_separacao }}</span></div></div>
         
-        <div class="col-12 col-sm-6 col-lg-4"><div class="status-pill"><span class="status-name">Expedição</span><span class="status-count text-dark">{{ pedidos_expedicao }}</span></div></div>
-        <div class="col-12 col-sm-6 col-lg-4"><div class="status-pill"><span class="status-name">Concluídos</span><span class="status-count text-success">{{ pedidos_concluidos }}</span></div></div>
-        <div class="col-12 col-sm-6 col-lg-4"><div class="status-pill" style="border-left: 4px solid #ef4444;"><span class="status-name">Atrasados</span><span class="status-count text-danger">{{ pedidos_atrasados }}</span></div></div>
-    </div>
+        <div class="col-12 col-sm-4 col-lg-2">
+            <div class="status-pill" style="border-left: 4px solid #6c757d;">
+                <span class="status-name text-uppercase">Lidos no PDF</span>
+                <span class="status-count text-secondary">{{ erp_total }}</span>
+            </div>
+        </div>
 
+        <div class="col-12 col-sm-4 col-lg-2">
+            <div class="status-pill" style="border-left: 4px solid #ef4444;">
+                <span class="status-name text-uppercase">Bloq. Crédito</span>
+                <span class="status-count text-danger">{{ erp_credito }}</span>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-4 col-lg-2">
+            <div class="status-pill" style="border-left: 4px solid #0d6efd;">
+                <span class="status-name text-uppercase">Bloq. Preço</span>
+                <span class="status-count text-primary">{{ erp_preco }}</span>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-4 col-lg-2">
+            <div class="status-pill" style="border-left: 4px solid #f59e0b;">
+                <span class="status-name text-uppercase">Separação</span>
+                <span class="status-count text-warning">{{ erp_separacao }}</span>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-4 col-lg-2">
+            <div class="status-pill" style="border-left: 4px solid #10b981;">
+                <span class="status-name text-uppercase">Faturados</span>
+                <span class="status-count text-success">{{ erp_faturados }}</span>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-4 col-lg-2">
+            <div class="status-pill" style="border-left: 4px solid #059669; background-color: #f0fdf4;">
+                <span class="status-name text-uppercase">Expedidos</span>
+                <span class="status-count" style="color: #059669;">{{ erp_expedidos }}</span>
+            </div>
+        </div>
+
+    </div>
     <div class="row g-4">
         
         <div class="col-lg-8">

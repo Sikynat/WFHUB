@@ -733,7 +733,7 @@ def dashboard_admin(request):
         cache.set('dashboard_faturamento', faturamento_formatado, 900)
 
     # =========================================================
-    # 2. MÉTRICAS DO SITE E STATUS (CACHE: 5 MINUTOS)
+    # 2. MÉTRICAS DO SITE E STATUS ERP (CACHE: 5 MINUTOS)
     # =========================================================
     metricas = cache.get('dashboard_metricas')
     
@@ -741,6 +741,8 @@ def dashboard_admin(request):
         metricas = {
             'total_clientes': WfClient.objects.count(),
             'total_pedidos': Pedido.objects.count(),
+            
+            # (Mantidos por segurança caso você use no futuro)
             'pendentes': Pedido.objects.filter(status='PENDENTE').count(),
             'concluidos': Pedido.objects.filter(status='FINALIZADO').count(),
             'orcamento': Pedido.objects.filter(status='ORCAMENTO').count(),
@@ -748,6 +750,15 @@ def dashboard_admin(request):
             'separacao': Pedido.objects.filter(status='SEPARACAO').count(),
             'expedicao': Pedido.objects.filter(status='EXPEDICAO').count(),
             'atrasados': Pedido.objects.filter(status='ATRASADO').count(),
+            
+            # --- NOVAS MÉTRICAS: STATUS DO ERP ---
+            # ATENÇÃO: Se o nome do seu modelo não for StatusPedidoERP, troque aqui abaixo:
+            'erp_total': StatusPedidoERP.objects.count(),
+            'erp_credito': StatusPedidoERP.objects.filter(situacao__icontains='Crédito').count(),
+            'erp_preco': StatusPedidoERP.objects.filter(situacao__icontains='Preço').count(),
+            'erp_separacao': StatusPedidoERP.objects.filter(Q(situacao__icontains='Separação') | Q(situacao__icontains='Bloqueado')).count(),
+            'erp_faturados': StatusPedidoERP.objects.filter(situacao__icontains='Faturado').count(),
+            'erp_expedidos': StatusPedidoERP.objects.filter(expedido=True).count(),
         }
         # Salva na memória por 300 segundos (5 minutos)
         cache.set('dashboard_metricas', metricas, 300)
@@ -823,20 +834,22 @@ def dashboard_admin(request):
         oportunidades_wishlist_cache = list(oportunidades_wishlist.values())
         cache.set('dashboard_wishlist', oportunidades_wishlist_cache, 900)
 
-    # --- CONTEXTO (Buscando os dados do Dicionário de Métricas Cacheadas) ---
+    # --- CONTEXTO ---
     contexto = {
         'titulo': 'Dashboard Administrativo',
         'total_clientes': metricas['total_clientes'],
         'total_pedidos': metricas['total_pedidos'],
         'total_vendas': faturamento_formatado,
         'pedidos_recentes': pedidos_com_total,
-        'pedidos_pendentes': metricas['pendentes'],
-        'pedidos_concluidos': metricas['concluidos'],
-        'pedidos_orcamento': metricas['orcamento'],
-        'pedidos_adc': metricas['adc'],
-        'pedidos_separacao': metricas['separacao'],
-        'pedidos_expedicao': metricas['expedicao'],
-        'pedidos_atrasados': metricas['atrasados'],
+        
+        # Enviando os novos números do ERP para a tela HTML
+        'erp_total': metricas['erp_total'],
+        'erp_credito': metricas['erp_credito'],
+        'erp_preco': metricas['erp_preco'],
+        'erp_separacao': metricas['erp_separacao'],
+        'erp_faturados': metricas['erp_faturados'],
+        'erp_expedidos': metricas['erp_expedidos'],
+        
         'filtro_ativo': filtro,
         'oportunidades_wishlist': oportunidades_wishlist_cache, 
     }

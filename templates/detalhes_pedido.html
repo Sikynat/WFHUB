@@ -2,217 +2,223 @@
 {% block title %}Pedido #{{ pedido.id }} - Detalhes{% endblock %}
 
 {% block content %}
-    <h1 class="display-5 fw-bold text-dark mb-4">
-        Detalhes do Pedido <span class="text-secondary fw-light">#{{ pedido.id }}</span>
-    </h1>
+<style>
+    :root {
+        --bg-light: #f8f9fc;
+        --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        --border-color: #edf2f7;
+    }
 
-    {# NOVO BLOCO: Exibição dos Erros de Upload Salvos (Se existirem) #}
+    body { background-color: var(--bg-light); font-family: 'Inter', sans-serif; }
+
+    .info-card {
+        background: white; border-radius: 16px; border: 1px solid var(--border-color);
+        box-shadow: var(--card-shadow); height: 100%;
+    }
+
+    .info-label { font-size: 0.8rem; font-weight: 600; color: #8d99ae; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.2rem; }
+    .info-value { font-size: 1rem; font-weight: 500; color: #2b2d42; margin-bottom: 1rem; }
+    
+    .admin-panel {
+        background: #f1f5f9; border-radius: 16px; border: 1px dashed #cbd5e1; padding: 1.5rem;
+    }
+
+    .table-container { background: white; border-radius: 16px; box-shadow: var(--card-shadow); overflow: hidden; border: 1px solid var(--border-color); }
+    .table thead th { background-color: #fcfcfd; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #8d99ae; border-bottom: 1px solid var(--border-color); padding: 1rem; }
+    .table tbody td { padding: 1rem; vertical-align: middle; border-bottom: 1px solid var(--border-color); }
+</style>
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-3 mb-1">
+                <h2 class="fw-bold mb-0 text-dark">Pedido <span class="text-primary">#{{ pedido.id }}</span></h2>
+                <span class="badge rounded-pill fs-6 px-3 py-2 
+                    {% if pedido.status == 'FINALIZADO' %}bg-success
+                    {% elif is_atrasado %}bg-danger
+                    {% else %}bg-info text-dark{% endif %}">
+                    {{ pedido.status }}
+                </span>
+            </div>
+            <p class="text-muted small mb-0">Criado em {{ pedido.data_criacao|date:"d/m/Y \à\s H:i" }} 
+                {% if user.is_staff %}por <strong>{{ pedido.criado_por.username }}</strong>{% endif %}
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            {% if user.is_staff %}
+                <a href="{% url 'todos_os_pedidos' %}" class="btn btn-light border rounded-pill shadow-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+                <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-outline-info rounded-pill shadow-sm"><i class="bi bi-file-earmark-excel me-1"></i> Exportar</a>
+                <a href="{% url 'enviar_whatsapp' pedido.id %}" target="_blank" class="btn btn-success rounded-pill shadow-sm"><i class="bi bi-whatsapp me-1"></i> WhatsApp</a>
+            {% else %}
+                <a href="{% url 'pedidos' %}" class="btn btn-light border rounded-pill shadow-sm"><i class="bi bi-arrow-left me-1"></i> Histórico</a>
+                <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-outline-info rounded-pill shadow-sm"><i class="bi bi-file-earmark-excel me-1"></i> Exportar</a>
+            {% endif %}
+        </div>
+    </div>
+
     {% if pedido.erros_upload %}
-        <div class="alert alert-warning border-0 shadow-sm rounded-lg p-4 mb-5" role="alert">
-            <h4 class="alert-heading fw-bold text-danger">⚠️ Itens Ignorados no Upload</h4>
-            <p class="mb-0">Este pedido foi gerado via planilha, mas alguns itens foram ignorados ou apresentaram erros de preço/catálogo:</p>
-            <hr>
-            {# O tag <pre> preserva as quebras de linha que você inseriu em views.py #}
-            <pre class="mb-0 small text-dark" style="white-space: pre-wrap; word-break: break-word;">{{ pedido.erros_upload }}</pre>
+        <div class="alert alert-warning border-0 shadow-sm mb-4" style="border-radius: 16px; border-left: 5px solid #f59e0b !important;">
+            <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-3"></i>
+                <h5 class="mb-0 fw-bold text-dark">Atenção: Itens Ignorados no Upload</h5>
+            </div>
+            <p class="mb-3 text-dark small">Este pedido foi gerado via planilha, mas alguns itens apresentaram erro de preço ou catálogo.</p>
+            <div class="bg-white p-3 rounded border">
+                <pre class="mb-0 small text-dark" style="white-space: pre-wrap; word-break: break-word;">{{ pedido.erros_upload }}</pre>
+            </div>
         </div>
     {% endif %}
 
-    <div class="row mb-5">
-        
-        {# Card: Informações Essenciais #}
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100 border-0 shadow-sm rounded-lg">
-                <div class="card-body p-4">
-                    <h5 class="card-title fw-bold text-primary mb-3">Informações Principais</h5>
-                    
-                    <div class="row g-2 mb-4">
-                        <div class="col-sm-6">
-                            <small class="text-muted d-block">Data da Compra:</small>
-                            <p class="fw-medium mb-0">{{ pedido.data_criacao|date:"d/m/Y H:i" }}</p>
-                        </div>
-                        <div class="col-sm-6">
-                            <small class="text-muted d-block">Situação:</small>
-                            <span class="badge rounded-pill fs-6 bg-{% if pedido.status == 'FINALIZADO' %}success{% elif is_atrasado %}danger{% else %}info{% endif %}">{{ pedido.status }}</span>
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mb-4">
-                        <div class="col-sm-6">
-                            <small class="text-muted d-block">Expedição Solicitada:</small>
-                            <p class="fw-medium mb-0">{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</p>
-                        </div>
-                        <div class="col-sm-6">
-                            <small class="text-muted d-block">Cliente:</small>
-                            <p class="fw-medium mb-0">{{ pedido.cliente.client_code }}</p>
-                        </div>
-                    </div>
-                    
-                    <small class="text-muted d-block">Observação:</small>
-                    <p class="fst-italic text-wrap mb-4">{{ pedido.observacao|default:"Nenhuma." }}</p>
-
-                    <div class="row g-2">
-                        <div class="col-sm-6">
-                            <small class="text-muted d-block">Opção de Frete:</small>
-                            <p class="fw-medium mb-0">{{ pedido.get_frete_option_display }}</p>
-                        </div>
-                        <div class="col-sm-6">
-                            <small class="text-muted d-block">Opção de NF:</small>
-                            <p class="fw-medium mb-0">{{ pedido.get_nota_fiscal_display }}</p>
-                        </div>
-                    </div>
-                    
-                    {% if user.is_staff %}
-                        <hr class="my-3">
-                        <small class="text-muted d-block">Criado por:</small>
-                        <p class="fw-medium mb-0">{{ pedido.criado_por.username }}</p>
-                    {% endif %}
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="info-card p-4">
+                <h6 class="fw-bold text-primary mb-4"><i class="bi bi-receipt me-2"></i> Resumo Financeiro</h6>
+                <div class="info-label">Valor Total do Pedido</div>
+                <div class="info-value text-success fs-3 fw-bold mb-3">R$ {{ total_geral|floatformat:2 }}</div>
+                
+                <div class="info-label">Opção de Nota Fiscal</div>
+                <div class="info-value">
+                    {% if pedido.nota_fiscal == 'COM' %}<i class="bi bi-file-text text-primary me-1"></i>{% endif %}
+                    {{ pedido.get_nota_fiscal_display }}
                 </div>
             </div>
         </div>
-        
-        {# Card de Endereço e Orçamento PDF #}
-        <div class="col-lg-6 d-flex flex-column">
-            {% if pedido.frete_option != 'ONIBUS' and pedido.frete_option != 'RETIRADA' %}
-                <div class="card h-100 border-0 shadow-sm rounded-lg mb-4">
-                    <div class="card-body p-4">
-                        <h5 class="card-title fw-bold text-info mb-3">Endereço de Envio</h5>
-                        <p class="mb-0 fw-medium">{{ pedido.endereco.logradouro }}, {{ pedido.endereco.numero }} - {{ pedido.endereco.bairro }}</p>
-                        <p class="text-muted">{{ pedido.endereco.cidade }} - {{ pedido.endereco.estado }} (CEP: {{ pedido.endereco.cep }})</p>
+
+        <div class="col-md-4">
+            <div class="info-card p-4">
+                <h6 class="fw-bold text-primary mb-4"><i class="bi bi-person me-2"></i> Dados do Cliente</h6>
+                <div class="info-label">Nome / Razão Social</div>
+                <div class="info-value text-truncate" title="{{ pedido.cliente.client_name }}">{{ pedido.cliente.client_name }}</div>
+                
+                <div class="info-label">Código Wefix</div>
+                <div class="info-value">#{{ pedido.cliente.client_code }}</div>
+
+                <div class="info-label">Observação do Pedido</div>
+                <div class="info-value fst-italic text-muted small">{{ pedido.observacao|default:"Nenhuma observação registrada." }}</div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="info-card p-4">
+                <h6 class="fw-bold text-primary mb-4"><i class="bi bi-truck me-2"></i> Logística</h6>
+                
+                <div class="row">
+                    <div class="col-6">
+                        <div class="info-label">Frete</div>
+                        <div class="info-value">{{ pedido.get_frete_option_display }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="info-label">Expedir em</div>
+                        <div class="info-value {% if is_atrasado %}text-danger fw-bold{% endif %}">{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</div>
                     </div>
                 </div>
-            {% endif %}
 
-            {% if pedido.orcamento_pdf %}
-                <div class="card border-0 shadow-sm rounded-lg">
-                    <div class="card-body d-flex justify-content-between align-items-center p-4">
-                        <h6 class="mb-0 fw-bold">Orçamento PDF Anexado</h6>
-                        <a href="{{ pedido.orcamento_pdf.url }}" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill ms-3">
-                            <i class="bi bi-file-earmark-pdf"></i> Visualizar
+                {% if pedido.frete_option != 'ONIBUS' and pedido.frete_option != 'RETIRADA' %}
+                    <div class="info-label">Endereço de Entrega</div>
+                    <div class="info-value small mb-0">
+                        {{ pedido.endereco.logradouro }}, {{ pedido.endereco.numero }}<br>
+                        {{ pedido.endereco.bairro }} - {{ pedido.endereco.cidade }}/{{ pedido.endereco.estado }}<br>
+                        CEP: {{ pedido.endereco.cep }}
+                    </div>
+                {% else %}
+                    <div class="info-label mt-2">Endereço de Entrega</div>
+                    <div class="info-value small text-muted">Não se aplica para esta opção de frete.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if user.is_staff %}
+        <div class="admin-panel mb-4 shadow-sm">
+            <div class="row align-items-center">
+                <div class="col-md-6 mb-3 mb-md-0">
+                    <h6 class="fw-bold text-dark mb-1"><i class="bi bi-gear-fill me-2"></i> Controle Operacional</h6>
+                    <p class="text-muted small mb-0">Gerencie o andamento deste pedido no ERP e envie documentos.</p>
+                </div>
+                <div class="col-md-6 d-flex flex-wrap gap-2 justify-content-md-end">
+                    
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary rounded-pill bg-white shadow-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-cloud-arrow-up me-1"></i> {% if pedido.orcamento_pdf %}Atualizar Orçamento{% else %}Anexar Orçamento{% endif %}
+                        </button>
+                        <div class="dropdown-menu p-3 shadow" style="width: 300px; border-radius: 12px;">
+                            <form action="{% url 'upload_orcamento_pdf' pedido.id %}" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <label class="small fw-bold mb-2">Selecione o arquivo PDF</label>
+                                <input type="file" name="orcamento_pdf_file" class="form-control form-control-sm mb-3" required>
+                                <button class="btn btn-primary btn-sm w-100 rounded-pill" type="submit">Enviar Arquivo</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {% if pedido.orcamento_pdf %}
+                        <a href="{{ pedido.orcamento_pdf.url }}" target="_blank" class="btn btn-outline-secondary rounded-pill bg-white shadow-sm">
+                            <i class="bi bi-file-pdf text-danger me-1"></i> Ver Orçamento
                         </a>
-                    </div>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-    
-    <hr class="my-5">
+                    {% endif %}
 
-    {# Seção de Ações #}
-    <h2 class="h5 fw-bold text-dark mb-4">Gerenciamento do Pedido</h2>
-    <div class="d-flex flex-wrap gap-3 p-4 border rounded-lg bg-light mb-5">
-        
-        {# AJUSTE NO LINK VOLTAR: Usa o histórico do cliente ou a lista admin #}
-        {% if user.is_staff %}
-            <a href="{% url 'todos_os_pedidos' %}" class="btn btn-outline-secondary rounded-pill">
-                <i class="bi bi-arrow-left me-1"></i> Voltar para Lista Admin
-            </a>
-        {% else %}
-            {# Correção anterior: 'historico_pedidos' mudou para 'pedidos' #}
-            <a href="{% url 'pedidos' %}" class="btn btn-outline-secondary rounded-pill">
-                <i class="bi bi-arrow-left me-1"></i> Voltar para Histórico
-            </a>
-        {% endif %}
-
-        
-        {% if user.is_staff %}
-            <a href="{% url 'dashboard_admin' %}" class="btn btn-outline-secondary rounded-pill">
-                <i class="bi bi-speedometer2 me-1"></i> Dashboard
-            </a>
-            <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-outline-info rounded-pill">
-                <i class="bi bi-file-earmark-excel me-1"></i> Exportar (Admin)
-            </a>
-        {% else %}
-            {# CORREÇÃO APLICADA AQUI: Mudança de 'exportar_detalhes_pedido_cliente_excel' para 'exportar_pedido_cliente_excel' #}
-            <a href="{% url 'exportar_pedido_cliente_excel' pedido.id %}" class="btn btn-outline-info rounded-pill">
-                <i class="bi bi-file-earmark-excel me-1"></i> Exportar
-            </a>
-        {% endif %}
-
-        {# Ações de Staff e Controle #}
-        {% if user.is_staff %}
-            <a  href="{% url 'enviar_whatsapp' pedido.id %}" target="_blank" class="btn btn-success rounded-pill">
-                <i class="bi bi-whatsapp me-1"></i> Enviar Whatsapp
-            </a>
-
-            
-                <form action="{% url 'marcar_pedido_finalizado' pedido.id %}" method="post" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger rounded-pill fw-bold">
-                        <i class="bi bi-check-circle me-1"></i> Marcar como Finalizado
-                    </button>
-                </form>
-            
-
-
-            {# Upload de Orçamento com Collapse #}
-            <button class="btn btn-outline-primary rounded-pill" type="button" data-bs-toggle="collapse" data-bs-target="#collapseForm" aria-expanded="false" aria-controls="collapseForm">
-                <i class="bi bi-cloud-arrow-up me-1"></i> Upload Orçamento
-            </button>
-            <div class="collapse w-100 mt-3" id="collapseForm">
-                <div class="p-3 border rounded-lg bg-white">
-                    <form action="{% url 'upload_orcamento_pdf' pedido.id %}" method="post" enctype="multipart/form-data" class="d-flex gap-2">
+                    {% if pedido.status != 'FINALIZADO' %}
+                    <form action="{% url 'marcar_pedido_finalizado' pedido.id %}" method="post" class="d-inline" onsubmit="return confirm('Tem certeza que deseja finalizar este pedido?');">
                         {% csrf_token %}
-                        <input type="file" name="orcamento_pdf_file" class="form-control form-control-sm rounded-pill" required>
-                        <button class="btn btn-primary rounded-pill" type="submit">Enviar</button>
+                        <button type="submit" class="btn btn-danger rounded-pill shadow-sm fw-bold px-4">
+                            <i class="bi bi-check2-all me-1"></i> Finalizar Pedido
+                        </button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
-        {% endif %}
-    </div>
-    
-    <hr class="my-5">
-    
-    {# Tabela de Itens #}
-    <h2 class="h5 fw-bold text-dark mb-4">Itens do Pedido</h2>
-    <div class="table-responsive shadow-sm rounded-lg">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light">
+        </div>
+    {% endif %}
+
+    <h5 class="fw-bold text-dark mb-3 mt-2"><i class="bi bi-box-seam me-2"></i> Itens Solicitados</h5>
+    <div class="table-container mb-5">
+        <table class="table table-hover mb-0">
+            <thead>
                 <tr>
-                    <th scope="col" class="text-uppercase small text-muted border-bottom-0 ps-4">Código</th>
-                    <th scope="col" class="text-uppercase small text-muted border-bottom-0">Descrição</th>
+                    <th class="ps-4">Código</th>
+                    <th>Descrição do Produto</th>
                     {% if preco_exibido == 'sp' %}
-                        <th scope="col" class="text-end text-uppercase small text-muted border-bottom-0">Valor (SP)</th>
+                        <th class="text-end">Valor (SP)</th>
                     {% elif preco_exibido == 'es' %}
-                        <th scope="col" class="text-end text-uppercase small text-muted border-bottom-0">Valor (ES)</th>
+                        <th class="text-end">Valor (ES)</th>
                     {% elif preco_exibido == 'todos' %}
-                        <th scope="col" class="text-end text-uppercase small text-muted border-bottom-0">Valor (SP)</th>
-                        <th scope="col" class="text-end text-uppercase small text-muted border-bottom-0">Valor (ES)</th>
+                        <th class="text-end">Valor (SP)</th>
+                        <th class="text-end">Valor (ES)</th>
                     {% endif %}
-                    <th scope="col" class="text-end text-uppercase small text-muted border-bottom-0">Quantidade</th>
-                    <th scope="col" class="text-end text-uppercase small text-muted border-bottom-0 pe-4">Subtotal</th>
+                    <th class="text-center">Qtd</th>
+                    <th class="text-end pe-4">Subtotal</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item_detalhe in itens_detalhes %}
-                <tr class="border-bottom">
+                <tr>
                     <td class="fw-bold ps-4">{{ item_detalhe.item.produto.product_code }}</td>
-                    <td>{{ item_detalhe.item.produto.product_description }}</td>
+                    <td class="text-dark">{{ item_detalhe.item.produto.product_description }}</td>
                     
-                    {# CORREÇÃO: Usar valor unitário congelado (item_detalhe.item.valor_unitario_xx) #}
                     {% if preco_exibido == 'todos' %}
                         <td class="text-end text-muted">R$ {{ item_detalhe.item.valor_unitario_sp|floatformat:2 }}</td>
                         <td class="text-end text-muted">R$ {{ item_detalhe.item.valor_unitario_es|floatformat:2 }}</td>
                     {% else %}
-                        {# Se for SP ou ES, o item_detalhe.valor_unitario já é o correto, calculado na view #}
                         <td class="text-end text-muted">R$ {{ item_detalhe.valor_unitario|floatformat:2 }}</td>
                     {% endif %}
                     
-                    <td class="text-end">{{ item_detalhe.item.quantidade }}</td>
-                    <td class="text-end text-primary fw-bold pe-4">R$ {{ item_detalhe.valor_total|floatformat:2 }}</td>
+                    <td class="text-center fw-bold text-dark">
+                        <span class="bg-light border px-2 py-1 rounded">{{ item_detalhe.item.quantidade }}</span>
+                    </td>
+                    <td class="text-end fw-bold text-primary pe-4">R$ {{ item_detalhe.valor_total|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
-            <tfoot>
+            <tfoot class="bg-light">
                 <tr>
-                    {% if preco_exibido == 'todos' %}
-                        <td colspan="5" class="text-end fw-bold fs-6 pt-3 ps-4">Total Geral:</td>
-                    {% else %}
-                        <td colspan="4" class="text-end fw-bold fs-6 pt-3 ps-4">Total Geral:</td>
-                    {% endif %}
-                    <td class="text-end fw-bold fs-4 text-success pt-3 pe-4">R$ {{ total_geral|floatformat:2 }}</td>
+                    <td colspan="{% if preco_exibido == 'todos' %}5{% else %}4{% endif %}" class="text-end fw-bold pt-3 pb-3">Valor Total do Pedido:</td>
+                    <td class="text-end fw-bold fs-5 text-success pt-3 pb-3 pe-4">R$ {{ total_geral|floatformat:2 }}</td>
                 </tr>
             </tfoot>
         </table>
     </div>
-{% endblock %}
 
+</div>
+{% endblock %}
