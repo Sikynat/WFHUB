@@ -110,7 +110,9 @@
                 {% for op in oportunidades_wishlist %}
                 <div class="list-group-item d-flex justify-content-between align-items-center py-3 px-0 border-bottom border-light">
                     <div>
-                        <h6 class="mb-1 fw-bold text-dark">{{ op.cliente.client_name }}</h6>
+                        <h6 class="mb-1 fw-bold text-dark">
+                            <span class="text-muted me-1">#{{ op.cliente.client_code }}</span> - {{ op.cliente.client_name }}
+                        </h6>
                         <small class="text-muted d-block">
                             {% for prod in op.produtos %}
                                 <span class="badge bg-light text-dark border me-1 mb-1">
