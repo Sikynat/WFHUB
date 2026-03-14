@@ -48,7 +48,7 @@ import locale
 from django.db.models.functions import TruncMonth , Coalesce
 from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper 
 from datetime import datetime, timedelta, date 
-
+from django.core.cache import cache
 from django.db.models import Count, Sum, F, OuterRef, Subquery, DecimalField, ExpressionWrapper, Value 
 from django.db.models.functions import TruncMonth, Coalesce, TruncDate
 from django.shortcuts import render, redirect, get_object_or_404
@@ -715,39 +715,51 @@ import locale
 
 @staff_member_required
 def dashboard_admin(request):
-    # --- NOVO: Lógica de Filtro ---
     filtro = request.GET.get('filtro')
     hoje = timezone.localdate()
 
-    # 1. CÁLCULO DO FATURAMENTO REAL (ERP)
-    total_faturamento_real = VendaReal.objects.aggregate(
-        total=Sum('Total')
-    )['total'] or Decimal('0.00')
-    faturamento_formatado = "{:,.2f}".format(float(total_faturamento_real)).replace(",", "X").replace(".", ",").replace("X", ".")
+    # =========================================================
+    # 1. CÁLCULO DO FATURAMENTO REAL (CACHE: 15 MINUTOS)
+    # =========================================================
+    faturamento_formatado = cache.get('dashboard_faturamento')
+    
+    if not faturamento_formatado:
+        total_faturamento_real = VendaReal.objects.aggregate(
+            total=Sum('Total')
+        )['total'] or Decimal('0.00')
+        faturamento_formatado = "{:,.2f}".format(float(total_faturamento_real)).replace(",", "X").replace(".", ",").replace("X", ".")
+        
+        # Salva na memória por 900 segundos (15 minutos)
+        cache.set('dashboard_faturamento', faturamento_formatado, 900)
 
-    # 2. MÉTRICAS DO SITE
-    total_clientes = WfClient.objects.count()
-    total_pedidos = Pedido.objects.count()
+    # =========================================================
+    # 2. MÉTRICAS DO SITE E STATUS (CACHE: 5 MINUTOS)
+    # =========================================================
+    metricas = cache.get('dashboard_metricas')
     
-    # Contagens para os cards de status
-    metricas_status = {
-        'pendentes': Pedido.objects.filter(status='PENDENTE').count(),
-        'concluidos': Pedido.objects.filter(status='FINALIZADO').count(),
-        'orcamento': Pedido.objects.filter(status='ORCAMENTO').count(),
-        'adc': Pedido.objects.filter(status='FINANCEIRO').count(),
-        'separacao': Pedido.objects.filter(status='SEPARACAO').count(),
-        'expedicao': Pedido.objects.filter(status='EXPEDICAO').count(),
-        'atrasados': Pedido.objects.filter(status='ATRASADO').count(),
-    }
+    if not metricas:
+        metricas = {
+            'total_clientes': WfClient.objects.count(),
+            'total_pedidos': Pedido.objects.count(),
+            'pendentes': Pedido.objects.filter(status='PENDENTE').count(),
+            'concluidos': Pedido.objects.filter(status='FINALIZADO').count(),
+            'orcamento': Pedido.objects.filter(status='ORCAMENTO').count(),
+            'adc': Pedido.objects.filter(status='FINANCEIRO').count(),
+            'separacao': Pedido.objects.filter(status='SEPARACAO').count(),
+            'expedicao': Pedido.objects.filter(status='EXPEDICAO').count(),
+            'atrasados': Pedido.objects.filter(status='ATRASADO').count(),
+        }
+        # Salva na memória por 300 segundos (5 minutos)
+        cache.set('dashboard_metricas', metricas, 300)
     
-    # 3. FILTRAGEM DE PEDIDOS (PARA A TABELA)
-    # Se o filtro 'sincronizados' estiver ativo, mostra pedidos atualizados hoje nos status do ERP
+    # =========================================================
+    # 3. FILTRAGEM DE PEDIDOS (SEM CACHE - TEMPO REAL)
+    # =========================================================
     if filtro == 'sincronizados':
         status_erp = ['SEPARACAO', 'EXPEDICAO', 'FINALIZADO']
-        # Nota: Filtramos por pedidos que foram modificados hoje
         pedidos_qs = Pedido.objects.filter(
             status__in=status_erp, 
-            data_criacao__date=hoje # No seu modelo atual, usamos data_criacao como referência
+            data_criacao__date=hoje
         ).order_by('-data_criacao')[:20]
     else:
         pedidos_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
@@ -768,63 +780,65 @@ def dashboard_admin(request):
         })
 
     # =========================================================
-    # --- 4. OPORTUNIDADES DE RETORNO (WISHLIST) ---
+    # 4. OPORTUNIDADES DE RETORNO (WISHLIST) (CACHE: 15 MINUTOS)
     # =========================================================
-
-    # 1. Define a data limite (hoje menos 30 dias)
-    data_limite = hoje - timedelta(days=30)
-
-    # 2. Busca apenas itens dos ÚLTIMOS 30 DIAS
-    itens_pendentes = ItemPedidoIgnorado.objects.filter(
-        notificado=False, 
-        motivo_erro__icontains="estoque",
-        data_tentativa__gte=data_limite
-    ).select_related('cliente', 'cliente__client_state')
-
-    oportunidades_wishlist = {}
+    oportunidades_wishlist_cache = cache.get('dashboard_wishlist')
     
-    codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
-    produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
+    # Usamos "is None" porque a lista de cache pode estar propositalmente vazia []
+    if oportunidades_wishlist_cache is None:
+        data_limite = hoje - timedelta(days=30)
+        itens_pendentes = ItemPedidoIgnorado.objects.filter(
+            notificado=False, 
+            motivo_erro__icontains="estoque",
+            data_tentativa__gte=data_limite
+        ).select_related('cliente', 'cliente__client_state')
 
-    for item in itens_pendentes:
-        produto = produtos_dict.get(item.codigo_produto)
-        if not produto or not item.cliente: # Segurança extra
-            continue
+        oportunidades_wishlist = {}
+        codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
+        produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
+
+        for item in itens_pendentes:
+            produto = produtos_dict.get(item.codigo_produto)
+            if not produto or not item.cliente:
+                continue
+                
+            estado = item.cliente.client_state.uf_name
+            preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             
-        estado = item.cliente.client_state.uf_name
-        preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
+            if preco_atual and preco_atual > 0:
+                c_id = item.cliente.client_id
+                if c_id not in oportunidades_wishlist:
+                    oportunidades_wishlist[c_id] = {
+                        'cliente': item.cliente,
+                        'produtos': []
+                    }
+                if produto.product_description not in [p['descricao'] for p in oportunidades_wishlist[c_id]['produtos']]:
+                    oportunidades_wishlist[c_id]['produtos'].append({
+                        'codigo': produto.product_code,
+                        'descricao': produto.product_description,
+                        'preco': float(preco_atual)
+                    })
         
-        # O MATCH: Verifica se o produto agora tem preço válido
-        if preco_atual and preco_atual > 0:
-            c_id = item.cliente.client_id
-            if c_id not in oportunidades_wishlist:
-                oportunidades_wishlist[c_id] = {
-                    'cliente': item.cliente,
-                    'produtos': []
-                }
-            # Evita produtos duplicados para o mesmo cliente
-            if produto.product_description not in [p['descricao'] for p in oportunidades_wishlist[c_id]['produtos']]:
-                oportunidades_wishlist[c_id]['produtos'].append({
-                    'codigo': produto.product_code,
-                    'descricao': produto.product_description,
-                    'preco': float(preco_atual)
-                })
-        
+        # Converte o dicionário em lista para facilitar a renderização e o cache
+        oportunidades_wishlist_cache = list(oportunidades_wishlist.values())
+        cache.set('dashboard_wishlist', oportunidades_wishlist_cache, 900)
+
+    # --- CONTEXTO (Buscando os dados do Dicionário de Métricas Cacheadas) ---
     contexto = {
         'titulo': 'Dashboard Administrativo',
-        'total_clientes': total_clientes,
-        'total_pedidos': total_pedidos,
+        'total_clientes': metricas['total_clientes'],
+        'total_pedidos': metricas['total_pedidos'],
         'total_vendas': faturamento_formatado,
         'pedidos_recentes': pedidos_com_total,
-        'pedidos_pendentes': metricas_status['pendentes'],
-        'pedidos_concluidos': metricas_status['concluidos'],
-        'pedidos_orcamento': metricas_status['orcamento'],
-        'pedidos_adc': metricas_status['adc'],
-        'pedidos_separacao': metricas_status['separacao'],
-        'pedidos_expedicao': metricas_status['expedicao'],
-        'pedidos_atrasados': metricas_status['atrasados'],
+        'pedidos_pendentes': metricas['pendentes'],
+        'pedidos_concluidos': metricas['concluidos'],
+        'pedidos_orcamento': metricas['orcamento'],
+        'pedidos_adc': metricas['adc'],
+        'pedidos_separacao': metricas['separacao'],
+        'pedidos_expedicao': metricas['expedicao'],
+        'pedidos_atrasados': metricas['atrasados'],
         'filtro_ativo': filtro,
-        'oportunidades_wishlist': oportunidades_wishlist.values(), 
+        'oportunidades_wishlist': oportunidades_wishlist_cache, 
     }
     
     return render(request, 'dashboard.html', contexto)
@@ -3484,6 +3498,11 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     # 1. ATUALIZA O BANCO (Trava para não notificar de novo)
     ItemPedidoIgnorado.objects.filter(id__in=ids_para_atualizar).update(notificado=True)
     
+    # ----------------------------------------------------
+    # NOVO: FORÇA A TELA DO DASHBOARD A ATUALIZAR IMEDIATAMENTE (Limpa o Cache)
+    cache.delete('dashboard_wishlist')
+    # ----------------------------------------------------
+    
     # 2. MONTA A MENSAGEM
     produtos_texto = "\n".join(produtos_recuperados)
     mensagem = (
@@ -3498,4 +3517,3 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     
     messages.success(request, f"Cliente {cliente.client_name} marcado como notificado!")
     return redirect(link_whatsapp)
-
