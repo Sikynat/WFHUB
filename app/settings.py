@@ -168,6 +168,10 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR / 'media')
 
 
+# settings.py
+SESSION_COOKIE_AGE = 2592000  # Mantém a sessão viva por 30 dias (em segundos)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False # Garante que não apaga ao fechar a aba
+
 # ==============================================================================
 # OUTRAS CONFIGURAÇÕES
 # ==============================================================================

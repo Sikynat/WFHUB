@@ -22,15 +22,13 @@ urlpatterns = [
     path('notificar-wishlist/<int:cliente_id>/', views.notificar_wishlist_whatsapp, name='notificar_wishlist_whatsapp'),
     # Rotas do cliente
    
-    # ... suas rotas existentes
-    # Em urls.py
-    # Em urls.py
+    path('adicionar-ao-carrinho-bd/', views.adicionar_ao_carrinho_bd, name='adicionar_ao_carrinho_bd'),
     path('meu-historico/exportar/', views.exportar_meus_itens_excel, name='exportar_meus_itens_excel'),
     path('meu-historico-compras/', views.meus_itens_comprados, name='meus_itens_comprados'),
     path('sugestoes/', views.sugestoes_compra, name='sugestoes_compra'),
     path('', views.home, name='home'),
     path('carrinho/', views.carrinho, name='carrinho'),
-    path('remover-item/<int:product_id>/', views.remover_item_carrinho, name='remover_item'),
+    path('remover-item/<int:product_id>/', views.remover_item, name='remover_item'),
     path('atualizar-carrinho/', views.atualizar_carrinho, name='atualizar_carrinho'),
     path('limpar-carrinho/', views.limpar_carrinho, name='limpar_carrinho'),
     path('salvar-pedido/', views.salvar_pedido, name='salvar_pedido'),

@@ -4,7 +4,6 @@
 {% block content %}
 
 <style>
-
     /* ----- PALETA DE CORES ----- */
     :root {
         --cor-fundo: #16001c;      /* Cinza escuro para o fundo */
@@ -67,69 +66,67 @@
 
    /* ----- TABELA (VERSÃO MELHORADA) ----- */
 .table-responsive {
-    border-radius: 0.5rem; /* Cantos arredondados para o container */
-    overflow: hidden; /* Garante que a tabela respeite os cantos arredondados */
+    border-radius: 0.5rem; 
+    overflow: hidden; 
     border: 1px solid var(--cor-borda);
-    background-color: var(--cor-componente); /* Fundo do container da tabela */
+    background-color: var(--cor-componente); 
 }
 
 .table {
     color: var(--cor-texto);
-    margin-bottom: 0; /* Remove a margem padrão para ajustar no container */
+    margin-bottom: 0; 
     border-collapse: separate;
     border-spacing: 0;
-    width: 100%; /* Garante que a tabela ocupe 100% da largura do pai */
+    width: 100%; 
 }
 
-/* Estilo do Cabeçalho */
 .table thead th {
-    background-color: #2c3034; /* Cinza mais escuro para o cabeçalho */
-    color: var(--cor-destaque); /* Cor do texto do cabeçalho levemente mais suave */
+    background-color: #2c3034; 
+    color: var(--cor-destaque); 
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 2px solid var(--cor-destaque); /* Borda roxa que você já tinha */
-    padding: 0.9rem; /* Espaçamento interno */
+    border-bottom: 2px solid var(--cor-destaque); 
+    padding: 0.9rem; 
     vertical-align: middle;
 }
 
-/* Estilo do Corpo da Tabela */
 .table tbody tr {
-    background-color: var(--cor-componente); /* Fundo padrão das linhas do corpo */
+    background-color: var(--cor-componente); 
     color: var(--cor-texto);
 }
 
-/* Estilo das Células */
 .table th,
 .table td {
-    padding: 0.9rem; /* Aumenta o espaçamento interno */
-    vertical-align: middle; /* Centraliza o conteúdo verticalmente */
+    padding: 0.9rem; 
+    vertical-align: middle; 
     border-top: 1px solid var(--cor-borda);
     background-color: #212529;
     color: white;
 }
 
-/* Remove borda inferior padrão, pois a superior já define */
 .table > :not(caption) > * > * {
     border-bottom-width: 0;
 }
 
-/* Efeito listrado para linhas ímpares */
 .table-striped > tbody > tr:nth-of-type(odd) {
-    background-color: rgba(255, 255, 255, 0.05); /* Fundo cinza um pouco mais claro para a linha ímpar */
+    background-color: rgba(255, 255, 255, 0.05); 
 }
 
-/* Efeito Hover */
 .table tbody tr:hover {
-    background-color: rgba(111, 66, 193, 0.25); /* Fundo roxo mais visível no hover */
-    color: #fff; /* Garante que o texto fique branco no hover */
+    background-color: rgba(111, 66, 193, 0.25); 
+    color: #fff; 
 }
 
-/* Classe para alinhar texto à direita */
 .text-right-data {
     text-align: right !important;
 }
 
+/* NOVO: Estilo para os subtotais da tabela */
+.subtotal-field {
+    color: var(--cor-destaque) !important; /* Cor Roxa por padrão */
+    font-weight: bold;
+}
 
     /* ----- BOTÕES ----- */
     .btn-primary, .btn-success {
@@ -141,7 +138,7 @@
         border-color: var(--cor-destaque-hover);
     }
     .btn-warning {
-        background-color: #6c757d; /* Botão secundário em cinza */
+        background-color: #6c757d; 
         border-color: #6c757d;
         color: white;
     }
@@ -169,11 +166,7 @@
         border-color: var(--cor-borda);
     }
 
-
-    /* ----- ESTILOS PARA MOBILE (Responsividade) ----- */
 @media (max-width: 767.98px) {
-
-    /* 1. Filtros empilhados verticalmente */
     .card-body .input-group {
         flex-direction: column;
     }
@@ -181,18 +174,16 @@
     .card-body .input-group .form-control,
     .card-body .input-group .btn {
         width: 100%;
-        margin-bottom: 0.75rem; /* Adiciona espaço entre os itens empilhados */
-        border-radius: 0.375rem !important; /* Garante que as bordas fiquem arredondadas */
+        margin-bottom: 0.75rem; 
+        border-radius: 0.375rem !important; 
     }
 
     .card-body .input-group > *:last-child {
-        margin-bottom: 0; /* Remove a margem do último item */
+        margin-bottom: 0; 
     }
 
-
-    /* 2. Ajuste de fontes para melhor leitura */
     h1 {
-        font-size: 1.8rem; /* Reduz um pouco o título principal */
+        font-size: 1.8rem; 
     }
     h2 {
         font-size: 1.5rem;
@@ -200,20 +191,15 @@
     p, body {
         margin-left: 10px;
         margin-right: 10px;
-        font-size: 0.65rem; /* Ajusta o texto geral */
+        font-size: 0.65rem; 
     }
 
-
-    /* 3. Tabela com menos espaçamento interno para caber mais conteúdo */
     .table th,
     .table td {
-        
-        padding: 0.6rem 0.4rem; /* Reduz o espaçamento vertical e horizontal */
+        padding: 0.6rem 0.4rem; 
     }
     
-
-    /* 4. Botões de Ação (Gerar Pedido/Limpar) empilhados */
-    #gerar-pedido-form .btn {
+    .btn {
         width: 100%;
         display: block;
         margin-bottom: 0.75rem;
@@ -221,19 +207,17 @@
 }
 
 .input-quantidade {
-    max-width: 90px; /* Largura máxima para o campo */
-    text-align: right; /* Alinha o texto à direita (melhor para números) */
-    padding: 0.375rem 0.75rem; /* Reduz o padding para um tamanho mais compacto */
-    height: calc(1.5em + 0.75rem + 2px); /* Tenta manter a altura padrão do Bootstrap */
-    font-size: 0.9rem; /* Torna a fonte um pouco menor */
+    max-width: 90px; 
+    text-align: right; 
+    padding: 0.375rem 0.75rem; 
+    height: calc(1.5em + 0.75rem + 2px); 
+    font-size: 0.9rem; 
 }
 
-/* Garante que o input da quantidade respeite a largura máxima dentro da célula */
 .table td input.input-quantidade {
     max-width: 90px;
-    margin: 0 auto; /* Opcional: Se quiser centralizar na célula */
+    margin: 0 auto; 
 }
-
 </style>
 
 <h1><span>Bem-vindo à nossa lista de produtos!</span></h1>
@@ -273,6 +257,7 @@
     </p>
 </div>
 {% endif %}
+
 <h2><span>Nossos Produtos</span></h2>
 <p>Você esta visualizando a tabela de preço do dia: <strong>{{ data_hoje|date:"d/m/Y" }}</strong></p>
 <div class="card mb-4">
@@ -300,83 +285,91 @@
 
 <hr>
 
-<form id="gerar-pedido-form" action="{% url 'gerar_pedido' %}" method="post">
-    {% csrf_token %}
-    <input type="hidden" name="cart_data" id="cart-data-input">
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Código do Produto</th>
-                    <th>Descrição do Produto</th>
-                    <th>Grupo</th>
-                    <th>Marca</th>
-                    {% if preco_exibido == 'todos' %}
-                        <th class="text-right-data">Valor (SP)</th>
-                        <th class="text-right-data">Valor (ES)</th>
-                    {% else %}
-                        <th class="text-right-data">Valor ({{ preco_exibido|upper }})</th>
-                    {% endif %}
-                    {% if not user.is_staff %}
-                        <th class="text-right-data">Quantidade</th>
-                        <th class="text-right-data">Total</th>
-                    {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in product_list %}
-                <tr>
-                    <td>{{ product.product_code }}</td>
-                    <td>{{ product.product_description }}</td>
-                    <td>{{ product.product_group }}</td>
-                    <td>{{ product.product_brand }}</td>
-                    
-                    {% if preco_exibido == 'todos' %}
-                        <td class="text-right-data" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                        <td class="text-right-data" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
-                    {% elif preco_exibido == 'sp' %}
-                        <td class="product-value text-right-data" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                    {% elif preco_exibido == 'es' %}
-                        <td class="product-value text-right-data" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
-                    {% endif %}
-                    
-                    {% if not user.is_staff %}
-                    <td>
+{% csrf_token %} 
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Código do Produto</th>
+                <th>Descrição do Produto</th>
+                <th>Grupo</th>
+                <th>Marca</th>
+                {% if preco_exibido == 'todos' %}
+                    <th class="text-right-data">Valor (SP)</th>
+                    <th class="text-right-data">Valor (ES)</th>
+                {% else %}
+                    <th class="text-right-data">Valor ({{ preco_exibido|upper }})</th>
+                {% endif %}
+                {% if not user.is_staff %}
+                    <th class="text-right-data">Quantidade</th>
+                    <th class="text-right-data">Total</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in product_list %}
+            <tr>
+                <td>{{ product.product_code }}</td>
+                <td>{{ product.product_description }}</td>
+                <td>{{ product.product_group }}</td>
+                <td>{{ product.product_brand }}</td>
+                
+                {% if preco_exibido == 'todos' %}
+                    <td class="text-right-data unit-price-sp" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
+                    <td class="text-right-data unit-price-es" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                {% elif preco_exibido == 'sp' %}
+                    <td class="product-value text-right-data unit-price" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
+                {% elif preco_exibido == 'es' %}
+                    <td class="product-value text-right-data unit-price" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                {% endif %}
+                
+                {% if not user.is_staff %}
+                <td>
+                    <div class="input-group input-group-sm" style="flex-wrap: nowrap; justify-content: flex-end; max-width: 110px; margin-left: auto;">
                         <input
                             type="number"
-                            name="quantidade_{{ product.product_id }}"
                             id="quantidade_{{ product.product_id }}"
-                            min="0"
-                            class="form-control input-quantidade text-right-data">
-                    </td>
-                    <td class="text-right-data">
-                        <span id="total_{{ product.product_id }}">R$ 0,00</span>
-                    </td>
-                    {% endif %}
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="{% if user.is_staff %}6{% else %}8{% endif %}">Nenhum produto cadastrado.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            {% if not user.is_staff %}
-            <tfoot>
-                <tr>
-                    <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
-                    <td class="text-right-data"><strong id="grand-total">R$ 0,00</strong></td>
-                </tr>
-            </tfoot>
-            {% endif %}
-        </table>
-    </div>
-    
-    {% if not user.is_staff %}
-    <br>
-    <button type="submit" class="btn btn-primary">Gerar Pedido</button>
-    <a href="#" class="btn btn-warning" onclick="limparCache()">Limpar Carrinho</a>
-    {% endif %}
-</form>
+                            value=""
+                            placeholder="0"
+                            min="1"
+                            class="form-control input-quantidade text-center" 
+                            style="padding: 0.25rem;"
+                            oninput="calcularSubtotalAoDigitar({{ product.product_id }})">
+                        <button type="button" class="btn btn-success" onclick="adicionarAoBanco({{ product.product_id }}, this)">
+                            +
+                        </button>
+                    </div>
+                </td>
+                <td class="text-right-data">
+                    <span id="total_{{ product.product_id }}" class="subtotal-field">R$ 0,00</span>
+                </td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="{% if user.is_staff %}6{% else %}8{% endif %}">Nenhum produto cadastrado.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        
+        {% if not user.is_staff %}
+        <tfoot>
+            <tr>
+                <td colspan="5" class="text-end"><strong>Total Geral:</strong></td>
+                <td colspan="2" class="text-right-data">
+                    <strong id="grand-total" data-valor-db="{{ total_carrinho_real|default:'0' }}">R$ 0,00</strong>
+                </td>
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+</div>
+
+{% if not user.is_staff %}
+<br>
+<a href="{% url 'carrinho' %}" class="btn btn-primary">Ir para o Carrinho</a>
+<button type="button" class="btn btn-warning" onclick="limparCache()">Limpar Visualização</button>
+{% endif %}
 
 {% if product_list.has_other_pages %}
     <br>
@@ -404,117 +397,112 @@
 {% endif %}
 
 <script>
-    document.addEventListener('DOMContentLoaded', (event) => {
-        const quantidadeInputs = document.querySelectorAll('input[type="number"][name^="quantidade_"]');
-        const grandTotalElement = document.getElementById('grand-total');
+    // Helper para formatar moeda PT-BR
+    function formatarMoeda(valor) {
+        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
 
-        const messagesContainer = document.querySelector('.mt-4');
-        const successMessage = messagesContainer ? messagesContainer.querySelector('.alert-success') : null;
-
-        if (successMessage) {
-            localStorage.clear();
-        } else {
-            loadAndCalculateTotals();
-        }
-
-        document.getElementById('gerar-pedido-form').addEventListener('submit', function(e) {
-            const cartData = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('quantidade_')) {
-                    const savedItem = localStorage.getItem(key);
-                    if (savedItem) {
-                        try {
-                            const itemData = JSON.parse(savedItem);
-                            if (itemData.quantidade > 0) {
-                                cartData[key.split('_')[1]] = itemData.quantidade;
-                            }
-                        } catch (error) {
-                            console.error('Erro ao processar item do localStorage:', error);
-                        }
-                    }
-                }
-            }
-            document.getElementById('cart-data-input').value = JSON.stringify(cartData);
-        });
-
-
-        function loadAndCalculateTotals() {
-            quantidadeInputs.forEach(input => {
-                const savedItem = localStorage.getItem(input.id);
-                if (savedItem) {
-                    try {
-                        const itemData = JSON.parse(savedItem);
-                        if (itemData && itemData.quantidade > 0) {
-                            input.value = itemData.quantidade;
-                        } else {
-                            input.value = 0;
-                        }
-                    } catch (e) {
-                        input.value = 0;
-                    }
-                }
-                updateTotals(input);
-            });
-        }
-
-        function updateTotals(inputElement) {
-            const row = inputElement.closest('tr');
-            const valorUnitarioElement = row.querySelector('.product-value');
-
-            if (!valorUnitarioElement) {
-                return;
-            }
-            
-            const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
-            const quantidade = parseFloat(inputElement.value);
-
-            if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
-                const total = valorUnitario * quantidade;
-                row.querySelector(`span#total_${inputElement.id.split('_')[1]}`).innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-            }
-
-            updateGrandTotal();
-        }
-
-        function updateGrandTotal() {
-            let totalGeral = 0;
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('quantidade_')) {
-                    const savedItem = localStorage.getItem(key);
-                    if (savedItem) {
-                        try {
-                            const itemData = JSON.parse(savedItem);
-                            if (!isNaN(itemData.valor) && !isNaN(itemData.quantidade)) {
-                                totalGeral += itemData.valor * itemData.quantidade;
-                            }
-                        } catch (e) {
-                            // Ignora itens mal formatados
-                        }
-                    }
-                }
-            }
-            grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
-        }
-
-        quantidadeInputs.forEach(input => {
-            input.addEventListener('input', (e) => {
-                const row = e.target.closest('tr');
-                const valorUnitarioElement = row.querySelector('.product-value');
-                const valorUnitario = parseFloat(valorUnitarioElement.dataset.value.replace(',', '.'));
-                
-                const itemData = {
-                    quantidade: parseFloat(e.target.value),
-                    valor: valorUnitario
-                };
-                localStorage.setItem(e.target.id, JSON.stringify(itemData));
-                
-                updateTotals(e.target);
-            });
-        });
+    document.addEventListener('DOMContentLoaded', () => {
+        loadVisuals();
     });
-    
+
+    // Calcula subtotal em tempo real conforme digita (Client-side)
+    function calcularSubtotalAoDigitar(productId) {
+        const input = document.getElementById('quantidade_' + productId);
+        const spanTotal = document.getElementById('total_' + productId);
+        
+        // Localiza o preço unitário correto baseado no data-value injetado pelo Django
+        const tdPreco = input.closest('tr').querySelector('[data-value]');
+        const precoUnitario = parseFloat(tdPreco.getAttribute('data-value').replace(',', '.'));
+        const quantidade = parseInt(input.value);
+
+        // O parseInt de "" retorna NaN, caindo perfeitamente no Else (0,00)
+        if (!isNaN(quantidade) && quantidade > 0) {
+            const subtotal = precoUnitario * quantidade;
+            spanTotal.innerText = formatarMoeda(subtotal);
+            spanTotal.style.color = 'var(--cor-destaque)';
+        } else {
+            spanTotal.innerText = "R$ 0,00";
+        }
+    }
+
+    // Sincroniza a tela com a verdade do Banco de Dados
+    function loadVisuals() {
+        const totalElement = document.getElementById('grand-total');
+        if (!totalElement) return;
+
+        const valorDB = parseFloat(totalElement.getAttribute('data-valor-db')) || 0;
+
+        if (valorDB === 0) {
+            totalElement.innerText = "R$ 0,00";
+            localStorage.removeItem('cart_grand_total');
+            
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('cart_item_')) localStorage.removeItem(key);
+            });
+        } else {
+            totalElement.innerText = formatarMoeda(valorDB);
+            localStorage.setItem('cart_grand_total', valorDB);
+        }
+    }
+
+    function adicionarAoBanco(productId, btnElement) {
+        const inputQtd = document.getElementById('quantidade_' + productId);
+        const spanTotalLinha = document.getElementById('total_' + productId);
+        const quantidade = parseInt(inputQtd.value);
+        const originalHtml = btnElement.innerHTML;
+
+        if (isNaN(quantidade) || quantidade <= 0) {
+            alert('Insira uma quantidade válida.');
+            return;
+        }
+
+        btnElement.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        btnElement.disabled = true;
+
+        const formData = new FormData();
+        formData.append('product_id', productId);
+        formData.append('quantidade', quantidade);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        fetch("{% url 'adicionar_ao_carrinho_bd' %}", {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                btnElement.innerHTML = '✔';
+                btnElement.classList.replace('btn-success', 'btn-primary');
+                
+                // Atualiza o Total Geral na interface imediatamente com o dado retornado
+                document.getElementById('grand-total').innerText = formatarMoeda(data.pedido_total);
+                localStorage.setItem('cart_grand_total', data.pedido_total);
+
+                setTimeout(() => {
+                    btnElement.innerHTML = originalHtml;
+                    btnElement.classList.replace('btn-primary', 'btn-success');
+                    btnElement.disabled = false;
+                    
+                    // ZERA O CAMPO: Volta a ficar vazio e limpa a linha de total
+                    inputQtd.value = "";
+                    spanTotalLinha.innerText = "R$ 0,00";
+                    spanTotalLinha.style.color = 'var(--cor-destaque)';
+                }, 1000);
+            } else {
+                alert('Erro: ' + data.erro);
+                btnElement.innerHTML = originalHtml;
+                btnElement.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            btnElement.innerHTML = originalHtml;
+            btnElement.disabled = false;
+        });
+    }
+
     function limparCache() {
         localStorage.clear();
         location.reload();

@@ -340,3 +340,43 @@ class StatusPedidoERP(models.Model):
 
     def __str__(self):
         return f"Pedido {self.numero_pedido} - {self.situacao}"
+    
+# ==========================================
+# ESTRUTURA DE CARRINHO DE COMPRAS (NOVO)
+# ==========================================
+
+class Carrinho(models.Model):
+    # OneToOne garante que cada cliente tenha no máximo 1 carrinho ativo por vez
+    cliente = models.OneToOneField(WfClient, on_delete=models.CASCADE, related_name='carrinho')
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'wf_carrinho'
+        verbose_name = 'Carrinho'
+        verbose_name_plural = 'Carrinhos'
+
+    def get_total_carrinho(self):
+        """Calcula o total lendo o preço ATUALIZADO do produto no momento."""
+        uf = self.cliente.client_state.uf_name if self.cliente and self.cliente.client_state else 'SP'
+        total = Decimal('0.00')
+        
+        for item in self.itens.all():
+            preco = item.produto.product_value_sp if uf == 'SP' else item.produto.product_value_es
+            if preco:
+                total += preco * Decimal(item.quantidade)
+        return total
+
+class ItemCarrinho(models.Model):
+    carrinho = models.ForeignKey(Carrinho, on_delete=models.CASCADE, related_name='itens')
+    produto = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantidade = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        db_table = 'wf_item_carrinho'
+        # Garante que o mesmo produto não apareça em duas linhas separadas no mesmo carrinho
+        unique_together = ('carrinho', 'produto') 
+
+    def get_subtotal(self):
+        uf = self.carrinho.cliente.client_state.uf_name if self.carrinho.cliente.client_state else 'SP'
+        preco = self.produto.product_value_sp if uf == 'SP' else self.produto.product_value_es
+        return (preco or Decimal('0.00')) * Decimal(self.quantidade)

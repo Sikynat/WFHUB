@@ -72,6 +72,9 @@ from datetime import date
 from .models import StatusPedidoERP
 import pdfplumber
 import re
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from .models import Carrinho, ItemCarrinho
 
 try:
     # Tenta definir o locale ideal
@@ -118,9 +121,10 @@ def home(request):
     preco_exibido = None
     cliente_logado = None
     itens_frequentes = [] 
-    produtos_wishlist_cliente = [] # NOVO: Lista para a Wishlist do cliente
+    produtos_wishlist_cliente = [] 
+    total_carrinho_real = Decimal('0.00') # Inicializa o total como zero
 
-    # 4. Lógica de Preços, Recomendações e WISHLIST
+    # 4. Lógica de Preços, Recomendações, WISHLIST e SINCRONIZAÇÃO DE CARRINHO
     if request.user.is_authenticated:
         if request.user.is_staff:
             preco_exibido = 'todos'
@@ -137,12 +141,17 @@ def home(request):
                     preco_exibido = 'es'
                     products = products.exclude(product_value_es=0)
 
-                # =========================================================
-                # --- NOVO: ALERTA DE WISHLIST NO FRONT-END ---
-                # =========================================================
+                # --- SINCRONIZAÇÃO DO TOTAL DO CARRINHO (NOVO) ---
+                # Importação local para evitar importação circular no topo do arquivo
+                from .models import Carrinho 
+                carrinho = Carrinho.objects.filter(cliente=cliente_logado).first()
+                if carrinho:
+                    total_carrinho_real = carrinho.get_total_carrinho()
+
+                # --- ALERTA DE WISHLIST NO FRONT-END ---
                 data_limite = timezone.localdate() - timedelta(days=30)
                 itens_pendentes = ItemPedidoIgnorado.objects.filter(
-                    cliente=cliente_logado, # Filtra SÓ os itens deste cliente
+                    cliente=cliente_logado,
                     notificado=False,
                     motivo_erro__icontains="estoque",
                     data_tentativa__gte=data_limite
@@ -159,14 +168,12 @@ def home(request):
                         preco_atual = getattr(produto, 'product_value_sp' if estado_cliente == 'SP' else 'product_value_es')
                         
                         if preco_atual and preco_atual > 0:
-                            # Evita duplicar o mesmo produto no aviso
                             if not any(p['codigo'] == produto.product_code for p in produtos_wishlist_cliente):
                                 produtos_wishlist_cliente.append({
                                     'codigo': produto.product_code,
                                     'descricao': produto.product_description,
                                     'preco': f"{preco_atual.quantize(Decimal('0.01'))}".replace('.', ',')
                                 })
-                # =========================================================
 
             except WfClient.DoesNotExist:
                 products = Product.objects.none()
@@ -180,7 +187,7 @@ def home(request):
         product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
     
     # 6. Paginação
-    paginator = Paginator(products, 30) 
+    paginator = Paginator(products, 30)
     page = request.GET.get('page')
 
     try:
@@ -194,11 +201,13 @@ def home(request):
     context = {
         'product_list': product_list,
         'itens_frequentes': itens_frequentes, 
-        'produtos_wishlist_cliente': produtos_wishlist_cliente, # NOVO: Injetado no HTML
+        'produtos_wishlist_cliente': produtos_wishlist_cliente,
         'cliente_logado': cliente_logado,
         'preco_exibido': preco_exibido,
         'data_hoje': products[0].date_product if products else date.today(),
         'pedidos_rascunho_count': pedidos_rascunho_count,
+        # INJETADO: Valor numérico puro para o data-attribute do HTML
+        'total_carrinho_real': float(total_carrinho_real), 
     }
             
     return render(request, 'home.html', context)
@@ -241,101 +250,113 @@ import pdb # Importa o módulo do debugger
 
 @login_required
 def carrinho(request):
-    carrinho_da_sessao = request.session.get('carrinho', {})
-    carrinho_detalhes = []
-    total_geral = Decimal('0.00')
-
-    # AQUI ESTÁ A CORREÇÃO: Busca o ID do pedido rascunho na sessão.
-    # A view 'continuar_pedido' é que salva este ID.
-    pedido_id_rascunho = request.session.get('pedido_id_rascunho', None)
-    
-    preco_exibido = None
-
+    # 1. Identifica o cliente logado
     try:
-        if request.user.is_staff:
-            preco_exibido = 'todos'
-        else:
-            cliente_logado = request.user.wfclient
-            if cliente_logado.client_state.uf_name == 'SP':
-                preco_exibido = 'sp'
-            elif cliente_logado.client_state.uf_name == 'ES':
-                preco_exibido = 'es'
+        cliente_logado = request.user.wfclient
     except WfClient.DoesNotExist:
-        pass
+        messages.error(request, "Cliente não encontrado.")
+        return redirect('home')
 
-    for product_id, quantidade in carrinho_da_sessao.items():
-        try:
-            product = get_object_or_404(Product, product_id=product_id)
+    # 2. Busca o carrinho do banco de dados
+    carrinho_obj = Carrinho.objects.filter(cliente=cliente_logado).first()
+    
+    itens_carrinho = []
+    total_carrinho = Decimal('0.00')
+
+    # 3. Se existir um carrinho, pega os itens
+    if carrinho_obj:
+        # Pega o estado para definir qual preço mostrar (SP ou ES)
+        uf_cliente = cliente_logado.client_state.uf_name if cliente_logado.client_state else 'SP'
+        
+        # Otimização: select_related traz o Produto junto, evitando consultas extras ao banco
+        itens_db = carrinho_obj.itens.select_related('produto').all()
+        
+        for item in itens_db:
+            preco_unitario = item.produto.product_value_sp if uf_cliente == 'SP' else item.produto.product_value_es
+            preco_unitario = preco_unitario or Decimal('0.00')
+            subtotal = preco_unitario * item.quantidade
             
-            if preco_exibido == 'sp':
-                valor_unitario = product.product_value_sp
-            elif preco_exibido == 'es':
-                valor_unitario = product.product_value_es
-            elif preco_exibido == 'todos':
-                valor_unitario = product.product_value_sp
-            else:
-                valor_unitario = Decimal('0.00')
-
-            if valor_unitario is None:
-                valor_unitario = Decimal('0.00')
-
-            valor_total_item = valor_unitario * quantidade
-            total_geral += valor_total_item
-
-            carrinho_detalhes.append({
-                'product': product,
-                'quantidade': quantidade,
-                'valor_unitario': valor_unitario,
-                'valor_total': valor_total_item,
-                'valor_unitario_formatado': f"{valor_unitario.quantize(Decimal('0.01'))}".replace('.', ','),
-                'valor_total_formatado': f"{valor_total_item.quantize(Decimal('0.01'))}".replace('.', ','),
+            # Monta o dicionário para a tela (HTML) ler
+            itens_carrinho.append({
+                'item_id': item.id,
+                'produto': item.produto,
+                'quantidade': item.quantidade,
+                'preco_unitario': preco_unitario,
+                'subtotal': subtotal
             })
-        except Product.DoesNotExist:
-            continue
+            total_carrinho += subtotal
 
-    contexto = {
-        'titulo': 'Carrinho de Compras',
-        'carrinho_detalhes': carrinho_detalhes,
-        'total_geral': total_geral,
-        'total_geral_formatado': f"R$ {total_geral.quantize(Decimal('0.01'))}".replace('.', ','),
-        'preco_exibido': preco_exibido,
-        # Adiciona o ID ao contexto, garantindo que o template tenha acesso a ele
-        'pedido_id_rascunho': pedido_id_rascunho,
+    context = {
+        'itens_carrinho': itens_carrinho,
+        'total_carrinho': total_carrinho,
+        'cliente_logado': cliente_logado,
     }
-    return render(request, 'carrinho.html', contexto)
+    
+    return render(request, 'carrinho.html', context)
 
 
 # Fim do carrinho
 
 
 @login_required
-def remover_item_carrinho(request, product_id):
-    carrinho = request.session.get('carrinho', {})
-    if str(product_id) in carrinho:
-        del carrinho[str(product_id)]
-        request.session.modified = True
-    return redirect('carrinho')
-
-@login_required
-def atualizar_carrinho(request):
-    if request.method == 'POST':
-        carrinho = request.session.get('carrinho', {})
-        for key, value in request.POST.items():
-            if key.startswith('quantidade_') and value.isdigit():
-                product_id = key.split('_')[1]
-                quantidade = int(value)
-                if quantidade > 0:
-                    carrinho[product_id] = quantidade
-                else:
-                    del carrinho[product_id]
-        request.session.modified = True
+def remover_item(request, product_id):
+    """Remove um item específico do carrinho no Banco de Dados."""
+    try:
+        cliente_logado = request.user.wfclient
+        # Deleta apenas o item especificado atrelado ao cliente logado
+        ItemCarrinho.objects.filter(
+            carrinho__cliente=cliente_logado, 
+            produto__product_id=product_id
+        ).delete()
+        messages.success(request, "Item removido do carrinho.")
+    except Exception as e:
+        messages.error(request, f"Erro ao remover item: {e}")
+        
     return redirect('carrinho')
 
 @login_required
 def limpar_carrinho(request):
-    if 'carrinho' in request.session:
-        del request.session['carrinho']
-        request.session.modified = True
+    """Esvazia o carrinho no Banco de Dados."""
+    try:
+        # Apagar o Carrinho inteiro limpa todos os itens por causa do CASCADE
+        Carrinho.objects.filter(cliente=request.user.wfclient).delete()
+        messages.success(request, "Carrinho limpo com sucesso.")
+    except Exception as e:
+        messages.error(request, "Erro ao limpar o carrinho.")
+        
+    return redirect('carrinho')
+
+@login_required
+def atualizar_carrinho(request):
+    """Atualiza as quantidades se o usuário digitar os números e clicar em 'Atualizar'."""
+    if request.method == 'POST':
+        try:
+            cliente_logado = request.user.wfclient
+            carrinho_obj = Carrinho.objects.filter(cliente=cliente_logado).first()
+            
+            if carrinho_obj:
+                for key, value in request.POST.items():
+                    # Procura pelos inputs de quantidade que nomeamos no HTML
+                    if key.startswith('quantidade_'):
+                        produto_id = key.split('_')[1]
+                        nova_qtd = int(value)
+                        
+                        if nova_qtd > 0:
+                            ItemCarrinho.objects.filter(
+                                carrinho=carrinho_obj, 
+                                produto__product_id=produto_id
+                            ).update(quantidade=nova_qtd)
+                        else:
+                            # Se ele botar zero, deleta o item
+                            ItemCarrinho.objects.filter(
+                                carrinho=carrinho_obj, 
+                                produto__product_id=produto_id
+                            ).delete()
+                            
+                messages.success(request, "Carrinho atualizado com sucesso!")
+        except Exception as e:
+            messages.error(request, "Erro ao atualizar o carrinho.")
+            
     return redirect('carrinho')
 
 
@@ -349,9 +370,10 @@ def limpar_carrinho(request):
 
 # ... (seus outros imports)
 
+# --- SUBSTITUA A VIEW CHECKOUT EXISTENTE POR ESTA VERSÃO OTIMIZADA ---
+
 @login_required
 def checkout(request, pedido_id_rascunho=None):
-    # Lógica para o método POST (quando o formulário de checkout é enviado)
     if request.method == 'POST':
         endereco_id = request.POST.get('endereco_selecionado')
         data_envio_str = request.POST.get('data_expedicao')
@@ -419,32 +441,33 @@ def checkout(request, pedido_id_rascunho=None):
                     criado_por=request.user,
                 )
                 
-                for product_id, quantidade in carrinho_da_sessao.items():
-                    product = get_object_or_404(Product, product_id=product_id)
-                    ItemPedido.objects.create(
-                        pedido=pedido,
-                        produto=product,
-                        quantidade=quantidade,
-                        valor_unitario_sp=product.product_value_sp,
-                        valor_unitario_es=product.product_value_es,
-                    )
+                # --- OTIMIZAÇÃO APLICADA: 1 SELECT IN (...) ---
+                product_ids = [int(pid) for pid in carrinho_da_sessao.keys()]
+                produtos_dict = Product.objects.in_bulk(product_ids, field_name='product_id')
                 
-                # === CORREÇÃO E DEBUG ===
-                # 1. Calcula o total usando a função do model
+                itens_para_criar = []
+                for product_id_str, quantidade in carrinho_da_sessao.items():
+                    product = produtos_dict.get(int(product_id_str))
+                    if product:
+                        # Prepara o objeto em memória (Não salva no banco ainda)
+                        itens_para_criar.append(ItemPedido(
+                            pedido=pedido,
+                            produto=product,
+                            quantidade=quantidade,
+                            valor_unitario_sp=product.product_value_sp,
+                            valor_unitario_es=product.product_value_es,
+                        ))
+                
+                # --- OTIMIZAÇÃO APLICADA: 1 INSERT MÚLTIPLO ---
+                if itens_para_criar:
+                    ItemPedido.objects.bulk_create(itens_para_criar)
+                
+                # Calcula o total usando a função do model
                 total_calculado = pedido.get_total_geral()
                 
-                # 2. Prints de Debug no Terminal
-                print(f"\n--- DEBUG CHECKOUT MANUAL (PEDIDO #{pedido.id}) ---")
-                print(f"Cliente: {cliente_logado.client_name} | UF: {cliente_logado.client_state.uf_name}")
-                print(f"Total Calculado via get_total_geral(): {total_calculado}")
-                
-                # 3. Salva o valor no banco de dados
+                # Salva o valor no banco de dados
                 pedido.valor_total = total_calculado
                 pedido.save()
-                
-                print(f"Valor salvo no campo valor_total: {pedido.valor_total}")
-                print("---------------------------------------------------\n")
-                
                 pedido_final = pedido
                 
                 if 'carrinho' in request.session:
@@ -452,7 +475,6 @@ def checkout(request, pedido_id_rascunho=None):
 
         messages.success(request, f'Pedido #{pedido_final.id} realizado com sucesso!')
         return redirect('home')
-
 
 
     # Lógica para o método GET (primeira vez que a página é acessada)
@@ -1698,6 +1720,8 @@ def gerar_pedido_manual(request):
     
     return render(request, 'gerar_pedido_manual.html', context)
 
+# --- SUBSTITUA A VIEW PROCESSAR_PEDIDO_MANUAL EXISTENTE POR ESTA VERSÃO OTIMIZADA ---
+
 @staff_member_required
 def processar_pedido_manual(request):
     if request.method == 'POST':
@@ -1708,9 +1732,8 @@ def processar_pedido_manual(request):
         frete_option = request.POST.get('frete_option')
         nota_fiscal = request.POST.get('nota_fiscal')
         usuario_logado = request.user
-        observacao = request.POST.get('observacao') # <-- ADICIONE ESTA LINHA
+        observacao = request.POST.get('observacao')
         
-        # Lógica de validação do endereço ajustada
         fretes_sem_endereco = ['ONIBUS', 'RETIRADA']
         endereco_selecionado = None
         
@@ -1743,37 +1766,45 @@ def processar_pedido_manual(request):
                     status='PENDENTE',
                     criado_por=usuario_logado,
                     valor_total=Decimal('0.00'),
-                    observacao=observacao # <-- ADICIONE ESTA LINHA
-
+                    observacao=observacao
                 )
                 
-                for product_id, quantidade in cart_data.items():
-                    try:
-                        produto = get_object_or_404(Product, product_id=product_id)
-                        
-                        # Lógica para salvar o valor no campo correto
-                        if cliente_selecionado.client_state.uf_name == 'SP':
-                            ItemPedido.objects.create(
-                                pedido=pedido_criado,
-                                produto=produto,
-                                quantidade=quantidade,
-                                valor_unitario_sp=produto.product_value_sp,
-                                valor_unitario_es=None
-                            )
-                        elif cliente_selecionado.client_state.uf_name == 'ES':
-                            ItemPedido.objects.create(
-                                pedido=pedido_criado,
-                                produto=produto,
-                                quantidade=quantidade,
-                                valor_unitario_sp=None,
-                                valor_unitario_es=produto.product_value_es
-                            )
-                        else:
-                            messages.warning(request, f'Produto {produto.product_code} não pôde ser adicionado ao pedido. Estado do cliente inválido.')
-                            continue
-                    except Product.DoesNotExist:
-                        messages.warning(request, f'Produto com ID {product_id} não encontrado e foi ignorado.')
+                # --- OTIMIZAÇÃO APLICADA: 1 SELECT IN (...) ---
+                product_ids = [int(pid) for pid in cart_data.keys()]
+                produtos_dict = Product.objects.in_bulk(product_ids, field_name='product_id')
+                
+                itens_para_criar = []
+                estado_cliente = cliente_selecionado.client_state.uf_name
+
+                for product_id_str, quantidade in cart_data.items():
+                    produto = produtos_dict.get(int(product_id_str))
+                    
+                    if not produto:
+                        messages.warning(request, f'Produto com ID {product_id_str} não encontrado e foi ignorado.')
                         continue
+                    
+                    # Lógica para salvar o valor no campo correto e manter o outro nulo
+                    if estado_cliente == 'SP':
+                        val_sp = produto.product_value_sp
+                        val_es = None
+                    elif estado_cliente == 'ES':
+                        val_sp = None
+                        val_es = produto.product_value_es
+                    else:
+                        messages.warning(request, f'Produto {produto.product_code} não pôde ser adicionado. Estado inválido.')
+                        continue
+
+                    itens_para_criar.append(ItemPedido(
+                        pedido=pedido_criado,
+                        produto=produto,
+                        quantidade=quantidade,
+                        valor_unitario_sp=val_sp,
+                        valor_unitario_es=val_es
+                    ))
+
+                # --- OTIMIZAÇÃO APLICADA: 1 INSERT MÚLTIPLO ---
+                if itens_para_criar:
+                    ItemPedido.objects.bulk_create(itens_para_criar)
 
                 # Cálculo e atualização do Valor Total
                 total_pedido = ItemPedido.objects.filter(pedido=pedido_criado).aggregate(
@@ -1790,14 +1821,13 @@ def processar_pedido_manual(request):
             return redirect(reverse('gerar_pedido_manual') + '?pedido_gerado=sucesso')
 
         except (WfClient.DoesNotExist, Endereco.DoesNotExist, ValueError) as e:
-            messages.error(request, f'Dados de cliente, endereço, frete ou data inválidos. Erro: {e}')
+            messages.error(request, f'Dados inválidos. Erro: {e}')
             return redirect('gerar_pedido_manual')
         except json.JSONDecodeError:
             messages.error(request, 'Erro nos dados do pedido. Tente novamente.')
             return redirect('gerar_pedido_manual')
 
     return redirect('gerar_pedido_manual')
-
 
 
 def normalize_text(text):
@@ -3591,3 +3621,41 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     
     messages.success(request, f"Cliente {cliente.client_name} marcado como notificado!")
     return redirect(link_whatsapp)
+
+@login_required
+@require_POST
+def adicionar_ao_carrinho_bd(request):
+    product_id = request.POST.get('product_id')
+    quantidade = int(request.POST.get('quantidade', 1))
+    
+    try:
+        cliente_logado = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return JsonResponse({'erro': 'Cliente não encontrado.'}, status=400)
+
+    if quantidade <= 0:
+        return JsonResponse({'erro': 'Quantidade inválida.'}, status=400)
+
+    produto = get_object_or_404(Product, product_id=product_id)
+
+    # 1. Pega o carrinho do cliente (ou cria um novo, vazio)
+    carrinho, _ = Carrinho.objects.get_or_create(cliente=cliente_logado)
+
+    # 2. Adiciona o item ao carrinho (ou soma a quantidade se já existir)
+    item, created = ItemCarrinho.objects.get_or_create(
+        carrinho=carrinho,
+        produto=produto,
+        defaults={'quantidade': quantidade}
+    )
+    
+    if not created:
+        item.quantidade += quantidade
+        item.save()
+
+    # 3. Retorna os valores em tempo real para o Frontend atualizar a tela
+    return JsonResponse({
+        'sucesso': True, 
+        'item_quantidade': item.quantidade,
+        'item_total': float(item.get_subtotal()),
+        'pedido_total': float(carrinho.get_total_carrinho())
+    })
