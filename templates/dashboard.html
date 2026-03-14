@@ -71,7 +71,7 @@
         </div>
     </div>
     
-    <div class="row g-4 mb-5">
+    <div class="row g-4 mb-4">
         <div class="col-md-4">
             <div class="card metric-card p-4">
                 <div class="metric-icon" style="background: rgba(67, 97, 238, 0.1); color: #4361ee;"><i class="fas fa-users"></i></div>
@@ -99,6 +99,35 @@
         </div>
     </div>
 
+    {% if oportunidades_wishlist %}
+    <div class="card metric-card mb-5 border-success" style="border-left: 5px solid #10b981;">
+        <div class="card-header bg-white border-0 pt-4 pb-0">
+            <h5 class="fw-bold text-success mb-1"><i class="fas fa-bullhorn me-2"></i> Oportunidades de Venda (Estoque Recuperado)</h5>
+            <p class="text-muted small mb-0">Estes clientes tentaram comprar produtos que estavam em falta, mas que agora têm estoque/preço disponível.</p>
+        </div>
+        <div class="card-body">
+            <div class="list-group list-group-flush">
+                {% for op in oportunidades_wishlist %}
+                <div class="list-group-item d-flex justify-content-between align-items-center py-3 px-0 border-bottom border-light">
+                    <div>
+                        <h6 class="mb-1 fw-bold text-dark">{{ op.cliente.client_name }}</h6>
+                        <small class="text-muted d-block">
+                            {% for prod in op.produtos %}
+                                <span class="badge bg-light text-dark border me-1 mb-1">
+                                    {{ prod.codigo }} (R$ {{ prod.preco|floatformat:2 }})
+                                </span>
+                            {% endfor %}
+                        </small>
+                    </div>
+                    <a href="{% url 'notificar_wishlist_whatsapp' op.cliente.client_id %}" target="_blank" class="btn btn-sm btn-success rounded-pill px-4 shadow-sm" style="background-color: #10b981; border: none;">
+                        <i class="fab fa-whatsapp me-1"></i> Avisar
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
     <h5 class="fw-bold mb-3">Atalhos de Gestão</h5>
     <div class="row g-3 mb-5">
         <div class="col-md-4">
@@ -119,23 +148,21 @@
                 <div><div class="fw-bold">Status Logística</div><div class="small text-muted">Importar PDF do ERP</div></div>
             </a>
         </div>
+        <div class="col-md-4">
+            <a href="{% url 'listar_status_erp' %}" class="action-btn shadow-sm">
+                <div class="action-icon" style="background-color: rgba(16, 185, 129, 0.1); color: #10b981;">
+                    <i class="fas fa-list-check"></i>
+                </div>
+                <div>
+                    <div class="fw-bold">Monitoramento ERP</div>
+                    <div class="small text-muted">Auditoria de Status Importados</div>
+                </div>
+            </a>
+        </div>
     </div>
-    <div class="col-md-4">
-    <a href="{% url 'listar_status_erp' %}" class="action-btn shadow-sm">
-        <div class="action-icon" style="background-color: rgba(16, 185, 129, 0.1); color: #10b981;">
-            <i class="fas fa-list-check"></i>
-        </div>
-        <div>
-            <div class="fw-bold">Monitoramento ERP</div>
-            <div class="small text-muted">Auditoria de Status Importados</div>
-        </div>
-    </a>
-
-</div>
 
     <hr>
     
-
     <h5 class="fw-bold mb-3">Fluxo de Pedidos (Site)</h5>
     <div class="row g-3 mb-5">
         <div class="col-md-3"><div class="status-pill"><span class="status-name">Pendentes</span><span class="status-count text-danger">{{ pedidos_pendentes }}</span></div></div>

@@ -117,26 +117,57 @@ def home(request):
     
     preco_exibido = None
     cliente_logado = None
-    itens_frequentes = [] # Inicializa a lista de recomendações
+    itens_frequentes = [] 
+    produtos_wishlist_cliente = [] # NOVO: Lista para a Wishlist do cliente
 
-    # 4. Lógica de Preços por Estado e Recomendações
+    # 4. Lógica de Preços, Recomendações e WISHLIST
     if request.user.is_authenticated:
         if request.user.is_staff:
             preco_exibido = 'todos'
         else:
             try:
                 cliente_logado = request.user.wfclient
-                
-                # --- NOVO: Busca Itens Frequentes do Cliente ---
-                # Chama o método que você implementou no modelo WfClient
                 itens_frequentes = cliente_logado.get_frequent_items(limit=6)
+                estado_cliente = cliente_logado.client_state.uf_name
                 
-                if cliente_logado.client_state.uf_name == 'SP':
+                if estado_cliente == 'SP':
                     preco_exibido = 'sp'
                     products = products.exclude(product_value_sp=0)
-                elif cliente_logado.client_state.uf_name == 'ES':
+                elif estado_cliente == 'ES':
                     preco_exibido = 'es'
                     products = products.exclude(product_value_es=0)
+
+                # =========================================================
+                # --- NOVO: ALERTA DE WISHLIST NO FRONT-END ---
+                # =========================================================
+                data_limite = timezone.localdate() - timedelta(days=30)
+                itens_pendentes = ItemPedidoIgnorado.objects.filter(
+                    cliente=cliente_logado, # Filtra SÓ os itens deste cliente
+                    notificado=False,
+                    motivo_erro__icontains="estoque",
+                    data_tentativa__gte=data_limite
+                )
+
+                if itens_pendentes.exists():
+                    codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
+                    produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
+
+                    for item in itens_pendentes:
+                        produto = produtos_dict.get(item.codigo_produto)
+                        if not produto: continue
+
+                        preco_atual = getattr(produto, 'product_value_sp' if estado_cliente == 'SP' else 'product_value_es')
+                        
+                        if preco_atual and preco_atual > 0:
+                            # Evita duplicar o mesmo produto no aviso
+                            if not any(p['codigo'] == produto.product_code for p in produtos_wishlist_cliente):
+                                produtos_wishlist_cliente.append({
+                                    'codigo': produto.product_code,
+                                    'descricao': produto.product_description,
+                                    'preco': f"{preco_atual.quantize(Decimal('0.01'))}".replace('.', ',')
+                                })
+                # =========================================================
+
             except WfClient.DoesNotExist:
                 products = Product.objects.none()
     
@@ -162,7 +193,8 @@ def home(request):
     # 7. Contexto do Template
     context = {
         'product_list': product_list,
-        'itens_frequentes': itens_frequentes, # Adicionado ao contexto para o algoritmo de recomendação
+        'itens_frequentes': itens_frequentes, 
+        'produtos_wishlist_cliente': produtos_wishlist_cliente, # NOVO: Injetado no HTML
         'cliente_logado': cliente_logado,
         'preco_exibido': preco_exibido,
         'data_hoje': products[0].date_product if products else date.today(),
@@ -170,6 +202,8 @@ def home(request):
     }
             
     return render(request, 'home.html', context)
+
+
 """
     # Lógica de Paginação:
     paginator = Paginator(product_list, 10)
@@ -732,6 +766,49 @@ def dashboard_admin(request):
             'total_str': total_p_formatado,
             'is_sincronizado': filtro == 'sincronizados'
         })
+
+    # =========================================================
+    # --- 4. OPORTUNIDADES DE RETORNO (WISHLIST) ---
+    # =========================================================
+
+    # 1. Define a data limite (hoje menos 30 dias)
+    data_limite = hoje - timedelta(days=30)
+
+    # 2. Busca apenas itens dos ÚLTIMOS 30 DIAS
+    itens_pendentes = ItemPedidoIgnorado.objects.filter(
+        notificado=False, 
+        motivo_erro__icontains="estoque",
+        data_tentativa__gte=data_limite
+    ).select_related('cliente', 'cliente__client_state')
+
+    oportunidades_wishlist = {}
+    
+    codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
+    produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
+
+    for item in itens_pendentes:
+        produto = produtos_dict.get(item.codigo_produto)
+        if not produto or not item.cliente: # Segurança extra
+            continue
+            
+        estado = item.cliente.client_state.uf_name
+        preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
+        
+        # O MATCH: Verifica se o produto agora tem preço válido
+        if preco_atual and preco_atual > 0:
+            c_id = item.cliente.client_id
+            if c_id not in oportunidades_wishlist:
+                oportunidades_wishlist[c_id] = {
+                    'cliente': item.cliente,
+                    'produtos': []
+                }
+            # Evita produtos duplicados para o mesmo cliente
+            if produto.product_description not in [p['descricao'] for p in oportunidades_wishlist[c_id]['produtos']]:
+                oportunidades_wishlist[c_id]['produtos'].append({
+                    'codigo': produto.product_code,
+                    'descricao': produto.product_description,
+                    'preco': float(preco_atual)
+                })
         
     contexto = {
         'titulo': 'Dashboard Administrativo',
@@ -747,10 +824,10 @@ def dashboard_admin(request):
         'pedidos_expedicao': metricas_status['expedicao'],
         'pedidos_atrasados': metricas_status['atrasados'],
         'filtro_ativo': filtro,
+        'oportunidades_wishlist': oportunidades_wishlist.values(), 
     }
     
     return render(request, 'dashboard.html', contexto)
-
 
 
 # View para exportação de pedidos
@@ -3067,6 +3144,44 @@ def dashboard_analise(request):
     l_diario = [d['Emissao'].strftime('%d/%m') for d in dados_grafico]
     v_diario = [float(d['total_dia']) for d in dados_grafico]
 
+    # =========================================================
+    # --- 8. OPORTUNIDADES DE RETORNO (WISHLIST) ---
+    # =========================================================
+    itens_pendentes = ItemPedidoIgnorado.objects.filter(
+        notificado=False, 
+        motivo_erro__icontains="estoque"
+    ).select_related('cliente', 'cliente__client_state')
+
+    oportunidades_wishlist = {}
+    
+    codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
+    produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
+
+    for item in itens_pendentes:
+        produto = produtos_dict.get(item.codigo_produto)
+        if not produto or not item.cliente: # Segurança extra caso cliente tenha sido excluído
+            continue
+            
+        estado = item.cliente.client_state.uf_name
+        preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
+        
+        # O MATCH: Verifica se o produto agora tem preço válido
+        if preco_atual and preco_atual > 0:
+            c_id = item.cliente.client_id
+            if c_id not in oportunidades_wishlist:
+                oportunidades_wishlist[c_id] = {
+                    'cliente': item.cliente,
+                    'produtos': []
+                }
+            # Evita produtos duplicados para o mesmo cliente
+            if produto.product_description not in [p['descricao'] for p in oportunidades_wishlist[c_id]['produtos']]:
+                oportunidades_wishlist[c_id]['produtos'].append({
+                    'codigo': produto.product_code,
+                    'descricao': produto.product_description,
+                    'preco': float(preco_atual)
+                })
+
+    # --- CONTEXTO ---
     contexto = {
         'total_vendas': total_vendas_str, 'ticket_medio': ticket_medio_formatado, 'total_itens_faturados': total_itens, 'total_pedidos_reais': total_pedidos,
         'media_diaria': media_diaria_str, 'projecao_final': projecao_final_str, 'progresso_mes': progresso_percentual,
@@ -3075,6 +3190,7 @@ def dashboard_analise(request):
         'labels_semana': json.dumps(dias_nomes), 'valores_semana': json.dumps(vendas_por_dia),
         'ranking_logistica_dia': ranking_logistica_dia, 'saude_base': saude_base,
         'mes_atual': mes_selecionado, 'ano_atual': ano_selecionado, 'lista_anos': range(hoje.year - 2, hoje.year + 1),
+        'oportunidades_wishlist': oportunidades_wishlist.values(), # INJETADO AQUI COM SUCESSO!
     }
     return render(request, 'analise/dashboard_analise.html', contexto)
 
@@ -3334,3 +3450,52 @@ def exportar_status_erp_excel(request):
         df.to_excel(writer, index=False, sheet_name='Status')
     
     return response
+
+@staff_member_required
+def notificar_wishlist_whatsapp(request, cliente_id):
+    cliente = get_object_or_404(WfClient, client_id=cliente_id)
+    estado = cliente.client_state.uf_name
+    
+    # Pega os itens pendentes deste cliente específico
+    itens_pendentes = ItemPedidoIgnorado.objects.filter(
+        cliente=cliente,
+        notificado=False,
+        motivo_erro__icontains="estoque"
+    )
+    
+    produtos_recuperados = []
+    ids_para_atualizar = []
+    
+    # Refaz a validação rapidamente para montar o texto
+    for item in itens_pendentes:
+        produto = Product.objects.filter(product_code=item.codigo_produto).first()
+        if produto:
+            preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
+            if preco_atual and preco_atual > 0:
+                produto_texto = f"- {produto.product_code} ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
+                if produto_texto not in produtos_recuperados:
+                    produtos_recuperados.append(produto_texto)
+                ids_para_atualizar.append(item.id)
+    
+    if not produtos_recuperados:
+        messages.warning(request, "Os produtos deste cliente ficaram sem estoque novamente.")
+        return redirect('dashboard_admin')
+        
+    # 1. ATUALIZA O BANCO (Trava para não notificar de novo)
+    ItemPedidoIgnorado.objects.filter(id__in=ids_para_atualizar).update(notificado=True)
+    
+    # 2. MONTA A MENSAGEM
+    produtos_texto = "\n".join(produtos_recuperados)
+    mensagem = (
+        f"Olá, {cliente.client_name}! Tudo bem?\n\n"
+        f"Temos uma ótima notícia! Aqueles itens que você tentou pedir recentemente e estavam em falta, *acabaram de chegar no nosso estoque*:\n\n"
+        f"{produtos_texto}\n\n"
+        f"Gostaria de aproveitar e incluir no seu próximo pedido?"
+    )
+    
+    # 3. ABRE O WHATSAPP (Abre a API geral para você escolher o contato do cliente)
+    link_whatsapp = f"https://api.whatsapp.com/send?text={quote(mensagem)}"
+    
+    messages.success(request, f"Cliente {cliente.client_name} marcado como notificado!")
+    return redirect(link_whatsapp)
+

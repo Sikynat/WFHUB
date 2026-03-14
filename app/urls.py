@@ -19,6 +19,7 @@ urlpatterns = [
     path('analise/upload-status-pdf/', views.upload_status_pdf, name='upload_status_pdf'),
     path('analise/monitoramento-erp/', views.listar_status_erp, name='listar_status_erp'),
     path('analise/exportar-erp-excel/', views.exportar_status_erp_excel, name='exportar_status_erp_excel'),
+    path('notificar-wishlist/<int:cliente_id>/', views.notificar_wishlist_whatsapp, name='notificar_wishlist_whatsapp'),
     # Rotas do cliente
    
     # ... suas rotas existentes

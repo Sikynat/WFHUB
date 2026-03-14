@@ -275,6 +275,7 @@ class ItemPedido(models.Model):
 class ItemPedidoIgnorado(models.Model):
     # Vínculo com o pedido original (opcional, mas recomendado para rastreio)
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens_ignorados')
+    notificado = models.BooleanField(default=False, verbose_name="Cliente Avisado?")
     
     # Dados solicitados
     cliente = models.ForeignKey(WfClient, on_delete=models.SET_NULL, null=True) # Código do cliente (via objeto)
