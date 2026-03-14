@@ -1271,38 +1271,74 @@ def processar_upload(request):
             return redirect('pagina_upload')
 
         try:
-            # 1. Leitura e Limpeza Inicial
-            # Usamos converters para garantir que o CÓDIGO venha como String e não vire número científico
-            df_es = pd.read_excel(planilha_es_file, usecols=['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'TABELA'], dtype={'CÓDIGO': str})
-            df_sp = pd.read_excel(planilha_sp_file, usecols=['CÓDIGO', 'TABELA'], dtype={'CÓDIGO': str})
+            # 1. Leitura Dinâmica (Lê tudo como texto inicialmente para evitar quebras)
+            df_es_raw = pd.read_excel(planilha_es_file, dtype=str)
+            df_sp_raw = pd.read_excel(planilha_sp_file, dtype=str)
 
-            # Renomear colunas
-            df_es = df_es.rename(columns={
-                'CÓDIGO': 'product_code', 
-                'DESCRIÇÃO': 'product_description', 
-                'GRUPO': 'product_group', 
-                'MARCA': 'product_brand', 
-                'TABELA': 'product_value_es'
-            })
-            df_sp = df_sp.rename(columns={'CÓDIGO': 'product_code', 'TABELA': 'product_value_sp'})
+            # 2. Mapeamento Inteligente de Colunas (Apelidos)
+            # O sistema vai procurar por qualquer uma destas palavras no cabeçalho
+            aliases = {
+                'codigo': ['CÓDIGO', 'CODIGO', 'PRODUTO', 'COD'],
+                'descricao': ['DESCRIÇÃO', 'DESCRICAO', 'NOME DO PRODUTO'],
+                'grupo': ['GRUPO', 'CATEGORIA'],
+                'marca': ['MARCA', 'FABRICANTE'],
+                'tabela': ['TABELA', 'PREÇO NOVO', 'PRECO', 'VALOR']
+            }
 
-            # 2. Tratamento de Preços (Converte "SEM ESTOQUE" ou lixo em 0)
-            for col in ['product_value_es', 'product_value_sp']:
-                target_df = df_es if col == 'product_value_es' else df_sp
-                # Força conversão para numérico, erros viram NaN, depois preenchemos com 0
-                target_df[col] = pd.to_numeric(target_df[col], errors='coerce').fillna(0)
+            def encontrar_coluna(df, nomes_possiveis):
+                for nome in nomes_possiveis:
+                    if nome in df.columns:
+                        return nome
+                return None
 
-            # 3. Merge das planilhas
-            df_final = pd.merge(df_es, df_sp, on='product_code', how='left')
+            # Processa as colunas da Planilha ES
+            col_cod_es = encontrar_coluna(df_es_raw, aliases['codigo'])
+            col_tab_es = encontrar_coluna(df_es_raw, aliases['tabela'])
+            
+            # Processa as colunas da Planilha SP
+            col_cod_sp = encontrar_coluna(df_sp_raw, aliases['codigo'])
+            col_tab_sp = encontrar_coluna(df_sp_raw, aliases['tabela'])
+
+            # Validação: Se não achar Código e Preço, avisa o usuário sem dar Erro 500
+            if not col_cod_es or not col_tab_es:
+                messages.error(request, 'Planilha ES inválida: É obrigatório ter as colunas de "Código/Produto" e "Tabela/Preço".')
+                return redirect('pagina_upload')
+            if not col_cod_sp or not col_tab_sp:
+                messages.error(request, 'Planilha SP inválida: É obrigatório ter as colunas de "Código/Produto" e "Tabela/Preço".')
+                return redirect('pagina_upload')
+
+            # 3. Montagem dos DataFrames limpos
+            # ES
+            df_es = pd.DataFrame()
+            df_es['product_code'] = df_es_raw[col_cod_es].str.strip()
+            df_es['product_value_es'] = pd.to_numeric(df_es_raw[col_tab_es].str.replace(',', '.'), errors='coerce').fillna(0)
+            
+            col_desc = encontrar_coluna(df_es_raw, aliases['descricao'])
+            col_grupo = encontrar_coluna(df_es_raw, aliases['grupo'])
+            col_marca = encontrar_coluna(df_es_raw, aliases['marca'])
+            
+            if col_desc: df_es['product_description'] = df_es_raw[col_desc].str.strip()
+            if col_grupo: df_es['product_group'] = df_es_raw[col_grupo].str.strip()
+            if col_marca: df_es['product_brand'] = df_es_raw[col_marca].str.strip()
+
+            # SP
+            df_sp = pd.DataFrame()
+            df_sp['product_code'] = df_sp_raw[col_cod_sp].str.strip()
+            df_sp['product_value_sp'] = pd.to_numeric(df_sp_raw[col_tab_sp].str.replace(',', '.'), errors='coerce').fillna(0)
+
+            # 4. Merge das planilhas (how='outer' garante que não perca itens que só estão em uma planilha)
+            df_final = pd.merge(df_es, df_sp, on='product_code', how='outer')
             df_final = df_final.replace({np.nan: None})
-            # Remove duplicatas de código na própria planilha para evitar erro no banco
             df_final = df_final.drop_duplicates(subset=['product_code'])
+            
+            # Remove linhas vazias/lixo da planilha
+            df_final = df_final[df_final['product_code'].notnull()]
+            df_final = df_final[df_final['product_code'] != ""]
 
-            # --- INÍCIO DA OTIMIZAÇÃO DE BANCO ---
+            # --- 5. OTIMIZAÇÃO DE BANCO E PREVENÇÃO DE PERDA DE DADOS ---
             codigos_na_planilha = df_final['product_code'].tolist()
             hoje = date.today()
             
-            # Busca todos os produtos existentes de uma só vez
             produtos_existentes = {
                 p.product_code: p for p in Product.objects.filter(product_code__in=codigos_na_planilha)
             }
@@ -1313,30 +1349,55 @@ def processar_upload(request):
             for _, row in df_final.iterrows():
                 codigo = str(row['product_code']).strip()
                 
-                dados_comuns = {
-                    'product_description': str(row['product_description'])[:255] if row['product_description'] else "",
-                    'product_group': str(row['product_group'])[:100] if row['product_group'] else "",
-                    'product_brand': str(row['product_brand'])[:100] if row['product_brand'] else "",
-                    'product_value_sp': row['product_value_sp'],
-                    'product_value_es': row['product_value_es'],
-                    'status': 'PENDENTE',
-                    'date_product': hoje,
-                }
+                # Extração segura dos dados
+                desc_planilha = row.get('product_description')
+                grupo_planilha = row.get('product_group')
+                marca_planilha = row.get('product_brand')
+                
+                val_es = row.get('product_value_es', 0)
+                val_sp = row.get('product_value_sp', 0)
 
                 if codigo in produtos_existentes:
                     obj = produtos_existentes[codigo]
-                    for campo, valor in dados_comuns.items():
-                        setattr(obj, campo, valor)
+                    
+                    # ATUALIZAÇÃO CONDICIONAL: Só atualiza se a célula da planilha não for nula/vazia
+                    if desc_planilha and str(desc_planilha).strip().lower() not in ['nan', 'none', '']:
+                        obj.product_description = str(desc_planilha).strip()[:255]
+                    
+                    if grupo_planilha and str(grupo_planilha).strip().lower() not in ['nan', 'none', '']:
+                        obj.product_group = str(grupo_planilha).strip()[:100]
+                    
+                    if marca_planilha and str(marca_planilha).strip().lower() not in ['nan', 'none', '']:
+                        obj.product_brand = str(marca_planilha).strip()[:100]
+                    
+                    # Atualização de preços (se a planilha não tiver, mantém o 0 que foi tratado no fillna)
+                    if val_sp is not None: obj.product_value_sp = val_sp
+                    if val_es is not None: obj.product_value_es = val_es
+                    
+                    obj.status = 'PENDENTE'
+                    obj.date_product = hoje
+                    
                     produtos_para_atualizar.append(obj)
                 else:
-                    produtos_para_criar.append(Product(product_code=codigo, **dados_comuns))
+                    # Criação de um produto novo
+                    produtos_para_criar.append(Product(
+                        product_code=codigo,
+                        product_description=str(desc_planilha).strip()[:255] if desc_planilha and str(desc_planilha).strip().lower() not in ['nan', 'none', ''] else "",
+                        product_group=str(grupo_planilha).strip()[:100] if grupo_planilha and str(grupo_planilha).strip().lower() not in ['nan', 'none', ''] else "",
+                        product_brand=str(marca_planilha).strip()[:100] if marca_planilha and str(marca_planilha).strip().lower() not in ['nan', 'none', ''] else "",
+                        product_value_sp=val_sp if val_sp is not None else 0,
+                        product_value_es=val_es if val_es is not None else 0,
+                        status='PENDENTE',
+                        date_product=hoje
+                    ))
 
-            # 4. Gravação Atômica e em Massa
+            # 6. Gravação Atômica e em Massa
             with transaction.atomic():
                 if produtos_para_criar:
                     Product.objects.bulk_create(produtos_para_criar, batch_size=500)
                 
                 if produtos_para_atualizar:
+                    # Informa exatamente quais campos devem ser tocados
                     Product.objects.bulk_update(
                         produtos_para_atualizar, 
                         fields=['product_description', 'product_group', 'product_brand', 'product_value_sp', 'product_value_es', 'status', 'date_product'],
