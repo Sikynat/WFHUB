@@ -3568,13 +3568,12 @@ def exportar_status_erp_excel(request):
         df.to_excel(writer, index=False, sheet_name='Status')
     
     return response
-
 @staff_member_required
 def notificar_wishlist_whatsapp(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
-    # Pega os itens pendentes deste cliente específico
+    # Filtra itens ignorados por estoque que ainda não foram notificados
     itens_pendentes = ItemPedidoIgnorado.objects.filter(
         cliente=cliente,
         notificado=False,
@@ -3584,13 +3583,16 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     produtos_recuperados = []
     ids_para_atualizar = []
     
-    # Refaz a validação rapidamente para montar o texto
+    # Valida disponibilidade atual e monta a lista com quantidades
     for item in itens_pendentes:
         produto = Product.objects.filter(product_code=item.codigo_produto).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             if preco_atual and preco_atual > 0:
-                produto_texto = f"- {produto.product_code} ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
+                # Inclui a quantidade tentada capturada no upload original
+                qtd = item.quantidade_tentada if item.quantidade_tentada else 0
+                produto_texto = f"- {produto.product_code}: {qtd} un. ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
+                
                 if produto_texto not in produtos_recuperados:
                     produtos_recuperados.append(produto_texto)
                 ids_para_atualizar.append(item.id)
@@ -3599,26 +3601,26 @@ def notificar_wishlist_whatsapp(request, cliente_id):
         messages.warning(request, "Os produtos deste cliente ficaram sem estoque novamente.")
         return redirect('dashboard_admin')
         
-    # 1. ATUALIZA O BANCO (Trava para não notificar de novo)
+    # Gera o link absoluto para a nova planilha de recuperação
+    link_download = request.build_absolute_uri(
+        reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
+    )
+
+    # 1. ATUALIZA O BANCO E CACHE
     ItemPedidoIgnorado.objects.filter(id__in=ids_para_atualizar).update(notificado=True)
-    
-    # ----------------------------------------------------
-    # NOVO: FORÇA A TELA DO DASHBOARD A ATUALIZAR IMEDIATAMENTE (Limpa o Cache)
     cache.delete('dashboard_wishlist')
-    # ----------------------------------------------------
     
-    # 2. MONTA A MENSAGEM
+    # 2. MONTA A MENSAGEM COM O LINK
     produtos_texto = "\n".join(produtos_recuperados)
     mensagem = (
         f"Olá, {cliente.client_name}! Tudo bem?\n\n"
         f"Temos uma ótima notícia! Aqueles itens que você tentou pedir recentemente e estavam em falta, *acabaram de chegar no nosso estoque*:\n\n"
         f"{produtos_texto}\n\n"
+        f"*Baixe a planilha de reposição aqui:* \n{link_download}\n\n"
         f"Gostaria de aproveitar e incluir no seu próximo pedido?"
     )
     
-    # 3. ABRE O WHATSAPP (Abre a API geral para você escolher o contato do cliente)
     link_whatsapp = f"https://api.whatsapp.com/send?text={quote(mensagem)}"
-    
     messages.success(request, f"Cliente {cliente.client_name} marcado como notificado!")
     return redirect(link_whatsapp)
 
@@ -3652,10 +3654,134 @@ def adicionar_ao_carrinho_bd(request):
         item.quantidade += quantidade
         item.save()
 
+    # =========================================================
+    # --- NOVO: AUTO-LIMPEZA DA WISHLIST ---
+    # Se o cliente adicionou ao carrinho, marcamos o erro como resolvido/notificado.
+    # O produto nunca mais aparecerá no banner de "voltou ao estoque" para este cliente.
+    # =========================================================
+    from .models import ItemPedidoIgnorado # Importação caso não esteja no topo do arquivo
+    ItemPedidoIgnorado.objects.filter(
+        cliente=cliente_logado,
+        codigo_produto=produto.product_code,
+        notificado=False
+    ).update(notificado=True)
+
     # 3. Retorna os valores em tempo real para o Frontend atualizar a tela
     return JsonResponse({
         'sucesso': True, 
         'item_quantidade': item.quantidade,
         'item_total': float(item.get_subtotal()),
-        'pedido_total': float(carrinho.get_total_carrinho())
+        'pedido_total': float(carrinho.get_total_carrinho()),
+        'codigo_produto': produto.product_code # INJETADO: Enviamos o código de volta para animar a tela
     })
+
+def exportar_itens_recuperados_excel(request, cliente_id):
+    cliente = get_object_or_404(WfClient, client_id=cliente_id)
+    estado = cliente.client_state.uf_name
+    
+    # Busca itens que foram ignorados por falta de estoque
+    itens = ItemPedidoIgnorado.objects.filter(
+        cliente=cliente,
+        motivo_erro__icontains="estoque"
+    )
+
+    data = []
+    for item in itens:
+        produto = Product.objects.filter(product_code=item.codigo_produto).first()
+        if produto:
+            preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
+            # Só inclui na planilha se o produto realmente voltou ao estoque (preço > 0)
+            if preco_atual and preco_atual > 0:
+                data.append({
+                    'Código': item.codigo_produto,
+                    'Descrição': produto.product_description,
+                    'Quantidade Solicitada': item.quantidade_tentada,
+                    'Preço Unitário': float(preco_atual),
+                    'Subtotal': float(preco_atual * item.quantidade_tentada)
+                })
+
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Itens Recuperados')
+    
+    output.seek(0)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename=recuperacao_{cliente.client_code}.xlsx'
+    return response
+
+@staff_member_required
+def historico_wishlist(request):
+    """
+    Exibe o histórico de todos os itens da Wishlist que já foram notificados aos clientes.
+    """
+    # Filtra apenas os que já foram notificados e que eram erro de estoque
+    itens_arquivados = ItemPedidoIgnorado.objects.filter(
+        notificado=True,
+        motivo_erro__icontains="estoque"
+    ).select_related('cliente', 'pedido').order_by('-data_tentativa')
+
+    # Paginação (50 itens por página)
+    paginator = Paginator(itens_arquivados, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    contexto = {
+        'titulo': 'Histórico de Oportunidades Notificadas',
+        'page_obj': page_obj,
+    }
+    
+    # Você precisará criar este arquivo HTML simples na sua pasta de templates
+    return render(request, 'analise/historico_wishlist.html', contexto)
+
+@staff_member_required
+def reenviar_notificacao_whatsapp(request, cliente_id):
+    cliente = get_object_or_404(WfClient, client_id=cliente_id)
+    estado = cliente.client_state.uf_name
+    
+    # Diferença aqui: busca os itens que JÁ FORAM notificados (notificado=True)
+    itens_arquivados = ItemPedidoIgnorado.objects.filter(
+        cliente=cliente,
+        notificado=True,
+        motivo_erro__icontains="estoque"
+    )
+    
+    produtos_recuperados = []
+    
+    # Valida se os itens ainda estão com preço > 0 hoje
+    for item in itens_arquivados:
+        produto = Product.objects.filter(product_code=item.codigo_produto).first()
+        if produto:
+            preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
+            if preco_atual and preco_atual > 0:
+                qtd = item.quantidade_tentada if item.quantidade_tentada else 0
+                produto_texto = f"- {produto.product_code}: {qtd} un. ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
+                
+                if produto_texto not in produtos_recuperados:
+                    produtos_recuperados.append(produto_texto)
+    
+    if not produtos_recuperados:
+        messages.warning(request, "Os produtos deste cliente não estão mais disponíveis no estoque para reenvio.")
+        return redirect('historico_wishlist')
+
+    # Gera o link da planilha
+    link_download = request.build_absolute_uri(
+        reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
+    )
+    
+    # Monta a mensagem idêntica
+    produtos_texto = "\n".join(produtos_recuperados)
+    mensagem = (
+        f"Olá, {cliente.client_name}! Tudo bem?\n\n"
+        f"Temos uma ótima notícia! Aqueles itens que você tentou pedir recentemente e estavam em falta, *acabaram de chegar no nosso estoque*:\n\n"
+        f"{produtos_texto}\n\n"
+        f"*Baixe a planilha de reposição aqui:* \n{link_download}\n\n"
+        f"Gostaria de aproveitar e incluir no seu próximo pedido?"
+    )
+    
+    # Redireciona para o WhatsApp (recomendo usar target="_blank" no HTML)
+    link_whatsapp = f"https://api.whatsapp.com/send?text={quote(mensagem)}"
+    return redirect(link_whatsapp)

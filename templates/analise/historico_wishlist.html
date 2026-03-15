@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ titulo }}</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Data da Tentativa</th>
+            <th>Cliente</th>
+            <th>Código do Produto</th>
+            <th>Qtd. Solicitada</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in page_obj %}
+        <tr>
+            <td>{{ item.data_tentativa|date:"d/m/Y H:i" }}</td>
+            <td>{{ item.cliente.client_name }}</td>
+            <td>{{ item.codigo_produto }}</td>
+            <td>{{ item.quantidade_tentada }}</td>
+           <td class="align-middle text-end">
+    <a href="{% url 'reenviar_notificacao_whatsapp' item.cliente.client_id %}" class="btn btn-sm btn-success me-1" target="_blank" title="Reenviar Mensagem">
+        <i class="fab fa-whatsapp"></i> Reenviar
+    </a>
+    
+    <a href="{% url 'exportar_itens_recuperados_excel' item.cliente.client_id %}" class="btn btn-sm btn-outline-success" title="Baixar Planilha">
+        <i class="fas fa-file-excel"></i> Excel
+    </a>
+</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5">Nenhum histórico encontrado.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
+

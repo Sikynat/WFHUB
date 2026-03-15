@@ -20,6 +20,8 @@ urlpatterns = [
     path('analise/monitoramento-erp/', views.listar_status_erp, name='listar_status_erp'),
     path('analise/exportar-erp-excel/', views.exportar_status_erp_excel, name='exportar_status_erp_excel'),
     path('notificar-wishlist/<int:cliente_id>/', views.notificar_wishlist_whatsapp, name='notificar_wishlist_whatsapp'),
+    path('dashboard/historico-wishlist/', views.historico_wishlist, name='historico_wishlist'),
+    path('dashboard/reenviar-whatsapp/<int:cliente_id>/', views.reenviar_notificacao_whatsapp, name='reenviar_notificacao_whatsapp'),
     # Rotas do cliente
    
     path('adicionar-ao-carrinho-bd/', views.adicionar_ao_carrinho_bd, name='adicionar_ao_carrinho_bd'),
@@ -41,7 +43,7 @@ urlpatterns = [
     path('exportar_detalhes_pedido_cliente_excel/<int:pedido_id>/', views.exportar_detalhes_pedido_cliente_excel, name='exportar_pedido_cliente_excel'),
     path('exportar_publico/excel/<int:pedido_id>/', views.exportar_detalhes_pedido_publico_excel, name='exportar_detalhes_pedido_publico_excel'),
     path('pedido/upload-planilha/', views.upload_pedido_cliente, name='upload_pedido_cliente'),
-
+    path('exportar-recuperados/<int:cliente_id>/', views.exportar_itens_recuperados_excel, name='exportar_itens_recuperados_excel'),
     # Rotas do administrador
     path('dashboard/analise/', views.analise_dados_dashboard, name='analise_dados_dashboard'),
     path('dashboard/pedidos/hoje/', views.pedidos_para_hoje, name='pedidos_para_hoje'),

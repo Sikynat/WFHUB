@@ -480,6 +480,42 @@
                 document.getElementById('grand-total').innerText = formatarMoeda(data.pedido_total);
                 localStorage.setItem('cart_grand_total', data.pedido_total);
 
+                // ==============================================================
+                // NOVO: EFEITO VISUAL DE LIMPEZA DA WISHLIST
+                // ==============================================================
+                if (data.codigo_produto) {
+                    // Busca todos os selos (badges) dentro do banner verde
+                    const badges = document.querySelectorAll('.alert-success .badge');
+                    badges.forEach(badge => {
+                        // Se o texto do selo contiver o código do produto recém adicionado
+                        if (badge.innerText.includes(data.codigo_produto)) {
+                            // Cria um efeito de fade-out (esmaecimento)
+                            badge.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+                            badge.style.opacity = "0";
+                            badge.style.transform = "scale(0.8)"; // Encolhe um pouquinho
+                            
+                            // Remove o elemento da tela após a animação
+                            setTimeout(() => badge.remove(), 400); 
+                        }
+                    });
+                    
+                    // Verifica se acabaram os produtos do banner
+                    setTimeout(() => {
+                        const remainingBadges = document.querySelectorAll('.alert-success .badge');
+                        if (remainingBadges.length === 0) {
+                            const alertBox = document.querySelector('.alert-success');
+                            if (alertBox) {
+                                // Faz o banner inteiro sumir suavemente
+                                alertBox.style.transition = "opacity 0.5s ease, margin-top 0.5s ease";
+                                alertBox.style.opacity = "0";
+                                alertBox.style.marginTop = "-50px"; 
+                                setTimeout(() => alertBox.remove(), 500);
+                            }
+                        }
+                    }, 450); // Checa logo após o badge individual sumir
+                }
+                // ==============================================================
+
                 setTimeout(() => {
                     btnElement.innerHTML = originalHtml;
                     btnElement.classList.replace('btn-primary', 'btn-success');
