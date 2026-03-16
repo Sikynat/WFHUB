@@ -3299,6 +3299,60 @@ def dashboard_analise(request):
                     'preco': float(preco_atual)
                 })
 
+    # =========================================================
+    # --- 9. CÁLCULO DE RECUPERAÇÃO REAL WISHLIST (15 DIAS) ---
+    # =========================================================
+    itens_notificados = ItemPedidoIgnorado.objects.filter(
+        notificado=True,
+        data_notificacao__year=ano_selecionado,
+        data_notificacao__month=mes_selecionado
+    ).select_related('cliente')
+
+    total_recuperado_reais = Decimal('0.00')
+    qtd_itens_recuperados = 0
+
+    if itens_notificados.exists():
+        # Para cobrir a janela de 15 dias com margem de segurança
+        data_inicio_busca = date(ano_selecionado, mes_selecionado, 1)
+        data_fim_busca = data_inicio_busca + timedelta(days=45) 
+
+        vendas_base_cruzamento = VendaReal.objects.filter(
+            Emissao__range=(data_inicio_busca, data_fim_busca)
+        ).values('Codigo_Cliente', 'Produto_Codigo', 'Emissao', 'Total')
+
+        # Dicionário em memória para consultas ultra-rápidas
+        vendas_erp_memoria = {}
+        for v in vendas_base_cruzamento:
+            chave = (str(v['Codigo_Cliente']), str(v['Produto_Codigo']))
+            if chave not in vendas_erp_memoria:
+                vendas_erp_memoria[chave] = []
+            vendas_erp_memoria[chave].append({'data': v['Emissao'], 'total': v['Total']})
+
+        for item in itens_notificados:
+            # Trava de segurança para garantir que a data exista antes de calcular
+            if item.cliente and item.data_notificacao:
+                codigo_cli = str(item.cliente.client_code)
+                codigo_prod = str(item.codigo_produto)
+                data_aviso = item.data_notificacao.date()
+                data_limite = data_aviso + timedelta(days=15)
+                
+                chave_busca = (codigo_cli, codigo_prod)
+                
+                if chave_busca in vendas_erp_memoria:
+                    compras_do_produto = vendas_erp_memoria[chave_busca]
+                    
+                    # Filtra compras apenas dentro da janela de 15 dias após o envio do WhatsApp
+                    vendas_validas = [
+                        compra['total'] for compra in compras_do_produto 
+                        if data_aviso <= compra['data'] <= data_limite
+                    ]
+                    
+                    if vendas_validas:
+                        total_recuperado_reais += sum(vendas_validas)
+                        qtd_itens_recuperados += 1
+
+    recuperado_formatado = "{:,.2f}".format(float(total_recuperado_reais)).replace(",", "X").replace(".", ",").replace("X", ".")
+
     # --- CONTEXTO ---
     contexto = {
         'total_vendas': total_vendas_str, 'ticket_medio': ticket_medio_formatado, 'total_itens_faturados': total_itens, 'total_pedidos_reais': total_pedidos,
@@ -3308,7 +3362,11 @@ def dashboard_analise(request):
         'labels_semana': json.dumps(dias_nomes), 'valores_semana': json.dumps(vendas_por_dia),
         'ranking_logistica_dia': ranking_logistica_dia, 'saude_base': saude_base,
         'mes_atual': mes_selecionado, 'ano_atual': ano_selecionado, 'lista_anos': range(hoje.year - 2, hoje.year + 1),
-        'oportunidades_wishlist': oportunidades_wishlist.values(), # INJETADO AQUI COM SUCESSO!
+        'oportunidades_wishlist': oportunidades_wishlist.values(),
+        
+        # NOVAS VARIÁVEIS INJETADAS AQUI:
+        'total_recuperado_reais': recuperado_formatado,
+        'qtd_itens_recuperados': qtd_itens_recuperados,
     }
     return render(request, 'analise/dashboard_analise.html', contexto)
 
@@ -3568,6 +3626,7 @@ def exportar_status_erp_excel(request):
         df.to_excel(writer, index=False, sheet_name='Status')
     
     return response
+
 @staff_member_required
 def notificar_wishlist_whatsapp(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
@@ -3606,8 +3665,13 @@ def notificar_wishlist_whatsapp(request, cliente_id):
         reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
     )
 
-    # 1. ATUALIZA O BANCO E CACHE
-    ItemPedidoIgnorado.objects.filter(id__in=ids_para_atualizar).update(notificado=True)
+    # ---------------------------------------------------------------------
+    # 1. ATUALIZA O BANCO E CACHE (AGORA COM O CARIMBO DE TEMPO)
+    # ---------------------------------------------------------------------
+    ItemPedidoIgnorado.objects.filter(id__in=ids_para_atualizar).update(
+        notificado=True,
+        data_notificacao=timezone.now() # <--- Grava a data e hora exata do envio!
+    )
     cache.delete('dashboard_wishlist')
     
     # 2. MONTA A MENSAGEM COM O LINK

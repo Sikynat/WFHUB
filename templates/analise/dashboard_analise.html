@@ -107,6 +107,28 @@
                 </div>
             </div>
 
+            <div class="row mb-4">
+    <div class="col-12">
+        <div class="metric-card p-4 border-start border-4" style="border-color: #783ae3 !important; background: linear-gradient(145deg, #ffffff 0%, #fcfaff 100%);">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="text-label" style="color: #783ae3;">
+                    <i class="fas fa-undo-alt me-1"></i> Vendas Recuperadas (Wishlist)
+                </div>
+                <span class="badge" style="background-color: rgba(120, 58, 227, 0.1); color: #783ae3;">Últimos 15 dias</span>
+            </div>
+            <div class="d-flex align-items-baseline gap-3">
+                <h2 class="fw-bold mb-0" style="color: #2d3748;">R$ {{ total_recuperado_reais|default:"0,00" }}</h2>
+                <div class="text-success fw-bold" style="font-size: 0.9rem;">
+                    <i class="fas fa-arrow-up me-1"></i> {{ qtd_itens_recuperados|default:"0" }} itens convertidos
+                </div>
+            </div>
+            <p class="text-muted small mt-2 mb-0">
+                Faturamento real (ERP) gerado por clientes que compraram o produto logo após receberem o aviso automático de retorno ao estoque.
+            </p>
+        </div>
+    </div>
+</div>
+
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <div class="metric-card p-4 border-start border-4 border-info">

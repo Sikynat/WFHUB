@@ -99,7 +99,6 @@
         </div>
     </div>
 
-    {% if oportunidades_wishlist %}
     <div class="card metric-card mb-4 border-success" style="border-left: 5px solid #10b981;">
         <div class="card-header bg-white border-0 pt-4 pb-0">
             <h5 class="fw-bold text-success mb-1"><i class="fas fa-bullhorn me-2"></i> Oportunidades de Venda (Estoque Recuperado)</h5>
@@ -113,23 +112,30 @@
                         <h6 class="mb-1 fw-bold text-dark">
                             <span class="text-muted me-1">#{{ op.cliente.client_code }}</span> - {{ op.cliente.client_name }}
                         </h6>
-                        <small class="text-muted d-block">
+                        <small class="text-muted d-block mt-2">
                             {% for prod in op.produtos %}
-                                <span class="badge bg-light text-dark border me-1 mb-1">
+                                <span class="badge bg-light text-dark border me-1 mb-1" style="font-weight: 500;">
                                     {{ prod.codigo }} (R$ {{ prod.preco|floatformat:2 }})
                                 </span>
                             {% endfor %}
                         </small>
                     </div>
-                    <a href="{% url 'notificar_wishlist_whatsapp' op.cliente.client_id %}" target="_blank" class="btn btn-sm btn-success rounded-pill px-4 shadow-sm" style="background-color: #10b981; border: none;">
+                    <a href="{% url 'notificar_wishlist_whatsapp' op.cliente.client_id %}" target="_blank" class="btn btn-sm btn-success rounded-pill px-4 shadow-sm" style="background-color: #10b981; border: none; white-space: nowrap;">
                         <i class="fab fa-whatsapp me-1"></i> Avisar
                     </a>
+                </div>
+                {% empty %}
+                <div class="text-center py-5 bg-light rounded mt-2" style="border: 2px dashed #cbd5e1;">
+                    <div class="mb-3">
+                        <i class="fas fa-box-open text-muted" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                    </div>
+                    <h6 class="fw-bold text-muted mb-1">Nenhuma oportunidade no momento</h6>
+                    <p class="text-muted small mb-0">Não foi encontrada nenhuma recuperação de estoque pendente para aviso.</p>
                 </div>
                 {% endfor %}
             </div>
         </div>
     </div>
-    {% endif %}
 
     <h5 class="fw-bold mb-3 mt-2"><i class="fas fa-satellite-dish me-2 text-primary"></i> Radar Logístico (Status do ERP)</h5>
     <div class="row g-3 mb-5">
@@ -263,11 +269,11 @@
                     <div><div class="fw-bold">Monitoramento ERP</div><div class="small text-muted">Auditoria de Status</div></div>
                 </a>
 
-                  <a href="{% url 'historico_wishlist' %}" class="action-btn shadow-sm w-100">
+                <a href="{% url 'historico_wishlist' %}" class="action-btn shadow-sm w-100">
                     <div class="action-icon" style="background-color: #e7d03c; color: white;">
-                        <i class="fas fa-list-check"></i>
+                        <i class="fas fa-history"></i>
                     </div>
-                    <div><div class="fw-bold">Historico de recuperações</div><div class="small text-muted">Historico de recuperações</div></div>
+                    <div><div class="fw-bold">Histórico de Recuperações</div><div class="small text-muted">Auditoria da Wishlist</div></div>
                 </a>
             </div>
         </div>
