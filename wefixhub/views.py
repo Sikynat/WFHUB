@@ -2932,32 +2932,49 @@ def sugestoes_compra(request):
     return render(request, 'sugestoes.html', contexto)
 
 # upload planilha do trs
+from django.db import transaction
+from django.contrib import messages
+from django.shortcuts import redirect, render
+import pandas as pd
+from decimal import Decimal
+
 @staff_member_required
 def upload_vendas_reais(request):
     if request.method == 'POST' and request.FILES.get('planilha_vendas'):
         file = request.FILES['planilha_vendas']
         try:
-            # Lemos a planilha garantindo que o pandas não crie linhas fantasmas
             df = pd.read_excel(file)
-            df = df.dropna(how='all')  # Remove linhas completamente vazias
+            df = df.dropna(how='all')
 
-            # --- OTIMIZAÇÃO 1: CONVERSÃO DE DATA EM LOTE ---
-            # Converte a coluna inteira de uma vez (muito mais rápido que fazer linha a linha)
+            # 1. OTIMIZAÇÃO: Conversão de data
             df['Emissão_dt'] = pd.to_datetime(df['Emissão'], dayfirst=True)
-            
-            # Descobre quais meses e anos únicos existem na planilha que você acabou de subir
-            # Formato: ['2026-01', '2026-02', ...]
-            meses_anos_na_planilha = df['Emissão_dt'].dt.strftime('%Y-%m').unique()
+            dias_na_planilha = df['Emissão_dt'].dt.date.unique()
 
-            # --- OTIMIZAÇÃO 2: LIMPEZA INTELIGENTE ---
             with transaction.atomic():
-                # Apaga APENAS os dados dos meses que vieram na planilha. 
-                # Preserva todo o restante do histórico no banco de dados.
-                for mes_ano in meses_anos_na_planilha:
-                    ano, mes = mes_ano.split('-')
-                    VendaReal.objects.filter(Emissao__year=int(ano), Emissao__month=int(mes)).delete()
+                VendaReal.objects.filter(Emissao__in=dias_na_planilha).delete()
 
-            # 2. CACHE DE CLIENTES (Performance mantida)
+            # 2. LIMPEZA E SANITIZAÇÃO FINANCEIRA
+            df['Código_Cliente'] = df['Código_Cliente'].fillna(0)
+            
+            # Garante que o Pandas consiga somar valores caso o Excel venha com vírgulas e formato texto
+            df['Total'] = pd.to_numeric(df['Total'].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
+            df['Unitário'] = pd.to_numeric(df['Unitário'].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
+            df['Quantidade'] = pd.to_numeric(df['Quantidade'], errors='coerce').fillna(0)
+
+            # 3. OTIMIZAÇÃO DE AGRUPAMENTO (A correção do gargalo)
+            # Sem a 'Produto_Descrição', todos os códigos genéricos (ex: 'FL') do mesmo pedido 
+            # se fundem em uma linha única, somando os valores e blindando contra perda de dados.
+            df_grouped = df.groupby(
+                ['Emissão_dt', 'Código_Cliente', 'Pedido', 'Produto_Código'], 
+                dropna=False, as_index=False
+            ).agg({
+                'Produto_Descrição': 'first', # Guarda apenas a primeira descrição encontrada
+                'Quantidade': 'sum',
+                'Unitário': 'first',
+                'Total': 'sum'
+            })
+
+            # 4. PROCESSAMENTO PARA O BANCO
             clientes_dict = {
                 str(c.client_code): c.client_name 
                 for c in WfClient.objects.all().only('client_code', 'client_name')
@@ -2965,20 +2982,21 @@ def upload_vendas_reais(request):
 
             novas_vendas = []
             
-            # 3. PROCESSAMENTO
-            for _, row in df.iterrows():
-                # Validação básica para evitar erros de conversão em células vazias
-                if pd.isna(row['Código_Cliente']) or pd.isna(row['Total']):
-                    continue
-
-                cod_cliente_str = str(int(row['Código_Cliente']))
-                nome_cliente = clientes_dict.get(cod_cliente_str, f"Cod: {cod_cliente_str}")
+            for _, row in df_grouped.iterrows():
+                # Remove potenciais .0 que o pandas coloca em inteiros
+                cod_cliente_str = str(row['Código_Cliente']).replace('.0', '')
+                
+                if cod_cliente_str == "0":
+                    nome_cliente = "Consumidor Final / Não Identificado"
+                else:
+                    nome_cliente = clientes_dict.get(cod_cliente_str, f"Cod: {cod_cliente_str}")
 
                 venda = VendaReal(
-                    Emissao=row['Emissão_dt'].date(), # Usa a data já convertida e otimizada
-                    Codigo_Cliente=int(row['Código_Cliente']),
-                    Pedido=str(row['Pedido']),
-                    Produto_Codigo=str(row['Produto_Código']),
+                    Emissao=row['Emissão_dt'].date(),
+                    Codigo_Cliente=int(float(row['Código_Cliente'])),
+                    # Limpa formato float caso o Excel tenha mandado o Pedido como número
+                    Pedido=str(row['Pedido']).replace('.0', ''), 
+                    Produto_Codigo=str(row['Produto_Código']).replace('.0', ''),
                     cliente_nome=nome_cliente,
                     Produto_Descricao=str(row['Produto_Descrição']),
                     Quantidade=int(row['Quantidade']),
@@ -2987,15 +3005,11 @@ def upload_vendas_reais(request):
                 )
                 novas_vendas.append(venda)
 
-            # 4. SALVAMENTO EM LOTE
             if novas_vendas:
                 with transaction.atomic():
-                    # Adicionado ignore_conflicts=True como blindagem extra contra duplicatas do ERP
                     VendaReal.objects.bulk_create(novas_vendas, batch_size=500, ignore_conflicts=True)
                 
-                # Mensagem de sucesso amigável mostrando os meses afetados
-                meses_formatados = ", ".join(meses_anos_na_planilha)
-                messages.success(request, f'Sucesso! {len(novas_vendas)} itens importados. Histórico atualizado para: {meses_formatados}.')
+                messages.success(request, f'Sucesso! {len(novas_vendas)} itens processados. Histórico atualizado para {len(dias_na_planilha)} dias.')
             else:
                 messages.warning(request, 'Nenhum dado válido encontrado na planilha.')
             
