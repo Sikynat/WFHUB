@@ -141,12 +141,23 @@ def home(request):
                     preco_exibido = 'es'
                     products = products.exclude(product_value_es=0)
 
-                # --- SINCRONIZAÇÃO DO TOTAL DO CARRINHO (NOVO) ---
+                # --- SINCRONIZAÇÃO DO TOTAL E QUANTIDADES DO CARRINHO (NOVO) ---
                 # Importação local para evitar importação circular no topo do arquivo
-                from .models import Carrinho 
+                from .models import Carrinho, ItemCarrinho 
                 carrinho = Carrinho.objects.filter(cliente=cliente_logado).first()
+                
                 if carrinho:
                     total_carrinho_real = carrinho.get_total_carrinho()
+                    
+                    # CUIDADO APLICADO: Cria uma subquery que busca exatamente a quantidade 
+                    # do produto atual dentro do carrinho do cliente logado.
+                    sq_qtd = ItemCarrinho.objects.filter(
+                        carrinho=carrinho,
+                        produto_id=OuterRef('product_id')
+                    ).values('quantidade')[:1]
+                    
+                    # Anota (injeta) a quantidade no QuerySet de produtos
+                    products = products.annotate(qtd_carrinho=Subquery(sq_qtd))
 
                 # --- ALERTA DE WISHLIST NO FRONT-END ---
                 data_limite = timezone.localdate() - timedelta(days=30)
@@ -211,7 +222,6 @@ def home(request):
     }
             
     return render(request, 'home.html', context)
-
 
 """
     # Lógica de Paginação:
@@ -3707,7 +3717,7 @@ def adicionar_ao_carrinho_bd(request):
     # 1. Pega o carrinho do cliente (ou cria um novo, vazio)
     carrinho, _ = Carrinho.objects.get_or_create(cliente=cliente_logado)
 
-    # 2. Adiciona o item ao carrinho (ou soma a quantidade se já existir)
+    # 2. Adiciona o item ao carrinho ou ATUALIZA a quantidade
     item, created = ItemCarrinho.objects.get_or_create(
         carrinho=carrinho,
         produto=produto,
@@ -3715,7 +3725,9 @@ def adicionar_ao_carrinho_bd(request):
     )
     
     if not created:
-        item.quantidade += quantidade
+        # CORREÇÃO APLICADA: Substitui o valor em vez de somar, 
+        # garantindo a consistência com o input preenchido no frontend.
+        item.quantidade = quantidade
         item.save()
 
     # =========================================================
@@ -3723,7 +3735,7 @@ def adicionar_ao_carrinho_bd(request):
     # Se o cliente adicionou ao carrinho, marcamos o erro como resolvido/notificado.
     # O produto nunca mais aparecerá no banner de "voltou ao estoque" para este cliente.
     # =========================================================
-    from .models import ItemPedidoIgnorado # Importação caso não esteja no topo do arquivo
+    from .models import ItemPedidoIgnorado # Importação local de segurança
     ItemPedidoIgnorado.objects.filter(
         cliente=cliente_logado,
         codigo_produto=produto.product_code,
@@ -3739,6 +3751,10 @@ def adicionar_ao_carrinho_bd(request):
         'codigo_produto': produto.product_code # INJETADO: Enviamos o código de volta para animar a tela
     })
 
+# =========================================================
+# EXPORTAÇÃO DE ITENS RECUPERADOS (WISHLIST)
+# =========================================================
+@staff_member_required # Recomendo proteger esta view para admins
 def exportar_itens_recuperados_excel(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name

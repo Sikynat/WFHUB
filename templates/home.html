@@ -124,7 +124,7 @@
 
 /* NOVO: Estilo para os subtotais da tabela */
 .subtotal-field {
-    color: var(--cor-destaque) !important; /* Cor Roxa por padrão */
+    color: var(--cor-destaque) !important;
     font-weight: bold;
 }
 
@@ -329,7 +329,7 @@
                         <input
                             type="number"
                             id="quantidade_{{ product.product_id }}"
-                            value=""
+                            value="{{ product.qtd_carrinho|default_if_none:'' }}"
                             placeholder="0"
                             min="1"
                             class="form-control input-quantidade text-center" 
@@ -340,8 +340,14 @@
                         </button>
                     </div>
                 </td>
-                <td class="text-right-data">
+                <td class="text-right-data" style="min-width: 120px;">
                     <span id="total_{{ product.product_id }}" class="subtotal-field">R$ 0,00</span>
+                    
+                    <div id="badge_carrinho_{{ product.product_id }}" class="mt-1" style="font-size: 0.8rem; {% if not product.qtd_carrinho %}display: none;{% endif %}">
+                        <span class="badge bg-success text-white px-2 py-1" style="opacity: 0.95; border-radius: 6px;">
+                            <i class="fas fa-shopping-cart me-1"></i> <span id="qtd_val_{{ product.product_id }}">{{ product.qtd_carrinho }}</span> no carrinho
+                        </span>
+                    </div>
                 </td>
                 {% endif %}
             </tr>
@@ -404,6 +410,14 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         loadVisuals();
+        
+        // NOVO: Calcula o subtotal e pinta de roxo para os itens que já carregam com quantidade do Banco de Dados
+        document.querySelectorAll('.input-quantidade').forEach(input => {
+            if (input.value && parseInt(input.value) > 0) {
+                const productId = input.id.split('_')[1];
+                calcularSubtotalAoDigitar(productId);
+            }
+        });
     });
 
     // Calcula subtotal em tempo real conforme digita (Client-side)
@@ -416,7 +430,6 @@
         const precoUnitario = parseFloat(tdPreco.getAttribute('data-value').replace(',', '.'));
         const quantidade = parseInt(input.value);
 
-        // O parseInt de "" retorna NaN, caindo perfeitamente no Else (0,00)
         if (!isNaN(quantidade) && quantidade > 0) {
             const subtotal = precoUnitario * quantidade;
             spanTotal.innerText = formatarMoeda(subtotal);
@@ -476,55 +489,54 @@
                 btnElement.innerHTML = '✔';
                 btnElement.classList.replace('btn-success', 'btn-primary');
                 
-                // Atualiza o Total Geral na interface imediatamente com o dado retornado
+                // Atualiza o Total Geral na interface
                 document.getElementById('grand-total').innerText = formatarMoeda(data.pedido_total);
                 localStorage.setItem('cart_grand_total', data.pedido_total);
 
+                // Atualiza a etiqueta visual do carrinho na linha
+                const badgeContainer = document.getElementById('badge_carrinho_' + productId);
+                const qtdVal = document.getElementById('qtd_val_' + productId);
+                if (badgeContainer && qtdVal) {
+                    qtdVal.innerText = data.item_quantidade;
+                    badgeContainer.style.display = 'block';
+                }
+
                 // ==============================================================
-                // NOVO: EFEITO VISUAL DE LIMPEZA DA WISHLIST
+                // EFEITO VISUAL DE LIMPEZA DA WISHLIST
                 // ==============================================================
                 if (data.codigo_produto) {
-                    // Busca todos os selos (badges) dentro do banner verde
                     const badges = document.querySelectorAll('.alert-success .badge');
                     badges.forEach(badge => {
-                        // Se o texto do selo contiver o código do produto recém adicionado
                         if (badge.innerText.includes(data.codigo_produto)) {
-                            // Cria um efeito de fade-out (esmaecimento)
                             badge.style.transition = "opacity 0.4s ease, transform 0.4s ease";
                             badge.style.opacity = "0";
-                            badge.style.transform = "scale(0.8)"; // Encolhe um pouquinho
+                            badge.style.transform = "scale(0.8)"; 
                             
-                            // Remove o elemento da tela após a animação
                             setTimeout(() => badge.remove(), 400); 
                         }
                     });
                     
-                    // Verifica se acabaram os produtos do banner
                     setTimeout(() => {
                         const remainingBadges = document.querySelectorAll('.alert-success .badge');
                         if (remainingBadges.length === 0) {
                             const alertBox = document.querySelector('.alert-success');
                             if (alertBox) {
-                                // Faz o banner inteiro sumir suavemente
                                 alertBox.style.transition = "opacity 0.5s ease, margin-top 0.5s ease";
                                 alertBox.style.opacity = "0";
                                 alertBox.style.marginTop = "-50px"; 
                                 setTimeout(() => alertBox.remove(), 500);
                             }
                         }
-                    }, 450); // Checa logo após o badge individual sumir
+                    }, 450); 
                 }
-                // ==============================================================
 
                 setTimeout(() => {
                     btnElement.innerHTML = originalHtml;
                     btnElement.classList.replace('btn-primary', 'btn-success');
                     btnElement.disabled = false;
                     
-                    // ZERA O CAMPO: Volta a ficar vazio e limpa a linha de total
-                    inputQtd.value = "";
-                    spanTotalLinha.innerText = "R$ 0,00";
-                    spanTotalLinha.style.color = 'var(--cor-destaque)';
+                    // Garante que o input mostra a quantidade validada pelo banco de dados sem apagar
+                    inputQtd.value = data.item_quantidade;
                 }, 1000);
             } else {
                 alert('Erro: ' + data.erro);
