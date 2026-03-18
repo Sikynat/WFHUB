@@ -3773,11 +3773,13 @@ def adicionar_ao_carrinho_bd(request):
 # EXPORTAÇÃO DE ITENS RECUPERADOS (WISHLIST)
 # =========================================================
 
+from django.db.models import Max
+
+@staff_member_required
 def exportar_itens_recuperados_excel(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
-    # Captura IDs específicos da URL (ex: ?ids=1,2,3)
     ids_param = request.GET.get('ids')
     
     queryset = ItemPedidoIgnorado.objects.filter(
@@ -3785,37 +3787,52 @@ def exportar_itens_recuperados_excel(request, cliente_id):
         motivo_erro__icontains="estoque"
     )
 
-    # Se passarmos IDs específicos, filtramos apenas eles
+    # 1. Lógica Anti-Falha (Se o link for cortado, puxa só o último lote)
     if ids_param:
         lista_ids = ids_param.split(',')
         queryset = queryset.filter(id__in=lista_ids)
     else:
-        # Se não houver IDs, por segurança, pegamos apenas os NÃO notificados 
-        # ou os notificados nos últimos 10 minutos (ajuste conforme necessidade)
-        queryset = queryset.filter(notificado=False)
+        # Pega a data/hora exata do último envio de WhatsApp que fizemos
+        ultima_notificacao = queryset.filter(notificado=True).aggregate(Max('data_notificacao'))['data_notificacao__max']
+        
+        if ultima_notificacao:
+            # Filtra estritamente os itens que foram notificados naquele exato segundo
+            queryset = queryset.filter(data_notificacao=ultima_notificacao)
+        else:
+            queryset = queryset.filter(notificado=False)
 
-    # Otimização de QuerySet: select_related não aplica aqui pois Produto é buscado por código,
-    # mas vamos otimizar a busca de produtos abaixo.
+    # 2. Agrupamento de Itens (Para a planilha ficar idêntica à mensagem)
+    itens_agrupados = {}
     
-    data = []
     for item in queryset:
-        # Otimização: Evitar queries repetitivas dentro do loop se possível
         produto = Product.objects.filter(product_code=item.codigo_produto).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             
             if preco_atual and preco_atual > 0:
-                data.append({
-                    'Código': item.codigo_produto,
-                    'Descrição': produto.product_description,
-                    'Quantidade Solicitada': item.quantidade_tentada,
-                    'Preço Unitário': float(preco_atual),
-                    'Subtotal': float(preco_atual * item.quantidade_tentada)
-                })
+                codigo = item.codigo_produto
+                qtd = item.quantidade_tentada or 0
+                
+                # Se o produto já está na lista, apenas soma a quantidade!
+                if codigo in itens_agrupados:
+                    itens_agrupados[codigo]['Quantidade Solicitada'] += qtd
+                    itens_agrupados[codigo]['Subtotal'] = float(preco_atual) * itens_agrupados[codigo]['Quantidade Solicitada']
+                else:
+                    # Se não está, cria a linha
+                    itens_agrupados[codigo] = {
+                        'Código': codigo,
+                        'Descrição': produto.product_description,
+                        'Quantidade Solicitada': qtd,
+                        'Preço Unitário': float(preco_atual),
+                        'Subtotal': float(preco_atual * qtd)
+                    }
+
+    data = list(itens_agrupados.values())
 
     if not data:
         return HttpResponse("Nenhum item disponível para exportação no momento.", status=404)
 
+    # Geração do Excel
     df = pd.DataFrame(data)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
