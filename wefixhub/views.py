@@ -3668,33 +3668,37 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     
     # Valida disponibilidade atual e monta a lista com quantidades
     for item in itens_pendentes:
+        # Dica Otimizador WFHUB: Se a base crescer, vale a pena tirar essa query de dentro do for!
         produto = Product.objects.filter(product_code=item.codigo_produto).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             if preco_atual and preco_atual > 0:
-                # Inclui a quantidade tentada capturada no upload original
                 qtd = item.quantidade_tentada if item.quantidade_tentada else 0
                 produto_texto = f"- {produto.product_code}: {qtd} un. ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
                 
                 if produto_texto not in produtos_recuperados:
                     produtos_recuperados.append(produto_texto)
+                
+                # Guarda o ID do item recuperado
                 ids_para_atualizar.append(item.id)
     
     if not produtos_recuperados:
         messages.warning(request, "Os produtos deste cliente ficaram sem estoque novamente.")
         return redirect('dashboard_admin')
         
-    # Gera o link absoluto para a nova planilha de recuperação
-    link_download = request.build_absolute_uri(
-        reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
-    )
+    # ---------------------------------------------------------------------
+    # NOVO: GERA O LINK COM OS IDS EXATOS (Parâmetro ?ids=...)
+    # ---------------------------------------------------------------------
+    ids_string = ",".join(map(str, ids_para_atualizar))
+    base_url = reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
+    link_download = request.build_absolute_uri(f"{base_url}?ids={ids_string}")
 
     # ---------------------------------------------------------------------
-    # 1. ATUALIZA O BANCO E CACHE (AGORA COM O CARIMBO DE TEMPO)
+    # 1. ATUALIZA O BANCO E CACHE (COM O CARIMBO DE TEMPO)
     # ---------------------------------------------------------------------
     ItemPedidoIgnorado.objects.filter(id__in=ids_para_atualizar).update(
         notificado=True,
-        data_notificacao=timezone.now() # <--- Grava a data e hora exata do envio!
+        data_notificacao=timezone.now()
     )
     cache.delete('dashboard_wishlist')
     
@@ -3768,23 +3772,38 @@ def adicionar_ao_carrinho_bd(request):
 # =========================================================
 # EXPORTAÇÃO DE ITENS RECUPERADOS (WISHLIST)
 # =========================================================
-@staff_member_required # Recomendo proteger esta view para admins
+
 def exportar_itens_recuperados_excel(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
-    # Busca itens que foram ignorados por falta de estoque
-    itens = ItemPedidoIgnorado.objects.filter(
+    # Captura IDs específicos da URL (ex: ?ids=1,2,3)
+    ids_param = request.GET.get('ids')
+    
+    queryset = ItemPedidoIgnorado.objects.filter(
         cliente=cliente,
         motivo_erro__icontains="estoque"
     )
 
+    # Se passarmos IDs específicos, filtramos apenas eles
+    if ids_param:
+        lista_ids = ids_param.split(',')
+        queryset = queryset.filter(id__in=lista_ids)
+    else:
+        # Se não houver IDs, por segurança, pegamos apenas os NÃO notificados 
+        # ou os notificados nos últimos 10 minutos (ajuste conforme necessidade)
+        queryset = queryset.filter(notificado=False)
+
+    # Otimização de QuerySet: select_related não aplica aqui pois Produto é buscado por código,
+    # mas vamos otimizar a busca de produtos abaixo.
+    
     data = []
-    for item in itens:
+    for item in queryset:
+        # Otimização: Evitar queries repetitivas dentro do loop se possível
         produto = Product.objects.filter(product_code=item.codigo_produto).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
-            # Só inclui na planilha se o produto realmente voltou ao estoque (preço > 0)
+            
             if preco_atual and preco_atual > 0:
                 data.append({
                     'Código': item.codigo_produto,
@@ -3793,6 +3812,9 @@ def exportar_itens_recuperados_excel(request, cliente_id):
                     'Preço Unitário': float(preco_atual),
                     'Subtotal': float(preco_atual * item.quantidade_tentada)
                 })
+
+    if not data:
+        return HttpResponse("Nenhum item disponível para exportação no momento.", status=404)
 
     df = pd.DataFrame(data)
     output = BytesIO()
@@ -3806,6 +3828,7 @@ def exportar_itens_recuperados_excel(request, cliente_id):
     )
     response['Content-Disposition'] = f'attachment; filename=recuperacao_{cliente.client_code}.xlsx'
     return response
+
 
 @staff_member_required
 def historico_wishlist(request):
@@ -3836,46 +3859,40 @@ def reenviar_notificacao_whatsapp(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
-    # Diferença aqui: busca os itens que JÁ FORAM notificados (notificado=True)
     itens_arquivados = ItemPedidoIgnorado.objects.filter(
         cliente=cliente,
         notificado=True,
         motivo_erro__icontains="estoque"
     )
     
-    produtos_recuperados = []
+    produtos_recuperados_texto = []
+    ids_recuperados = [] # <--- LISTA PARA ARMAZENAR OS IDS
     
-    # Valida se os itens ainda estão com preço > 0 hoje
     for item in itens_arquivados:
         produto = Product.objects.filter(product_code=item.codigo_produto).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             if preco_atual and preco_atual > 0:
-                qtd = item.quantidade_tentada if item.quantidade_tentada else 0
-                produto_texto = f"- {produto.product_code}: {qtd} un. ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
+                ids_recuperados.append(str(item.id)) # Guarda o ID do ItemPedidoIgnorado
                 
-                if produto_texto not in produtos_recuperados:
-                    produtos_recuperados.append(produto_texto)
+                qtd = item.quantidade_tentada or 0
+                texto = f"- {produto.product_code}: {qtd} un. ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
+                produtos_recuperados_texto.append(texto)
     
-    if not produtos_recuperados:
-        messages.warning(request, "Os produtos deste cliente não estão mais disponíveis no estoque para reenvio.")
+    if not ids_recuperados:
+        messages.warning(request, "Nenhum produto disponível.")
         return redirect('historico_wishlist')
 
-    # Gera o link da planilha
-    link_download = request.build_absolute_uri(
-        reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
-    )
+    # Gerar link com IDs (Ex: /exportar-recuperados/15/?ids=102,105,110)
+    ids_string = ",".join(ids_recuperados)
+    base_url = reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
+    link_download = request.build_absolute_uri(f"{base_url}?ids={ids_string}")
     
-    # Monta a mensagem idêntica
-    produtos_texto = "\n".join(produtos_recuperados)
     mensagem = (
-        f"Olá, {cliente.client_name}! Tudo bem?\n\n"
-        f"Temos uma ótima notícia! Aqueles itens que você tentou pedir recentemente e estavam em falta, *acabaram de chegar no nosso estoque*:\n\n"
-        f"{produtos_texto}\n\n"
-        f"*Baixe a planilha de reposição aqui:* \n{link_download}\n\n"
-        f"Gostaria de aproveitar e incluir no seu próximo pedido?"
+        f"Olá, {cliente.client_name}!\n\n"
+        f"Os itens abaixo voltaram ao estoque:\n\n"
+        f"{"\n".join(produtos_recuperados_texto)}\n\n"
+        f"*Planilha de reposição:* {link_download}"
     )
     
-    # Redireciona para o WhatsApp (recomendo usar target="_blank" no HTML)
-    link_whatsapp = f"https://api.whatsapp.com/send?text={quote(mensagem)}"
-    return redirect(link_whatsapp)
+    return redirect(f"https://api.whatsapp.com/send?text={quote(mensagem)}")
