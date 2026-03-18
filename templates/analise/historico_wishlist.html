@@ -1,39 +1,139 @@
 {% extends 'base.html' %}
-{% block content %}
-<h2>{{ titulo }}</h2>
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Data da Tentativa</th>
-            <th>Cliente</th>
-            <th>Código do Produto</th>
-            <th>Qtd. Solicitada</th>
-            <th>Ações</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for item in page_obj %}
-        <tr>
-            <td>{{ item.data_tentativa|date:"d/m/Y H:i" }}</td>
-            <td>{{ item.cliente.client_name }}</td>
-            <td>{{ item.codigo_produto }}</td>
-            <td>{{ item.quantidade_tentada }}</td>
-           <td class="align-middle text-end">
-    <a href="{% url 'reenviar_notificacao_whatsapp' item.cliente.client_id %}" class="btn btn-sm btn-success me-1" target="_blank" title="Reenviar Mensagem">
-        <i class="fab fa-whatsapp"></i> Reenviar
-    </a>
-    
-    <a href="{% url 'exportar_itens_recuperados_excel' item.cliente.client_id %}" class="btn btn-sm btn-outline-success" title="Baixar Planilha">
-        <i class="fas fa-file-excel"></i> Excel
-    </a>
-</td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="5">Nenhum histórico encontrado.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% endblock %}
+{% block title %}Histórico de Lotes Enviados{% endblock %}
 
+{% block content %}
+<div class="container-fluid mt-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-dark fw-bold"><i class="fas fa-history text-primary me-2"></i> {{ titulo }}</h2>
+    </div>
+
+    <div class="card bg-white text-dark border-0 shadow rounded-3">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle mb-0">
+                    <thead class="table-light text-secondary">
+                        <tr>
+                            <th class="py-3 px-4">Data do Envio</th>
+                            <th class="py-3">ID do Lote</th>
+                            <th class="py-3">Cliente</th>
+                            <th class="py-3 text-center">Resumo do Lote</th>
+                            <th class="py-3 text-end px-4">Ações do Lote</th>
+                        </tr>
+                    </thead>
+                    <tbody class="border-top-0">
+                        {% for item in page_obj %}
+                        <tr>
+                            <td class="text-nowrap px-4 text-muted fw-medium">
+                                {{ item.data_envio|date:"d/m/Y H:i" }}
+                            </td>
+                            
+                            <td class="text-nowrap">
+                                {% if item.lote_notificacao %}
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill">
+                                        <i class="fas fa-box-open me-1"></i> {{ item.lote_notificacao }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary px-3 py-2 rounded-pill">
+                                        Envio Antigo
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <strong class="text-dark">{{ item.cliente__client_code }}</strong> 
+                                <span class="text-muted ms-1">- {{ item.cliente__client_name }}</span>
+                            </td>
+
+                            <td class="text-center">
+                                <span class="fw-bold text-dark">{{ item.qtd_produtos }} modelo(s)</span><br>
+                                <small class="text-muted">{{ item.total_unidades|default:0 }} un. totais</small>
+                            </td>
+
+                            <td class="text-end px-4">
+                                <a href="{% url 'reenviar_notificacao_whatsapp' item.cliente__client_id %}{% if item.lote_notificacao %}?lote={{ item.lote_notificacao }}{% endif %}" class="btn btn-sm btn-success shadow-sm me-1" target="_blank" title="Reenviar Lote no WhatsApp">
+                                    <i class="fab fa-whatsapp"></i> Reenviar
+                                </a>
+                                
+                                <a href="{% url 'exportar_itens_recuperados_excel' item.cliente__client_id %}{% if item.lote_notificacao %}?lote={{ item.lote_notificacao }}{% endif %}" class="btn btn-sm btn-outline-secondary shadow-sm" title="Baixar Planilha do Lote">
+                                    <i class="fas fa-file-excel text-success"></i> Planilha
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5">
+                                <div class="p-4">
+                                    <i class="fas fa-boxes fa-3x mb-3 text-muted opacity-50"></i>
+                                    <h4 class="text-dark fw-bold mt-2">Nenhum lote enviado ainda!</h4>
+                                    <p class="text-muted">Os lotes aparecerão aqui assim que você notificar as reposições de estoque.</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <nav aria-label="Navegação de páginas do histórico" class="mt-4">
+        <ul class="pagination justify-content-center shadow-sm">
+            
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link text-primary" href="?page=1" aria-label="Primeira">
+                    <span aria-hidden="true">&laquo;&laquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link text-primary" href="?page={{ page_obj.previous_page_number }}" aria-label="Anterior">
+                    <span aria-hidden="true">&laquo; Anterior</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link text-muted">&laquo;&laquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link text-muted">&laquo; Anterior</span>
+            </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active" aria-current="page">
+                        <span class="page-link bg-primary border-primary">{{ num }}</span>
+                    </li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link text-primary" href="?page={{ num }}">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link text-primary" href="?page={{ page_obj.next_page_number }}" aria-label="Próxima">
+                    <span aria-hidden="true">Próxima &raquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link text-primary" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Última">
+                    <span aria-hidden="true">&raquo;&raquo;</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link text-muted">Próxima &raquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link text-muted">&raquo;&raquo;</span>
+            </li>
+            {% endif %}
+
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

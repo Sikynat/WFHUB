@@ -75,6 +75,7 @@ import re
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from .models import Carrinho, ItemCarrinho
+from django.utils.crypto import get_random_string
 
 try:
     # Tenta definir o locale ideal
@@ -3656,19 +3657,14 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
-    # Filtra itens ignorados por estoque que ainda não foram notificados
     itens_pendentes = ItemPedidoIgnorado.objects.filter(
-        cliente=cliente,
-        notificado=False,
-        motivo_erro__icontains="estoque"
+        cliente=cliente, notificado=False, motivo_erro__icontains="estoque"
     )
     
     produtos_recuperados = []
     ids_para_atualizar = []
     
-    # Valida disponibilidade atual e monta a lista com quantidades
     for item in itens_pendentes:
-        # Dica Otimizador WFHUB: Se a base crescer, vale a pena tirar essa query de dentro do for!
         produto = Product.objects.filter(product_code=item.codigo_produto).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
@@ -3678,8 +3674,6 @@ def notificar_wishlist_whatsapp(request, cliente_id):
                 
                 if produto_texto not in produtos_recuperados:
                     produtos_recuperados.append(produto_texto)
-                
-                # Guarda o ID do item recuperado
                 ids_para_atualizar.append(item.id)
     
     if not produtos_recuperados:
@@ -3687,22 +3681,20 @@ def notificar_wishlist_whatsapp(request, cliente_id):
         return redirect('dashboard_admin')
         
     # ---------------------------------------------------------------------
-    # NOVO: GERA O LINK COM OS IDS EXATOS (Parâmetro ?ids=...)
+    # NOVO: GERA O ID DO LOTE (Ex: REP-7X9P2K) E O LINK
     # ---------------------------------------------------------------------
-    ids_string = ",".join(map(str, ids_para_atualizar))
+    lote_id = f"REP-{get_random_string(6).upper()}"
     base_url = reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
-    link_download = request.build_absolute_uri(f"{base_url}?ids={ids_string}")
+    link_download = request.build_absolute_uri(f"{base_url}?lote={lote_id}") # <-- Link limpo e seguro!
 
-    # ---------------------------------------------------------------------
-    # 1. ATUALIZA O BANCO E CACHE (COM O CARIMBO DE TEMPO)
-    # ---------------------------------------------------------------------
+    # Atualiza o banco com o lote gerado
     ItemPedidoIgnorado.objects.filter(id__in=ids_para_atualizar).update(
         notificado=True,
-        data_notificacao=timezone.now()
+        data_notificacao=timezone.now(),
+        lote_notificacao=lote_id # <-- Salva o Lote!
     )
     cache.delete('dashboard_wishlist')
     
-    # 2. MONTA A MENSAGEM COM O LINK
     produtos_texto = "\n".join(produtos_recuperados)
     mensagem = (
         f"Olá, {cliente.client_name}! Tudo bem?\n\n"
@@ -3713,7 +3705,7 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     )
     
     link_whatsapp = f"https://api.whatsapp.com/send?text={quote(mensagem)}"
-    messages.success(request, f"Cliente {cliente.client_name} marcado como notificado!")
+    messages.success(request, f"Cliente {cliente.client_name} notificado (Lote {lote_id})!")
     return redirect(link_whatsapp)
 
 @login_required
@@ -3775,33 +3767,29 @@ def adicionar_ao_carrinho_bd(request):
 
 from django.db.models import Max
 
-@staff_member_required
 def exportar_itens_recuperados_excel(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
-    ids_param = request.GET.get('ids')
+    # Captura o parâmetro ?lote=REP-XXXXXX
+    lote_param = request.GET.get('lote')
     
     queryset = ItemPedidoIgnorado.objects.filter(
         cliente=cliente,
         motivo_erro__icontains="estoque"
     )
 
-    # 1. Lógica Anti-Falha (Se o link for cortado, puxa só o último lote)
-    if ids_param:
-        lista_ids = ids_param.split(',')
-        queryset = queryset.filter(id__in=lista_ids)
+    if lote_param:
+        # Busca EXATAMENTE os itens daquele lote
+        queryset = queryset.filter(lote_notificacao=lote_param)
     else:
-        # Pega a data/hora exata do último envio de WhatsApp que fizemos
+        # Fallback de segurança (mantido por precaução)
         ultima_notificacao = queryset.filter(notificado=True).aggregate(Max('data_notificacao'))['data_notificacao__max']
-        
         if ultima_notificacao:
-            # Filtra estritamente os itens que foram notificados naquele exato segundo
             queryset = queryset.filter(data_notificacao=ultima_notificacao)
         else:
             queryset = queryset.filter(notificado=False)
 
-    # 2. Agrupamento de Itens (Para a planilha ficar idêntica à mensagem)
     itens_agrupados = {}
     
     for item in queryset:
@@ -3813,12 +3801,10 @@ def exportar_itens_recuperados_excel(request, cliente_id):
                 codigo = item.codigo_produto
                 qtd = item.quantidade_tentada or 0
                 
-                # Se o produto já está na lista, apenas soma a quantidade!
                 if codigo in itens_agrupados:
                     itens_agrupados[codigo]['Quantidade Solicitada'] += qtd
                     itens_agrupados[codigo]['Subtotal'] = float(preco_atual) * itens_agrupados[codigo]['Quantidade Solicitada']
                 else:
-                    # Se não está, cria a linha
                     itens_agrupados[codigo] = {
                         'Código': codigo,
                         'Descrição': produto.product_description,
@@ -3832,7 +3818,6 @@ def exportar_itens_recuperados_excel(request, cliente_id):
     if not data:
         return HttpResponse("Nenhum item disponível para exportação no momento.", status=404)
 
-    # Geração do Excel
     df = pd.DataFrame(data)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -3843,32 +3828,44 @@ def exportar_itens_recuperados_excel(request, cliente_id):
         output.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    response['Content-Disposition'] = f'attachment; filename=recuperacao_{cliente.client_code}.xlsx'
+    # Coloquei o ID do lote no nome do arquivo para ficar ainda mais profissional!
+    lote_nome = f"_{lote_param}" if lote_param else ""
+    response['Content-Disposition'] = f'attachment; filename=recuperacao_{cliente.client_code}{lote_nome}.xlsx'
     return response
-
 
 @staff_member_required
 def historico_wishlist(request):
     """
-    Exibe o histórico de todos os itens da Wishlist que já foram notificados aos clientes.
+    Exibe o histórico de lotes de reposição notificados aos clientes.
     """
-    # Filtra apenas os que já foram notificados e que eram erro de estoque
-    itens_arquivados = ItemPedidoIgnorado.objects.filter(
+    # Agrupa os itens arquivados pelo Lote e pelo Cliente
+    lotes_arquivados = ItemPedidoIgnorado.objects.filter(
         notificado=True,
         motivo_erro__icontains="estoque"
-    ).select_related('cliente', 'pedido').order_by('-data_tentativa')
+    ).values(
+        'lote_notificacao',
+        'cliente__client_id',
+        'cliente__client_code',
+        'cliente__client_name'
+    ).annotate(
+        # Conta quantos produtos diferentes foram no lote
+        qtd_produtos=Count('id'),
+        # Soma a quantidade total de unidades pedidas
+        total_unidades=Sum('quantidade_tentada'),
+        # Pega a data exata do envio deste lote
+        data_envio=Max('data_notificacao')
+    ).order_by('-data_envio')
 
-    # Paginação (50 itens por página)
-    paginator = Paginator(itens_arquivados, 50)
+    # Paginação (agora podemos por menos por página, ex: 20 lotes)
+    paginator = Paginator(lotes_arquivados, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     contexto = {
-        'titulo': 'Histórico de Oportunidades Notificadas',
+        'titulo': 'Histórico de Lotes Enviados',
         'page_obj': page_obj,
     }
     
-    # Você precisará criar este arquivo HTML simples na sua pasta de templates
     return render(request, 'analise/historico_wishlist.html', contexto)
 
 @staff_member_required
@@ -3876,43 +3873,65 @@ def reenviar_notificacao_whatsapp(request, cliente_id):
     cliente = get_object_or_404(WfClient, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
+    # 1. Pega o parâmetro do lote da URL (enviado pelo botão do painel)
+    lote_param = request.GET.get('lote')
+    
     itens_arquivados = ItemPedidoIgnorado.objects.filter(
         cliente=cliente,
         notificado=True,
         motivo_erro__icontains="estoque"
     )
     
-    produtos_recuperados_texto = []
-    ids_recuperados = [] # <--- LISTA PARA ARMAZENAR OS IDS
+    # 2. Filtra estritamente os itens do lote selecionado
+    if lote_param:
+        itens_arquivados = itens_arquivados.filter(lote_notificacao=lote_param)
+    
+    produtos_recuperados_dict = {} # <-- Dicionário para agrupar o texto
     
     for item in itens_arquivados:
         produto = Product.objects.filter(product_code=item.codigo_produto).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             if preco_atual and preco_atual > 0:
-                ids_recuperados.append(str(item.id)) # Guarda o ID do ItemPedidoIgnorado
-                
+                codigo = produto.product_code
                 qtd = item.quantidade_tentada or 0
-                texto = f"- {produto.product_code}: {qtd} un. ({produto.product_description}) | R$ {preco_atual:.2f}".replace(".", ",")
-                produtos_recuperados_texto.append(texto)
+                
+                # Agrupa a quantidade para a mensagem de texto
+                if codigo in produtos_recuperados_dict:
+                    produtos_recuperados_dict[codigo]['qtd'] += qtd
+                else:
+                    produtos_recuperados_dict[codigo] = {
+                        'descricao': produto.product_description,
+                        'preco': preco_atual,
+                        'qtd': qtd
+                    }
     
-    if not ids_recuperados:
-        messages.warning(request, "Nenhum produto disponível.")
+    if not produtos_recuperados_dict:
+        messages.warning(request, "Nenhum produto deste lote está disponível no momento.")
         return redirect('historico_wishlist')
 
-    # Gerar link com IDs (Ex: /exportar-recuperados/15/?ids=102,105,110)
-    ids_string = ",".join(ids_recuperados)
+    # Monta a lista de textos já agrupada
+    produtos_recuperados_texto = []
+    for cod, dados in produtos_recuperados_dict.items():
+        texto = f"- {cod}: {dados['qtd']} un. ({dados['descricao']}) | R$ {dados['preco']:.2f}".replace(".", ",")
+        produtos_recuperados_texto.append(texto)
+
+    # 3. Gerar link limpo usando o Lote (e não mais IDs gigantes)
     base_url = reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
-    link_download = request.build_absolute_uri(f"{base_url}?ids={ids_string}")
+    if lote_param:
+        link_download = request.build_absolute_uri(f"{base_url}?lote={lote_param}")
+    else:
+        # Fallback para envios antigos sem lote
+        link_download = request.build_absolute_uri(base_url)
     
-    # CORREÇÃO AQUI: separa o join da f-string!
     produtos_texto = "\n".join(produtos_recuperados_texto) 
     
     mensagem = (
         f"Olá, {cliente.client_name}!\n\n"
-        f"Os itens abaixo voltaram ao estoque:\n\n"
+        f"Temos uma ótima notícia! Aqueles itens que você tentou pedir recentemente e estavam em falta, *acabaram de chegar no nosso estoque*:\n\n"
         f"{produtos_texto}\n\n"
-        f"*Planilha de reposição:* {link_download}"
+        f"*Baixe a planilha de reposição aqui:* \n{link_download}\n\n"
+        f"Gostaria de aproveitar e incluir no seu próximo pedido?"
     )
     
     return redirect(f"https://api.whatsapp.com/send?text={quote(mensagem)}")

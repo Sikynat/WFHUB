@@ -277,6 +277,7 @@ class ItemPedidoIgnorado(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens_ignorados')
     notificado = models.BooleanField(default=False, verbose_name="Cliente Avisado?")
     data_notificacao = models.DateTimeField(null=True, blank=True, verbose_name='Data do Aviso')
+    lote_notificacao = models.CharField(max_length=20, blank=True, null=True, help_text="ID único do lote de envio no WhatsApp")
     # Dados solicitados
     cliente = models.ForeignKey(WfClient, on_delete=models.SET_NULL, null=True) # Código do cliente (via objeto)
     data_tentativa = models.DateTimeField(auto_now_add=True) # Data do pedido (momento do upload)
