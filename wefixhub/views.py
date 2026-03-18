@@ -3888,10 +3888,13 @@ def reenviar_notificacao_whatsapp(request, cliente_id):
     base_url = reverse('exportar_itens_recuperados_excel', args=[cliente.client_id])
     link_download = request.build_absolute_uri(f"{base_url}?ids={ids_string}")
     
+    # CORREÇÃO AQUI: separa o join da f-string!
+    produtos_texto = "\n".join(produtos_recuperados_texto) 
+    
     mensagem = (
         f"Olá, {cliente.client_name}!\n\n"
         f"Os itens abaixo voltaram ao estoque:\n\n"
-        f"{"\n".join(produtos_recuperados_texto)}\n\n"
+        f"{produtos_texto}\n\n"
         f"*Planilha de reposição:* {link_download}"
     )
     
