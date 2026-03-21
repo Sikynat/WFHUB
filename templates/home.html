@@ -310,7 +310,29 @@
             {% for product in product_list %}
             <tr>
                 <td>{{ product.product_code }}</td>
-                <td>{{ product.product_description }}</td>
+                <td>
+                    {{ product.product_description }}
+                    {% if product.status_estoque == 'SEM_ESTOQUE' %}
+                        <span class="badge ms-1" style="background-color: #6c757d; font-size: 0.7rem;">Sem Estoque</span>
+                        {% if not user.is_staff %}
+                            {% if product.product_code in codigos_avise_me %}
+                            <button type="button" class="btn btn-sm ms-1" disabled
+                                style="font-size: 0.7rem; padding: 0.1rem 0.4rem; background-color: transparent; border: 1px solid #10b981; color: #10b981;">
+                                ✔ Registrado
+                            </button>
+                            {% else %}
+                            <button
+                                type="button"
+                                class="btn btn-sm ms-1 btn-avise-me"
+                                style="font-size: 0.7rem; padding: 0.1rem 0.4rem; background-color: transparent; border: 1px solid #9747e8; color: #9747e8;"
+                                data-product-id="{{ product.product_id }}"
+                                onclick="avisarQuandoDisponivel({{ product.product_id }}, this)">
+                                Avise-me
+                            </button>
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                </td>
                 <td>{{ product.product_group }}</td>
                 <td>{{ product.product_brand }}</td>
                 
@@ -335,7 +357,7 @@
                             class="form-control input-quantidade text-center" 
                             style="padding: 0.25rem;"
                             oninput="calcularSubtotalAoDigitar({{ product.product_id }})">
-                        <button type="button" class="btn btn-success" onclick="adicionarAoBanco({{ product.product_id }}, this)">
+                        <button type="button" class="btn btn-success" onclick="adicionarAoBanco({{ product.product_id }}, this)" {% if product.status_estoque == 'SEM_ESTOQUE' %}disabled title="Produto sem estoque"{% endif %}>
                             +
                         </button>
                     </div>
@@ -554,6 +576,36 @@
     function limparCache() {
         localStorage.clear();
         location.reload();
+    }
+
+    function avisarQuandoDisponivel(productId, btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerText = '...';
+
+        const formData = new FormData();
+        formData.append('product_id', productId);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        fetch("{% url 'avisar_quando_disponivel' %}", {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                btnElement.innerText = '✔ Registrado';
+                btnElement.style.borderColor = '#10b981';
+                btnElement.style.color = '#10b981';
+            } else {
+                btnElement.innerText = 'Avise-me';
+                btnElement.disabled = false;
+            }
+        })
+        .catch(() => {
+            btnElement.innerText = 'Avise-me';
+            btnElement.disabled = false;
+        });
     }
 </script>
 {% endblock %}

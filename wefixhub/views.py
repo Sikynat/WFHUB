@@ -1,81 +1,74 @@
-from django.shortcuts import render, redirect, get_object_or_404
+# 1. Bibliotecas Padrão do Python
+import os
+import re
+import json
+import locale
+import calendar
+import unicodedata
+from datetime import datetime, date, timedelta
+from decimal import Decimal
+from io import BytesIO
+from urllib.parse import quote
+
+# 2. Bibliotecas de Terceiros
+import pandas as pd
+import numpy as np
+import openpyxl
+import xlsxwriter
+import pdfplumber
+import requests
+from fpdf import FPDF
+import pdb 
+
+# 3. Núcleo e Utilidades do Django
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.db.models import Count, Sum, F
-from django.db.models.functions import ExtractMonth
-from .models import Product, Pedido, ItemPedido, WfClient
-from django.http import HttpResponse
-from django.utils import timezone
-import openpyxl
-from .models import Pedido
-from datetime import datetime, timedelta
-from .forms import WfClientForm
-from .forms import EnderecoForm
-from .forms import EnderecoForm # Adicionando o novo formulário
-from django.db import connection
-import pandas as pd
-from django.shortcuts import render
-import numpy as np
-from .models import Product, WfClient, Endereco, ItemPedido, Pedido
-from django.db import transaction
-from django.contrib import messages
-import datetime
-from decimal import Decimal
-from fpdf import FPDF
-import json
-from .forms import GerarPedidoForm
-from .forms import UploadPedidoForm, SelectClientForm
-import unicodedata
-from django.urls import reverse
-import os
-from django.conf import settings
-from urllib.parse import quote
-from django.shortcuts import get_object_or_404, redirect
-from io import BytesIO
-import requests
-import xlsxwriter
-from datetime import date
-from django.db.models import OuterRef, Subquery, Max
-from django import template
-from django.conf import settings
-from django.utils import formats
-import locale
-from django.db.models.functions import Cast
-from django.db.models import IntegerField
-from django.contrib import messages
-import locale
-from django.db.models.functions import TruncMonth , Coalesce
-from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper 
-from datetime import datetime, timedelta, date 
 from django.core.cache import cache
-from django.db.models import Count, Sum, F, OuterRef, Subquery, DecimalField, ExpressionWrapper, Value 
-from django.db.models.functions import TruncMonth, Coalesce, TruncDate
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db import transaction, connection
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.utils import timezone
-from datetime import datetime, timedelta, date
-from decimal import Decimal
-from django.contrib.admin.views.decorators import staff_member_required
-from django.db import transaction
-from .models import VendaReal
-from django.db.models.functions import TruncDay
-import json
-# Garanta que seus modelos estão importados
-from .models import Pedido, ItemPedido, WfClient, ItemPedidoIgnorado
-from django.shortcuts import render
-from django.db.models import Sum
-from .models import VendaReal
-from decimal import Decimal
-import json
-import calendar
-from datetime import date
-from .models import StatusPedidoERP
-import pdfplumber
-import re
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-from .models import Carrinho, ItemCarrinho
+from django.urls import reverse
+from django.utils import timezone, formats
 from django.utils.crypto import get_random_string
+from django.views.decorators.http import require_POST
+from django import template
+
+#Utils
+
+from .utils import ( gerar_dados_dashboard_analise, gerar_excel_vendas_reais, 
+                    processar_status_pdf, processar_giro_cliente, 
+                    processar_giro_cliente )
+
+
+# 4. ORM e Banco de Dados do Django
+from django.db.models import (
+    Count, Sum, Max, F, Q, OuterRef, Subquery, 
+    DecimalField, IntegerField, ExpressionWrapper, Value
+)
+from django.db.models.functions import (
+    ExtractMonth, TruncMonth, TruncDate, TruncDay, Coalesce, Cast
+)
+
+# 5. Aplicações Locais (Models e Forms)
+from .models import (
+    Product, Pedido, ItemPedido, WfClient, Endereco, 
+    ItemPedidoIgnorado, VendaReal, StatusPedidoERP, 
+    Carrinho, ItemCarrinho, SugestaoCompraERP
+)
+from .forms import (
+    WfClientForm, EnderecoForm, GerarPedidoForm, 
+    UploadPedidoForm, SelectClientForm
+)
+
+# Configuração do locale para o formato brasileiro
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except locale.Error:
+    print("Aviso: Locale 'pt_BR.UTF-8' não encontrado. Usando 'C.UTF-8' como fallback.")
+    locale.setlocale(locale.LC_ALL, 'C.UTF-8')
 
 try:
     # Tenta definir o locale ideal
@@ -137,10 +130,10 @@ def home(request):
                 
                 if estado_cliente == 'SP':
                     preco_exibido = 'sp'
-                    products = products.exclude(product_value_sp=0)
+                    products = products.exclude(product_value_sp=0, status_estoque='DISPONIVEL')
                 elif estado_cliente == 'ES':
                     preco_exibido = 'es'
-                    products = products.exclude(product_value_es=0)
+                    products = products.exclude(product_value_es=0, status_estoque='DISPONIVEL')
 
                 # --- SINCRONIZAÇÃO DO TOTAL E QUANTIDADES DO CARRINHO (NOVO) ---
                 # Importação local para evitar importação circular no topo do arquivo
@@ -187,9 +180,19 @@ def home(request):
                                     'preco': f"{preco_atual.quantize(Decimal('0.01'))}".replace('.', ',')
                                 })
 
+                # Produtos que o cliente já solicitou aviso
+                codigos_avise_me = set(
+                    ItemPedidoIgnorado.objects.filter(
+                        cliente=cliente_logado,
+                        notificado=False,
+                        motivo_erro__icontains='estoque'
+                    ).values_list('codigo_produto', flat=True)
+                )
+
             except WfClient.DoesNotExist:
                 products = Product.objects.none()
-    
+                codigos_avise_me = set()
+
     if not request.user.is_authenticated:
         products = Product.objects.none()
     
@@ -219,7 +222,8 @@ def home(request):
         'data_hoje': products[0].date_product if products else date.today(),
         'pedidos_rascunho_count': pedidos_rascunho_count,
         # INJETADO: Valor numérico puro para o data-attribute do HTML
-        'total_carrinho_real': float(total_carrinho_real), 
+        'total_carrinho_real': float(total_carrinho_real),
+        'codigos_avise_me': codigos_avise_me if 'codigos_avise_me' in locals() else set(),
     }
             
     return render(request, 'home.html', context)
@@ -253,7 +257,7 @@ def home(request):
     return render(request, 'home.html', contexto)"""
 
 # Inicio gerar pedido
-import pdb # Importa o módulo do debugger
+# Importa o módulo do debugger
 
 
 # Inicio do carrinho
@@ -738,13 +742,6 @@ def detalhes_pedido(request, pedido_id):
 # Configuração do locale para o formato brasileiro
 locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
-
-
-
-from .models import VendaReal, Pedido, WfClient, ItemPedido # Certifique-se de importar VendaReal
-from django.db.models import Sum
-from decimal import Decimal
-import locale
 
 @staff_member_required
 def dashboard_admin(request):
@@ -1290,10 +1287,11 @@ def editar_endereco(request, endereco_id):
 
 
 # A página para exibir o formulário de upload
+@staff_member_required
 def pagina_upload(request):
     return render(request, 'upload_planilha.html')
 
-
+@staff_member_required
 def processar_upload(request):
     if request.method == 'POST':
         planilha_es_file = request.FILES.get('planilha_es')
@@ -1361,6 +1359,13 @@ def processar_upload(request):
 
             # 4. Merge das planilhas (how='outer' garante que não perca itens que só estão em uma planilha)
             df_final = pd.merge(df_es, df_sp, on='product_code', how='outer')
+
+            # Detecta status de estoque antes do replace(nan→None)
+            # Produto com pelo menos um preço válido (>0) é DISPONIVEL, caso contrário SEM_ESTOQUE
+            val_es_num = pd.to_numeric(df_final['product_value_es'], errors='coerce').fillna(0)
+            val_sp_num = pd.to_numeric(df_final['product_value_sp'], errors='coerce').fillna(0)
+            df_final['status_estoque'] = ((val_es_num > 0) | (val_sp_num > 0)).map({True: 'DISPONIVEL', False: 'SEM_ESTOQUE'})
+
             df_final = df_final.replace({np.nan: None})
             df_final = df_final.drop_duplicates(subset=['product_code'])
             
@@ -1389,6 +1394,7 @@ def processar_upload(request):
                 
                 val_es = row.get('product_value_es', 0)
                 val_sp = row.get('product_value_sp', 0)
+                estoque = row.get('status_estoque', 'DISPONIVEL')
 
                 if codigo in produtos_existentes:
                     obj = produtos_existentes[codigo]
@@ -1403,11 +1409,12 @@ def processar_upload(request):
                     if marca_planilha and str(marca_planilha).strip().lower() not in ['nan', 'none', '']:
                         obj.product_brand = str(marca_planilha).strip()[:100]
                     
-                    # Atualização de preços (se a planilha não tiver, mantém o 0 que foi tratado no fillna)
-                    if val_sp is not None: obj.product_value_sp = val_sp
-                    if val_es is not None: obj.product_value_es = val_es
+                    # Atualização de preços (só atualiza se veio com valor real — evita zerar preço existente)
+                    if val_sp: obj.product_value_sp = val_sp
+                    if val_es: obj.product_value_es = val_es
                     
                     obj.status = 'PENDENTE'
+                    obj.status_estoque = estoque
                     obj.date_product = hoje
                     
                     produtos_para_atualizar.append(obj)
@@ -1421,6 +1428,7 @@ def processar_upload(request):
                         product_value_sp=val_sp if val_sp is not None else 0,
                         product_value_es=val_es if val_es is not None else 0,
                         status='PENDENTE',
+                        status_estoque=estoque,
                         date_product=hoje
                     ))
 
@@ -1433,7 +1441,7 @@ def processar_upload(request):
                     # Informa exatamente quais campos devem ser tocados
                     Product.objects.bulk_update(
                         produtos_para_atualizar, 
-                        fields=['product_description', 'product_group', 'product_brand', 'product_value_sp', 'product_value_es', 'status', 'date_product'],
+                        fields=['product_description', 'product_group', 'product_brand', 'product_value_sp', 'product_value_es', 'status', 'status_estoque', 'date_product'],
                         batch_size=500
                     )
             
@@ -1850,19 +1858,6 @@ def normalize_text(text):
 # --- FIM DA CORREÇÃO ---
 
 
-# Sua view views.py
-
-# Seu arquivo views.py
-
-# views.py
-
-# ... (todos os seus imports)
-
-
-
-
-# views.py
-
 @staff_member_required
 def upload_pedido(request):
     """
@@ -2120,21 +2115,6 @@ def upload_pedido(request):
     }
     
     return render(request, 'upload_pedido.html', context)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @staff_member_required
@@ -3157,243 +3137,7 @@ def exportar_vendas_reais_excel(request):
     response['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
-@staff_member_required
-def dashboard_analise(request):
-    # --- FILTRO DE DATA ---
-    hoje = date.today()
-    mes_selecionado = int(request.GET.get('mes', hoje.month))
-    ano_selecionado = int(request.GET.get('ano', hoje.year))
-    
-    # --- TRAVA DE PERÍODO ---
-    vendas_qs = VendaReal.objects.filter(
-        Emissao__month=mes_selecionado, 
-        Emissao__year=ano_selecionado
-    )
 
-    # --- LÓGICA DE CALENDÁRIO ---
-    primeiro_dia_mes = date(ano_selecionado, mes_selecionado, 1)
-    ultimo_dia_valor = calendar.monthrange(ano_selecionado, mes_selecionado)[1]
-    ultimo_dia_mes = date(ano_selecionado, mes_selecionado, ultimo_dia_valor)
-
-    if mes_selecionado == hoje.month and ano_selecionado == hoje.year:
-        data_fim_calculo = hoje
-    else:
-        data_fim_calculo = ultimo_dia_mes
-
-    def contar_dias_uteis(data_inicio, data_fim):
-        dias = 0
-        atual = data_inicio
-        while atual <= data_fim:
-            if atual.weekday() < 5: dias += 1
-            atual += timedelta(days=1)
-        return dias
-
-    # --- 1. MÉTRICAS BÁSICAS ---
-    total_faturamento = vendas_qs.aggregate(total=Sum('Total'))['total'] or Decimal('0.00')
-    total_itens = vendas_qs.aggregate(total=Sum('Quantidade'))['total'] or 0
-    total_pedidos = vendas_qs.values('Pedido').distinct().count() or 1
-    total_vendas_str = "{:,.2f}".format(float(total_faturamento)).replace(",", "X").replace(".", ",").replace("X", ".")
-    ticket_valor = float(total_faturamento) / total_pedidos if total_pedidos > 0 else 0
-    ticket_medio_formatado = "{:,.2f}".format(ticket_valor).replace(",", "X").replace(".", ",").replace("X", ".")
-
-    # --- 2. PROJEÇÃO E MÉDIA ---
-    dias_uteis_decorridos = contar_dias_uteis(primeiro_dia_mes, data_fim_calculo)
-    total_dias_uteis_mes = contar_dias_uteis(primeiro_dia_mes, ultimo_dia_mes)
-    divisor = max(dias_uteis_decorridos, 1)
-    media_diaria_util = float(total_faturamento) / divisor
-    projecao_valor = media_diaria_util * total_dias_uteis_mes
-    progresso_percentual = int((dias_uteis_decorridos / total_dias_uteis_mes) * 100) if total_dias_uteis_mes > 0 else 0
-    media_diaria_str = "{:,.2f}".format(media_diaria_util).replace(",", "X").replace(".", ",").replace("X", ".")
-    projecao_final_str = "{:,.2f}".format(projecao_valor).replace(",", "X").replace(".", ",").replace("X", ".")
-
-    # --- 3. RANKINGS COMERCIAL ---
-    top_produtos_raw = vendas_qs.values('Produto_Codigo', 'Produto_Descricao').annotate(total_gerado=Sum('Total'), qtd_vendida=Sum('Quantidade')).order_by('-total_gerado')[:10]
-    top_produtos_formatados = [{'codigo': p['Produto_Codigo'], 'descricao': p['Produto_Descricao'], 'qtd': p['qtd_vendida'], 'total_formatado': "{:,.2f}".format(float(p['total_gerado'])).replace(",", "X").replace(".", ",").replace("X", ".")} for p in top_produtos_raw]
-    
-    top_clientes_raw = vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(total_gasto=Sum('Total')).order_by('-total_gasto')[:10]
-    top_clientes_formatados = [{'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': "{:,.2f}".format(float(c['total_gasto'])).replace(",", "X").replace(".", ",").replace("X", ".")} for c in top_clientes_raw]
-
-    # --- 4. RANKING ALERTA (< 50k) ---
-    vendas_por_cliente_periodo = vendas_qs.values('Codigo_Cliente').annotate(total_periodo=Sum('Total'))
-    mapa_vendas_periodo = {v['Codigo_Cliente']: v['total_periodo'] for v in vendas_por_cliente_periodo}
-    todos_clientes_historico = VendaReal.objects.values('Codigo_Cliente', 'cliente_nome').annotate(total_historico=Sum('Total'), ultima_compra=Max('Emissao')).order_by('-total_historico')
-    clientes_alerta = []
-    for c in todos_clientes_historico:
-        total_no_periodo = mapa_vendas_periodo.get(c['Codigo_Cliente'], Decimal('0.00'))
-        if total_no_periodo < 50000:
-            clientes_alerta.append({'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': "{:,.2f}".format(float(c['total_historico'])).replace(",", "X").replace(".", ",").replace("X", "."), 'mes_atual_formatado': "{:,.2f}".format(float(total_no_periodo)).replace(",", "X").replace(".", ",").replace("X", "."), 'ultima_data': c['ultima_compra'].strftime('%d/%m/%Y')})
-            if len(clientes_alerta) >= 10: break
-
-    # --- 5. ANÁLISE LOGÍSTICA (Ajustado para incluir o Código do Cliente) ---
-    dias_nomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-    vendas_por_dia = [0.0] * 7
-    clientes_por_dia_acumulado = {i: {} for i in range(7)}
-    
-    for v in vendas_qs:
-        dia_indice = v.Emissao.weekday()
-        vendas_por_dia[dia_indice] += float(v.Total)
-        
-        cod_cli = v.Codigo_Cliente
-        nome_cli = v.cliente_nome or "Desconhecido"
-        
-        # Cria ou atualiza o dicionário usando o CÓDIGO como chave principal
-        if cod_cli not in clientes_por_dia_acumulado[dia_indice]:
-            clientes_por_dia_acumulado[dia_indice][cod_cli] = {'nome': nome_cli, 'valor': 0.0}
-        
-        clientes_por_dia_acumulado[dia_indice][cod_cli]['valor'] += float(v.Total)
-    
-    ranking_logistica_dia = []
-    for i in range(7):
-        # Ordena os clientes pelo valor faturado no dia
-        top_clientes_dia = sorted(
-            clientes_por_dia_acumulado[i].items(), 
-            key=lambda x: x[1]['valor'], 
-            reverse=True
-        )[:3]
-        
-        # Prepara os dados para o template
-        ranking_logistica_dia.append({
-            'dia': dias_nomes[i], 
-            'clientes': [
-                {
-                    'codigo': cod, 
-                    'nome': dados['nome'], 
-                    'valor': "{:,.2f}".format(dados['valor']).replace(",", "X").replace(".", ",").replace("X", ".")
-                } for cod, dados in top_clientes_dia
-            ]
-        })
-
-    # --- 6. SAÚDE DA BASE ---
-    historico_total = VendaReal.objects.values('Codigo_Cliente', 'Emissao', 'cliente_nome').order_by('Codigo_Cliente', 'Emissao')
-    dados_habito = {}
-    for h in historico_total:
-        cod = h['Codigo_Cliente']
-        if cod not in dados_habito: dados_habito[cod] = {'nome': h['cliente_nome'], 'datas': set()}
-        dados_habito[cod]['datas'].add(h['Emissao'])
-
-    saude_base = []
-    for cod, info in dados_habito.items():
-        datas = sorted(list(info['datas']))
-        if len(datas) < 2: continue
-        intervalos = [(datas[i] - datas[i-1]).days for i in range(1, len(datas))]
-        media_habito = sum(intervalos) / len(intervalos)
-        dias_sem_comprar = (hoje - datas[-1]).days
-        if dias_sem_comprar > (media_habito * 1.2) and dias_sem_comprar > 7:
-            saude_base.append({'codigo': cod, 'nome': info['nome'], 'media_habito': round(media_habito), 'dias_sem_comprar': dias_sem_comprar, 'atraso': round(dias_sem_comprar - media_habito), 'ultima_data': datas[-1].strftime('%d/%m/%Y')})
-    saude_base = sorted(saude_base, key=lambda x: x['atraso'], reverse=True)[:15]
-
-    # --- 7. GRÁFICOS ---
-    dados_grafico = vendas_qs.values('Emissao').annotate(total_dia=Sum('Total')).order_by('Emissao')
-    l_diario = [d['Emissao'].strftime('%d/%m') for d in dados_grafico]
-    v_diario = [float(d['total_dia']) for d in dados_grafico]
-
-    # =========================================================
-    # --- 8. OPORTUNIDADES DE RETORNO (WISHLIST) ---
-    # =========================================================
-    itens_pendentes = ItemPedidoIgnorado.objects.filter(
-        notificado=False, 
-        motivo_erro__icontains="estoque"
-    ).select_related('cliente', 'cliente__client_state')
-
-    oportunidades_wishlist = {}
-    
-    codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
-    produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
-
-    for item in itens_pendentes:
-        produto = produtos_dict.get(item.codigo_produto)
-        if not produto or not item.cliente: # Segurança extra caso cliente tenha sido excluído
-            continue
-            
-        estado = item.cliente.client_state.uf_name
-        preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
-        
-        # O MATCH: Verifica se o produto agora tem preço válido
-        if preco_atual and preco_atual > 0:
-            c_id = item.cliente.client_id
-            if c_id not in oportunidades_wishlist:
-                oportunidades_wishlist[c_id] = {
-                    'cliente': item.cliente,
-                    'produtos': []
-                }
-            # Evita produtos duplicados para o mesmo cliente
-            if produto.product_description not in [p['descricao'] for p in oportunidades_wishlist[c_id]['produtos']]:
-                oportunidades_wishlist[c_id]['produtos'].append({
-                    'codigo': produto.product_code,
-                    'descricao': produto.product_description,
-                    'preco': float(preco_atual)
-                })
-
-    # =========================================================
-    # --- 9. CÁLCULO DE RECUPERAÇÃO REAL WISHLIST (15 DIAS) ---
-    # =========================================================
-    itens_notificados = ItemPedidoIgnorado.objects.filter(
-        notificado=True,
-        data_notificacao__year=ano_selecionado,
-        data_notificacao__month=mes_selecionado
-    ).select_related('cliente')
-
-    total_recuperado_reais = Decimal('0.00')
-    qtd_itens_recuperados = 0
-
-    if itens_notificados.exists():
-        # Para cobrir a janela de 15 dias com margem de segurança
-        data_inicio_busca = date(ano_selecionado, mes_selecionado, 1)
-        data_fim_busca = data_inicio_busca + timedelta(days=45) 
-
-        vendas_base_cruzamento = VendaReal.objects.filter(
-            Emissao__range=(data_inicio_busca, data_fim_busca)
-        ).values('Codigo_Cliente', 'Produto_Codigo', 'Emissao', 'Total')
-
-        # Dicionário em memória para consultas ultra-rápidas
-        vendas_erp_memoria = {}
-        for v in vendas_base_cruzamento:
-            chave = (str(v['Codigo_Cliente']), str(v['Produto_Codigo']))
-            if chave not in vendas_erp_memoria:
-                vendas_erp_memoria[chave] = []
-            vendas_erp_memoria[chave].append({'data': v['Emissao'], 'total': v['Total']})
-
-        for item in itens_notificados:
-            # Trava de segurança para garantir que a data exista antes de calcular
-            if item.cliente and item.data_notificacao:
-                codigo_cli = str(item.cliente.client_code)
-                codigo_prod = str(item.codigo_produto)
-                data_aviso = item.data_notificacao.date()
-                data_limite = data_aviso + timedelta(days=15)
-                
-                chave_busca = (codigo_cli, codigo_prod)
-                
-                if chave_busca in vendas_erp_memoria:
-                    compras_do_produto = vendas_erp_memoria[chave_busca]
-                    
-                    # Filtra compras apenas dentro da janela de 15 dias após o envio do WhatsApp
-                    vendas_validas = [
-                        compra['total'] for compra in compras_do_produto 
-                        if data_aviso <= compra['data'] <= data_limite
-                    ]
-                    
-                    if vendas_validas:
-                        total_recuperado_reais += sum(vendas_validas)
-                        qtd_itens_recuperados += 1
-
-    recuperado_formatado = "{:,.2f}".format(float(total_recuperado_reais)).replace(",", "X").replace(".", ",").replace("X", ".")
-
-    # --- CONTEXTO ---
-    contexto = {
-        'total_vendas': total_vendas_str, 'ticket_medio': ticket_medio_formatado, 'total_itens_faturados': total_itens, 'total_pedidos_reais': total_pedidos,
-        'media_diaria': media_diaria_str, 'projecao_final': projecao_final_str, 'progresso_mes': progresso_percentual,
-        'top_produtos': top_produtos_formatados, 'top_clientes': top_clientes_formatados, 'clientes_inativos': clientes_alerta, 
-        'labels_diario': json.dumps(l_diario), 'valores_diario': json.dumps(v_diario),
-        'labels_semana': json.dumps(dias_nomes), 'valores_semana': json.dumps(vendas_por_dia),
-        'ranking_logistica_dia': ranking_logistica_dia, 'saude_base': saude_base,
-        'mes_atual': mes_selecionado, 'ano_atual': ano_selecionado, 'lista_anos': range(hoje.year - 2, hoje.year + 1),
-        'oportunidades_wishlist': oportunidades_wishlist.values(),
-        
-        # NOVAS VARIÁVEIS INJETADAS AQUI:
-        'total_recuperado_reais': recuperado_formatado,
-        'qtd_itens_recuperados': qtd_itens_recuperados,
-    }
-    return render(request, 'analise/dashboard_analise.html', contexto)
 
 
 @login_required
@@ -3422,7 +3166,7 @@ def meus_itens_comprados(request):
         ultima_venda=Max('id')
     ).values_list('ultima_venda', flat=True)
 
-    vendas_qs = VendaReal.objects.filter(id__in=vendas_ids).order_by('Produto_Descricao')
+    vendas_qs = VendaReal.objects.filter(id__in=vendas_ids).order_by('-id')
 
     # Filtros de busca
     filtro_produto = request.GET.get('produto', '').strip()
@@ -3492,102 +3236,22 @@ def exportar_meus_itens_excel(request):
     response['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
+# wefixhub/views.py
+
 @staff_member_required
 def upload_status_pdf(request):
     if request.method == 'POST' and request.FILES.get('pdf_file'):
         pdf_file = request.FILES['pdf_file']
-        novos_status_preparados = []
         
-        # Mapeamento expandido para incluir o bloqueio de preço
-        MAP_SINC_STATUS = {
-            '4-Bloqueado Separação': 'SEPARACAO',
-            '6-Pronto para Faturar': 'EXPEDICAO',
-            '8-Faturado': 'FINALIZADO',
-            '2-Bloqueado Crédito': 'FINANCEIRO',
-            '1-Bloqueado Preço': 'PRECO',  # Adicionado para evitar 'não identificado' 
-        }
-
         try:
-            import pdfplumber
-            from datetime import datetime
-            from django.db import transaction
-            import re
-
-            with pdfplumber.open(pdf_file) as pdf:
-                for pagina in pdf.pages:
-                    tabela = pagina.extract_table({"vertical_strategy": "text", "horizontal_strategy": "text", "snap_tolerance": 4})
-                    if not tabela: continue
-                        
-                    for linha in tabela:
-                        l = [str(c).strip() for c in linha if c and str(c).strip() != ""]
-                        
-                        # Uma linha válida DEVE começar com a data (dd/mm/aaaa) [cite: 39, 40]
-                        if len(l) >= 4 and re.match(r'\d{2}/\d{2}/\d{4}', l[0]) and l[1].isdigit():
-                            
-                            # Juntamos TUDO para garantir que palavras picadas sejam achadas [cite: 76, 77]
-                            linha_texto = " ".join(l).upper()
-
-                            # --- IDENTIFICAÇÃO DO STATUS (Hieraquia Corrigida) ---
-                            # Crédito e Preço devem ser checados primeiro 
-                            if any(x in linha_texto for x in ['CREAITA', 'CREDITO', 'CRÉDITO', 'BLOQUENDA']):
-                                status_pdf = '2-Bloqueado Crédito'
-                            elif 'PREÇO' in linha_texto or 'PRECO' in linha_texto:
-                                status_pdf = '1-Bloqueado Preço'  # Correção aplicada 
-                            elif 'EPARAÇ' in linha_texto:
-                                status_pdf = '4-Bloqueado Separação'
-                            elif 'PRONTO' in linha_texto:
-                                status_pdf = '6-Pronto para Faturar'
-                            elif any(x in linha_texto for x in ['FATURADO', '8=', '8-']):
-                                status_pdf = '8-Faturado'
-                            else:
-                                status_pdf = "Status não identificado"
-
-                            # --- EXTRAÇÃO DO CLIENTE (Pulando Charles/Vendedor) ---
-                            miolo_cliente = " ".join(l[3:-1]) 
-                            
-                            match_cliente = re.search(r'(\d+)\s*[-–—]\s*([A-Z\s&]{3,})', miolo_cliente)
-                            
-                            if match_cliente:
-                                cod_c = match_cliente.group(1)
-                                nome_c = match_cliente.group(2).strip()
-                            else:
-                                match_fallback = re.search(r'(\d+)\s+([A-Z\s&]{4,})', miolo_cliente)
-                                cod_c = match_fallback.group(1) if match_fallback else ""
-                                nome_c = match_fallback.group(2).strip() if match_fallback else miolo_cliente
-
-                            # Limpeza de nomes e ruídos (CPFs/Datas) [cite: 40, 41]
-                            nome_c = nome_c.replace("  ", " ").replace("CARL OS", "CARLOS").replace("AL VES", "ALVES")
-                            nome_c = re.sub(r'\s*\d{11}.*', '', nome_c) 
-                            nome_c = re.sub(r'\d{2}/\d{2}/\d{4}.*', '', nome_c).strip()
-
-                            novos_status_preparados.append({
-                                'emissao': datetime.strptime(l[0], '%d/%m/%Y').date(),
-                                'numero_pedido': l[1],
-                                'cod_cliente': cod_c,
-                                'nome_cliente': nome_c[:255],
-                                'situacao': status_pdf,
-                                'expedido': any(x in l[-1].upper() for x in ['SIM', 'SIRM', 'SI']) # [cite: 39]
-                            })
-
-            if novos_status_preparados:
-                with transaction.atomic():
-                    for data in novos_status_preparados:
-                        # Limpa para evitar duplicados [cite: 40, 41]
-                        StatusPedidoERP.objects.filter(numero_pedido=data['numero_pedido']).delete()
-                        StatusPedidoERP.objects.create(**data)
-                        
-                        pedido_site = Pedido.objects.filter(id=data['numero_pedido']).first()
-                        if pedido_site:
-                            novo_status_interno = MAP_SINC_STATUS.get(data['situacao'])
-                            if novo_status_interno:
-                                pedido_site.status = novo_status_interno
-                                pedido_site.save(update_fields=['status'])
-
-                messages.success(request, f"Sucesso! {len(novos_status_preparados)} pedidos processados.")
+            # Chama o serviço que faz todo o processamento de texto e banco
+            qtd_processados = processar_status_pdf(pdf_file)
+            
+            messages.success(request, f"Sucesso! {qtd_processados} pedidos processados.")
             return redirect('dashboard_admin')
 
         except Exception as e:
-            messages.error(request, f"Erro crítico: {str(e)}")
+            messages.error(request, f"Erro crítico ao ler o PDF: {str(e)}")
             return redirect('dashboard_admin')
 
     return render(request, 'analise/upload_status_pdf.html')
@@ -3663,9 +3327,12 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     
     produtos_recuperados = []
     ids_para_atualizar = []
-    
+
+    codigos = [item.codigo_produto for item in itens_pendentes]
+    produtos_map = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos)}
+
     for item in itens_pendentes:
-        produto = Product.objects.filter(product_code=item.codigo_produto).first()
+        produto = produtos_map.get(item.codigo_produto)
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             if preco_atual and preco_atual > 0:
@@ -3707,6 +3374,62 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     link_whatsapp = f"https://api.whatsapp.com/send?text={quote(mensagem)}"
     messages.success(request, f"Cliente {cliente.client_name} notificado (Lote {lote_id})!")
     return redirect(link_whatsapp)
+
+@login_required
+@require_POST
+def avisar_quando_disponivel(request):
+    product_id = request.POST.get('product_id')
+    produto = get_object_or_404(Product, product_id=product_id)
+
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return JsonResponse({'erro': 'Cliente não encontrado.'}, status=400)
+
+    # Evita duplicatas: só registra se ainda não há aviso pendente para este produto/cliente
+    ja_registrado = ItemPedidoIgnorado.objects.filter(
+        cliente=cliente,
+        codigo_produto=produto.product_code,
+        notificado=False,
+        motivo_erro__icontains='estoque'
+    ).exists()
+
+    if not ja_registrado:
+        ItemPedidoIgnorado.objects.create(
+            pedido=None,
+            cliente=cliente,
+            codigo_produto=produto.product_code,
+            descricao_produto=produto.product_description,
+            quantidade_tentada=0,
+            motivo_erro='Sem estoque — cliente solicitou aviso via catálogo'
+        )
+
+    return JsonResponse({'sucesso': True, 'mensagem': 'Você será avisado quando o produto estiver disponível!'})
+
+@login_required
+def meus_avisos(request):
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    pendentes = ItemPedidoIgnorado.objects.filter(
+        cliente=cliente,
+        notificado=False,
+        motivo_erro__icontains='estoque'
+    ).order_by('-data_tentativa')
+
+    notificados = ItemPedidoIgnorado.objects.filter(
+        cliente=cliente,
+        notificado=True,
+        motivo_erro__icontains='estoque'
+    ).order_by('-data_notificacao')[:20]
+
+    return render(request, 'meus_avisos.html', {
+        'titulo': 'Meus Avisos',
+        'pendentes': pendentes,
+        'notificados': notificados,
+    })
 
 @login_required
 @require_POST
@@ -3849,7 +3572,7 @@ def historico_wishlist(request):
         'cliente__client_name'
     ).annotate(
         # Conta quantos produtos diferentes foram no lote
-        qtd_produtos=Count('id'),
+        qtd_produtos=Count('codigo_produto', distinct=True),
         # Soma a quantidade total de unidades pedidas
         total_unidades=Sum('quantidade_tentada'),
         # Pega a data exata do envio deste lote
@@ -3935,3 +3658,117 @@ def reenviar_notificacao_whatsapp(request, cliente_id):
     )
     
     return redirect(f"https://api.whatsapp.com/send?text={quote(mensagem)}")
+
+
+@staff_member_required
+def dashboard_analise(request):
+    hoje = date.today()
+    mes_selecionado = int(request.GET.get('mes', hoje.month))
+    ano_selecionado = int(request.GET.get('ano', hoje.year))
+    
+    contexto = gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado)
+    
+    return render(request, 'analise/dashboard_analise.html', contexto)
+
+@login_required
+def sugestoes_inteligentes_erp(request):
+    try:
+        cliente_logado = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    # Para evitar gargalos, você pode rodar isso assincronamente (ex: Celery) no futuro.
+    # Por enquanto, rodamos on-the-fly. O processamento dura milissegundos graças ao 'annotate'.
+    processar_giro_cliente(cliente_logado.client_code)
+
+    # Busca os resultados do backup ordenando pelos itens de maior giro
+    sugestoes_qs = SugestaoCompraERP.objects.filter(
+        cliente=cliente_logado
+    ).order_by('-giro_diario')
+
+    # Paginação para não sobrecarregar a tela
+    paginator = Paginator(sugestoes_qs, 20)
+    page_number = request.GET.get('page')
+    sugestoes_paginadas = paginator.get_page(page_number)
+
+    contexto = {
+        'titulo': 'Reposição de Estoque Inteligente',
+        'sugestoes': sugestoes_paginadas,
+        'cliente_logado': cliente_logado,
+    }
+    
+    return render(request, 'sugestoes_inteligentes.html', contexto)
+
+
+@login_required
+def adicionar_sugestoes_ao_carrinho(request):
+    if request.method == 'POST':
+        try:
+            cliente = request.user.wfclient
+        except WfClient.DoesNotExist:
+            return redirect('home')
+
+        # CAPTURA OS CHECKBOXES: Pega a lista de códigos que o cliente deixou marcado
+        produtos_selecionados = request.POST.getlist('produtos_selecionados')
+        
+        if not produtos_selecionados:
+            messages.warning(request, "Nenhum produto foi selecionado para adicionar ao carrinho.")
+            return redirect('sugestoes_inteligentes_erp')
+
+        # FILTRA AS SUGESTÕES: Agora só processa o que o cliente escolheu
+        sugestoes = SugestaoCompraERP.objects.filter(
+            cliente=cliente, 
+            produto_codigo__in=produtos_selecionados
+        )
+        
+        if not sugestoes.exists():
+            messages.warning(request, "As sugestões selecionadas não são mais válidas.")
+            return redirect('sugestoes_inteligentes_erp')
+
+        with transaction.atomic():
+            carrinho, _ = Carrinho.objects.get_or_create(cliente=cliente)
+
+            codigos_sugeridos = sugestoes.values_list('produto_codigo', flat=True)
+            produtos_catalogo = Product.objects.filter(
+                product_code__in=codigos_sugeridos
+            ).in_bulk(field_name='product_code')
+
+            itens_carrinho_existentes = {
+                item.produto.product_code: item 
+                for item in ItemCarrinho.objects.filter(carrinho=carrinho).select_related('produto')
+            }
+
+            itens_para_criar = []
+            itens_para_atualizar = []
+            codigos_processados_agora = set() 
+
+            for sug in sugestoes:
+                codigo = sug.produto_codigo
+                
+                if codigo in codigos_processados_agora:
+                    continue
+                codigos_processados_agora.add(codigo)
+
+                produto_real = produtos_catalogo.get(codigo)
+                
+                if produto_real:
+                    if codigo in itens_carrinho_existentes:
+                        item_existente = itens_carrinho_existentes[codigo]
+                        item_existente.quantidade = sug.quantidade_sugerida
+                        itens_para_atualizar.append(item_existente)
+                    else:
+                        itens_para_criar.append(ItemCarrinho(
+                            carrinho=carrinho,
+                            produto=produto_real,
+                            quantidade=sug.quantidade_sugerida
+                        ))
+
+            if itens_para_criar:
+                ItemCarrinho.objects.bulk_create(itens_para_criar)
+            if itens_para_atualizar:
+                ItemCarrinho.objects.bulk_update(itens_para_atualizar, ['quantidade'])
+
+        messages.success(request, f"{len(codigos_processados_agora)} sugestões adicionadas ao carrinho!")
+        return redirect('carrinho') 
+
+    return redirect('sugestoes_inteligentes_erp')

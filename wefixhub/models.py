@@ -114,7 +114,13 @@ class Product(models.Model):
     product_value_es = models.DecimalField(max_digits=6, decimal_places=2, null=True)
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
-    
+
+    ESTOQUE_CHOICES = [
+        ('DISPONIVEL', 'Disponível'),
+        ('SEM_ESTOQUE', 'Sem Estoque'),
+    ]
+    status_estoque = models.CharField(max_length=20, choices=ESTOQUE_CHOICES, default='DISPONIVEL')
+
     # NOVO CAMPO
     date_product = models.DateField(auto_now_add=True)
 
@@ -274,7 +280,7 @@ class ItemPedido(models.Model):
 
 class ItemPedidoIgnorado(models.Model):
     # Vínculo com o pedido original (opcional, mas recomendado para rastreio)
-    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens_ignorados')
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens_ignorados', null=True, blank=True)
     notificado = models.BooleanField(default=False, verbose_name="Cliente Avisado?")
     data_notificacao = models.DateTimeField(null=True, blank=True, verbose_name='Data do Aviso')
     lote_notificacao = models.CharField(max_length=20, blank=True, null=True, help_text="ID único do lote de envio no WhatsApp")
@@ -381,3 +387,25 @@ class ItemCarrinho(models.Model):
         uf = self.carrinho.cliente.client_state.uf_name if self.carrinho.cliente.client_state else 'SP'
         preco = self.produto.product_value_sp if uf == 'SP' else self.produto.product_value_es
         return (preco or Decimal('0.00')) * Decimal(self.quantidade)
+    
+class SugestaoCompraERP(models.Model):
+    cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='sugestoes_giro')
+    produto_codigo = models.CharField(max_length=50, db_index=True)
+    produto_descricao = models.CharField(max_length=255)
+    
+    # Métricas do Giro
+    giro_diario = models.DecimalField(max_digits=10, decimal_places=4, verbose_name="Giro (Unidades/Dia)")
+    intervalo_medio_dias = models.IntegerField(verbose_name="Média de dias entre compras")
+    ultima_compra = models.DateField()
+    
+    # O que o sistema deduziu
+    quantidade_sugerida = models.IntegerField()
+    data_calculo = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'wf_sugestao_compra_erp'
+        verbose_name = 'Sugestão de Compra ERP'
+        verbose_name_plural = 'Sugestões de Compra ERP'
+
+    def __str__(self):
+        return f"{self.produto_codigo} para {self.cliente.client_code} - Sugerido: {self.quantidade_sugerida}"

@@ -20,10 +20,15 @@ urlpatterns = [
     path('analise/monitoramento-erp/', views.listar_status_erp, name='listar_status_erp'),
     path('analise/exportar-erp-excel/', views.exportar_status_erp_excel, name='exportar_status_erp_excel'),
     path('notificar-wishlist/<int:cliente_id>/', views.notificar_wishlist_whatsapp, name='notificar_wishlist_whatsapp'),
+    path('avisar-quando-disponivel/', views.avisar_quando_disponivel, name='avisar_quando_disponivel'),
+    path('meus-avisos/', views.meus_avisos, name='meus_avisos'),
     path('dashboard/historico-wishlist/', views.historico_wishlist, name='historico_wishlist'),
     path('dashboard/reenviar-whatsapp/<int:cliente_id>/', views.reenviar_notificacao_whatsapp, name='reenviar_notificacao_whatsapp'),
+ 
     # Rotas do cliente
+   path('sugestoes-inteligentes/adicionar-ao-carrinho/', views.adicionar_sugestoes_ao_carrinho, name='adicionar_sugestoes_ao_carrinho'),
    
+    path('sugestoes-inteligentes/', views.sugestoes_inteligentes_erp, name='sugestoes_inteligentes_erp'),
     path('adicionar-ao-carrinho-bd/', views.adicionar_ao_carrinho_bd, name='adicionar_ao_carrinho_bd'),
     path('meu-historico/exportar/', views.exportar_meus_itens_excel, name='exportar_meus_itens_excel'),
     path('meu-historico-compras/', views.meus_itens_comprados, name='meus_itens_comprados'),

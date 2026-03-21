@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+{% block title %}Reposição Inteligente{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --cor-fundo: #16001c;
+        --cor-componente: #343a40;
+        --cor-borda: #495057;
+        --cor-texto: #f8f9fa;
+        --cor-destaque: #9747e8;
+        --cor-destaque-hover: #783ae3;
+        
+        /* Variáveis de apoio para contraste limpo */
+        --texto-secundario: #adb5bd;
+    }
+
+    body {
+        background-color: var(--cor-fundo);
+        color: var(--cor-texto);
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    /* ----- TIPOGRAFIA E CORES DE TEXTO ----- */
+    .txt-primario {
+        color: var(--cor-texto);
+        font-weight: 600;
+        letter-spacing: 0.2px;
+    }
+    .txt-secundario {
+        color: var(--texto-secundario);
+        font-size: 0.85rem;
+    }
+    .text-destaque {
+        color: var(--cor-destaque);
+    }
+
+    /* ----- BOTÃO PRINCIPAL (GLOW EFFECT) ----- */
+    .btn-magic {
+        background: linear-gradient(135deg, var(--cor-destaque), var(--cor-destaque-hover));
+        color: #ffffff;
+        font-weight: 600;
+        border: none;
+        padding: 0.8rem 1.8rem;
+        border-radius: 50px; /* Pílula para dar ar moderno */
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        box-shadow: 0 4px 15px rgba(151, 71, 232, 0.2);
+        cursor: pointer;
+    }
+    .btn-magic:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(151, 71, 232, 0.4);
+        color: #ffffff;
+    }
+
+    /* ----- TABELA MODERNA (LINHAS FLUTUANTES) ----- */
+    .modern-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 0.8rem; /* Cria o espaço entre as linhas */
+        margin-top: 1rem;
+    }
+
+    .modern-table thead th {
+        color: var(--texto-secundario);
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border: none;
+        padding: 0 1.2rem 0.5rem 1.2rem;
+    }
+
+    .modern-table tbody tr {
+        background-color: var(--cor-componente);
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .modern-table tbody tr:hover {
+        transform: translateY(-3px) scale(1.005);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+        background-color: #3b4249; /* Levemente mais claro no hover */
+    }
+
+    .modern-table tbody td {
+        padding: 1.2rem;
+        vertical-align: middle;
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.02); /* Brilho sutil no topo do card */
+    }
+
+    /* Arredondando as pontas de cada linha */
+    .modern-table tbody td:first-child {
+        border-top-left-radius: 0.75rem;
+        border-bottom-left-radius: 0.75rem;
+        border-left: 2px solid transparent; /* Preparando para o hover */
+        transition: border-color 0.2s;
+    }
+    .modern-table tbody td:last-child {
+        border-top-right-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    /* Detalhe charmoso no hover */
+    .modern-table tbody tr:hover td:first-child {
+        border-left-color: var(--cor-destaque);
+    }
+
+    /* ----- COMPONENTES INTERNOS DA TABELA ----- */
+    .tag-sugerido {
+        background-color: rgba(151, 71, 232, 0.15);
+        color: #e0c3fc;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-weight: 700;
+        border: 1px solid rgba(151, 71, 232, 0.3);
+    }
+
+    .btn-icon {
+        background: rgba(255,255,255,0.05);
+        color: var(--texto-secundario);
+        border: 1px solid var(--cor-borda);
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+    .btn-icon:hover {
+        background: var(--cor-destaque);
+        color: #fff;
+        border-color: var(--cor-destaque);
+        transform: rotate(5deg);
+    }
+
+    /* ----- PAGINAÇÃO ----- */
+    .pagination .page-link {
+        background-color: var(--cor-componente);
+        border: 1px solid var(--cor-componente);
+        color: var(--texto-secundario);
+        margin: 0 0.2rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: 0.2s;
+    }
+    .pagination .page-item.active .page-link {
+        background-color: var(--cor-destaque);
+        border-color: var(--cor-destaque);
+        color: #fff;
+        box-shadow: 0 4px 10px rgba(151, 71, 232, 0.3);
+    }
+    .pagination .page-link:hover:not(.active) {
+        background-color: #495057;
+        color: #fff;
+    }
+    
+    /* Estilizando o checkbox para combinar com o tema */
+    .form-check-input:checked {
+        background-color: var(--cor-destaque);
+        border-color: var(--cor-destaque);
+    }
+</style>
+
+<header class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mt-4 mb-2 gap-3">
+    <div>
+        <h1 class="h2 fw-bold mb-1">Reposição <span class="text-destaque">Inteligente</span></h1>
+        <p class="txt-secundario mb-0" style="max-width: 600px; font-size: 0.95rem;">
+            Análise preditiva baseada no seu histórico de compras. Abaixo estão os itens recomendados para evitar ruptura de estoque.
+        </p>
+    </div>
+    
+    {% if sugestoes %}
+    <div>
+        <button type="submit" form="form-sugestoes" class="btn-magic">
+            <i class="bi bi-cart-plus"></i> Enviar Sugestões ao Carrinho
+        </button>
+    </div>
+    {% endif %}
+</header>
+
+{% if sugestoes %}
+<form action="{% url 'adicionar_sugestoes_ao_carrinho' %}" method="POST" id="form-sugestoes">
+    {% csrf_token %}
+    <div class="table-responsive" style="overflow-x: auto; padding-bottom: 1rem;">
+        <table class="modern-table">
+            <thead>
+                <tr>
+                    <th class="text-center" style="width: 50px; padding-left: 1.2rem;">
+                        <input type="checkbox" id="check-todos" class="form-check-input" checked style="cursor: pointer;">
+                    </th>
+                    <th class="text-start">Produto</th>
+                    <th class="text-end">Giro Diário</th>
+                    <th class="text-end">Última Compra</th>
+                    <th class="text-end">Ciclo Médio</th>
+                    <th class="text-end">Sugestão</th>
+                    <th class="text-center">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sugestao in sugestoes %}
+                <tr>
+                    <td class="text-center" style="padding-left: 1.2rem;">
+                        <input type="checkbox" name="produtos_selecionados" value="{{ sugestao.produto_codigo }}" class="form-check-input check-item" checked style="cursor: pointer;">
+                    </td>
+                    <td class="text-start" style="min-width: 250px;">
+                        <div class="txt-primario">{{ sugestao.produto_codigo }}</div>
+                        <div class="txt-secundario mt-1">{{ sugestao.produto_descricao }}</div>
+                    </td>
+                    <td class="text-end txt-secundario">
+                        <span class="txt-primario">{{ sugestao.giro_diario|floatformat:1 }}</span> un/d
+                    </td>
+                    <td class="text-end txt-secundario">{{ sugestao.ultima_compra|date:"d/m/Y" }}</td>
+                    <td class="text-end txt-secundario">
+                        <span class="txt-primario">{{ sugestao.intervalo_medio_dias }}</span> dias
+                    </td>
+                    <td class="text-end">
+                        <span class="tag-sugerido">{{ sugestao.quantidade_sugerida }} un.</span>
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn-icon" onclick="copiarParaBusca('{{ sugestao.produto_codigo }}')" title="Buscar produto">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</form>
+
+{% if sugestoes.has_other_pages %}
+<nav aria-label="Navegação da página" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if sugestoes.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page=1"><i class="bi bi-chevron-double-left"></i></a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ sugestoes.previous_page_number }}"><i class="bi bi-chevron-left"></i></a></li>
+        {% endif %}
+
+        {% for i in sugestoes.paginator.page_range %}
+            {% if sugestoes.number == i %}
+                <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+            {% elif i > sugestoes.number|add:'-3' and i < sugestoes.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ i }}">{{ i }}</a></li>
+            {% endif %}
+        {% endfor %}
+
+        {% if sugestoes.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ sugestoes.next_page_number }}"><i class="bi bi-chevron-right"></i></a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ sugestoes.paginator.num_pages }}"><i class="bi bi-chevron-double-right"></i></a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5 mt-5">
+    <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.03); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+        <i class="bi bi-inboxes text-muted" style="font-size: 2.5rem;"></i>
+    </div>
+    <h3 class="h5 txt-primario mb-2">Seu estoque está em dia!</h3>
+    <p class="txt-secundario mx-auto" style="max-width: 450px;">
+        Ainda não temos dados suficientes ou você não possui itens próximos da ruptura para gerar uma sugestão inteligente agora.
+    </p>
+</div>
+{% endif %}
+
+<script>
+    // JS para fazer o Checkbox Mestre marcar/desmarcar todos da lista
+    document.getElementById('check-todos')?.addEventListener('change', function(e) {
+        let checkboxes = document.querySelectorAll('.check-item');
+        for (let i = 0; i < checkboxes.length; i++) {
+            checkboxes[i].checked = e.target.checked;
+        }
+    });
+
+    // Função que redireciona o cliente para a tela inicial já com o filtro aplicado
+    function copiarParaBusca(codigo) {
+        window.location.href = "{% url 'home' %}?codigo=" + encodeURIComponent(codigo);
+    }
+</script>
+{% endblock %}

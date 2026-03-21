@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}Meus Avisos{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --cor-fundo: #16001c;
+        --cor-componente: #343a40;
+        --cor-borda: #495057;
+        --cor-texto: #f8f9fa;
+        --cor-destaque: #9747e8;
+    }
+    body { background-color: var(--cor-fundo); color: var(--cor-texto); }
+    h1, h2, h3, h4, h5, h6 { color: var(--cor-texto); }
+    span { color: var(--cor-destaque); }
+    .card { background-color: var(--cor-componente); border: 1px solid var(--cor-borda); }
+    .card-header { background-color: #2c3034; border-bottom: 1px solid var(--cor-borda); }
+    .table { color: var(--cor-texto); margin-bottom: 0; }
+    .table thead th {
+        background-color: #2c3034;
+        color: var(--cor-destaque);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid var(--cor-destaque);
+        padding: 0.9rem;
+    }
+    .table th, .table td {
+        padding: 0.9rem;
+        vertical-align: middle;
+        border-top: 1px solid var(--cor-borda);
+        background-color: #212529;
+        color: white;
+    }
+    .table > :not(caption) > * > * { border-bottom-width: 0; }
+    .table tbody tr:hover { background-color: rgba(111, 66, 193, 0.25); }
+    .table-responsive {
+        border-radius: 0.5rem;
+        overflow: hidden;
+        border: 1px solid var(--cor-borda);
+    }
+</style>
+
+<h1><span>Meus Avisos</span></h1>
+<p>Produtos que você solicitou ser avisado quando voltarem ao estoque.</p>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Aguardando disponibilidade ({{ pendentes.count }})</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Data do Aviso</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in pendentes %}
+                    <tr>
+                        <td>{{ item.codigo_produto }}</td>
+                        <td>{{ item.descricao_produto|default:"-" }}</td>
+                        <td>{{ item.data_tentativa|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <span class="badge" style="background-color: #6c757d;">Aguardando</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">Nenhum aviso pendente.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if notificados %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Já notificados</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Notificado em</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in notificados %}
+                    <tr>
+                        <td>{{ item.codigo_produto }}</td>
+                        <td>{{ item.descricao_produto|default:"-" }}</td>
+                        <td>{{ item.data_notificacao|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <span class="badge" style="background-color: #10b981;">Notificado</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
