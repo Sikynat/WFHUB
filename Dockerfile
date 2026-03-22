@@ -38,4 +38,5 @@ ENV DEBUG="False"
 # Coleta todos os arquivos estáticos para o diretório STATIC_ROOT
 RUN python manage.py collectstatic --noinput
 
-# Sem CMD aqui — o startCommand do railway.toml assume o controle
+# 8. COMANDO DE INICIALIZAÇÃO
+CMD gunicorn app.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --log-level debug --access-logfile - --error-logfile -
