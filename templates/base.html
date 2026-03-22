@@ -23,160 +23,152 @@
 <body>
  
         <nav class="sidebar close">
-                <header>
-                    <div class="image-text">
-                        <span class="image">
-                          <a href="{% url 'home' %}">  <img src="{% static 'wefixhub/images/1.png' %}" alt="Logo da Empresa"></a>
-                        </span>
-
-                        <div class="text header-text">
-                            <a href="{% url 'home' %}"><span class="name">Charles Monteiro</span></a>
-                            <a href="{% url 'home' %}"><span class="profession">Representante</span></a>
-                        </div>
+            <header>
+                <div class="image-text">
+                    <span class="image">
+                        <a href="{% url 'home' %}"><img src="{% static 'wefixhub/images/1.png' %}" alt="Logo"></a>
+                    </span>
+                    <div class="header-text">
+                        <a href="{% url 'home' %}" style="font-weight:600; color:var(--text-color); font-size:14px;">Charles Monteiro</a>
+                        <a href="{% url 'home' %}" style="font-size:12px; color:var(--text-color);">Representante</a>
                     </div>
+                </div>
                 <i class='bx bx-chevron-right toggle'></i>
-                </header>
+            </header>
 
-                <div class="menu-bar">
-                    <div class="menu">
-                        
-                        <ul class="menu-links">
-                <li class="nav-links active"> <a href="{% url 'home' %}">
-                        <i class='bx bx-home'></i>
-                        <span class="text nav-text">Home</span>
-                    </a>
-                </li>
-                <li class="nav-links">
-                    <a href="{% url 'novidades' %}">
-                        <i class='bx bx-star'></i>
-                        <span class="text nav-text">Novidades</span>
-                    </a>
-                </li>
-
-                            {% if user.is_staff %}
-                    <li class="nav-links">
-                        <a href="{% url 'upload_pedido' %}">
-                            <i class='bx bx-upload'></i>
-                            <span class="text nav-text">Subir Pedido</span>
-                        </a>
-                    </li>
-                    <li class="nav-links"> <a href="{% url 'pedidos_em_andamento' %}">
-                            <i class='bx bx-bookmark'></i>
-                            <span class="text nav-text">
-                               Rascunho
-                                {% if pedidos_rascunho_count > 0 %}
-                                    <span class="badge text-bg-secondary">{{ pedidos_rascunho_count }}</span>
-                                {% endif %}
-                            </span>
-                        </a>
-                    </li>
-                      
-                    <li class="nav-links">
-                        <a href="{% url 'dashboard_admin' %}">
-                            <i class='bx bxs-dashboard'></i>
-                            <span class="text nav-text">Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="nav-links">
-                        <a href="{% url 'todos_os_pedidos' %}">
-                            <i class='bx bx-list-ul'></i>
-                            <span class="text nav-text">Todos os pedidos</span>
-                        </a>
-                    </li>
-                    <li class="nav-links">
-                        <a href="{% url 'pagina_upload' %}">
-                            <i class='bx bx-calendar-plus' ></i>
-                            <span class="text nav-text">Preço do dia</span>
-                        </a>
-                    </li>
-                    <li class="nav-links">
-                        <a href="{% url 'historico_precos' %}">
-                            <i class='bx bx-line-chart'></i>
-                            <span class="text nav-text">Histórico de Preços</span>
-                        </a>
-                    </li>
-                    <li class="nav-links">
-                        <a href="{% url 'pedidos_para_hoje' %}">
-                            <i class='bx bx-error'></i>
-                            <span class="text nav-text">Pedidos de hoje</span>
-                        </a>
-                    </li>
-                    <li class="nav-links">
-                        <a href="{% url 'gerar_pedido_manual' %}">
-                            <i class='bx bx-cart-add'></i>
-                            <span class="text nav-text">Pedido Manual</span>
-                        </a>
-                    </li>
-                    {% else %}
-                    <li class="nav-links">
-                        <a href="{% url 'carrinho' %}" style="position: relative;">
-                            <i class='bx bx-cart'></i>
-                            {% if carrinho_count > 0 %}
-                                <span style="position: absolute; top: 6px; left: 30px; background: #9747e8; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: bold;">{{ carrinho_count }}</span>
-                            {% endif %}
-                            <span class="text nav-text">Carrinho</span>
-                        </a>
-                    </li>
-                    <li class="nav-links">
-                        <a href="{% url 'pedidos' %}">
-                            <i class='bx bx-history'></i>
-                            <span class="text nav-text">Histórico de Pedidos</span>
-                        </a>
-                    </li>
-                         <li class="nav-links">
-                            <a href="{% url 'meus_itens_comprados' %}">
-                                <i class='bx bx-search-alt'></i>
-                                <span class="text nav-text">Meus Itens Comprados</span>
+            <div class="menu-bar">
+                <div>
+                    <ul class="menu-links">
+                        <li class="nav-item">
+                            <a href="{% url 'home' %}">
+                                <i class='bx bx-home nav-icon'></i>
+                                <span class="nav-label">Home</span>
                             </a>
-                    </li>
-                    <li class="nav-links">
-                        <a href="{% url 'meus_avisos' %}">
-                            <i class='bx bx-bell'></i>
-                            <span class="text nav-text">Meus Avisos</span>
-                        </a>
-                    </li>
-                    {% endif %}
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'novidades' %}">
+                                <i class='bx bx-star nav-icon'></i>
+                                <span class="nav-label">Novidades</span>
+                            </a>
+                        </li>
 
-                <li class="nav-links">
-                    <a href="{% url 'password_change' %}">
-                        <i class="bi bi-key"></i>
-                        <span class="text nav-text">Alterar senha</span>
-                    </a>
-                </li>
-                <li class="nav-links">
-                    <a href="{% url 'editar_perfil' %}">
-                        <i class="bi bi-pin-map"></i>
-                        <span class="text nav-text">Endereço</span>
-                    </a>
-                </li>
-                <!--
-                <li class="nav-links">
-                    <a href="{% url 'sugestoes_compra' %}">
-                        <i class='bx bx-magic-indicator'></i>
-                        <span class="text nav-text">Sugestões de Compra</span>
-                    </a>
-                </li>-->
-                <li class="nav-links">
-                        <a href="{% url 'upload_pedido_cliente' %}">
-                            <i class='bx bx-spreadsheet'></i>
-                            <span class="text nav-text">Enviar Planilha</span>
-                        </a>
-                    </li>
-            </ul>
-        </div>
-            <div class="bottom-content">
-                <li class="nav-links">
-                    <a href="{% url 'logout' %}" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                        <i class='bx bx-log-out icon'></i> <span class="text nav-text">Sair</span>
-                    </a>
-                    <form id="logout-form" action="{% url 'logout' %}" method="post" style="display: none;">
-                        {% csrf_token %}
-                    </form>
-                </li>
+                        {% if user.is_staff %}
+
+                        <!-- GRUPO: PEDIDOS -->
+                        <li class="nav-item nav-group" id="grp-pedidos">
+                            <button class="nav-group-btn" onclick="toggleGroup('grp-pedidos')">
+                                <i class='bx bx-package nav-icon'></i>
+                                <span class="nav-label">Pedidos
+                                    {% if pedidos_rascunho_count > 0 %}
+                                        <span class="badge bg-secondary ms-1" style="font-size:11px;">{{ pedidos_rascunho_count }}</span>
+                                    {% endif %}
+                                </span>
+                                <i class='bx bx-chevron-down nav-chevron'></i>
+                            </button>
+                            <ul class="nav-group-items">
+                                <li><a href="{% url 'todos_os_pedidos' %}"><i class='bx bx-list-ul nav-icon'></i><span class="nav-label">Todos os pedidos</span></a></li>
+                                <li><a href="{% url 'pedidos_para_hoje' %}"><i class='bx bx-time nav-icon'></i><span class="nav-label">Pedidos de hoje</span></a></li>
+                                <li><a href="{% url 'pedidos_em_andamento' %}"><i class='bx bx-bookmark nav-icon'></i><span class="nav-label">Rascunhos</span></a></li>
+                                <li><a href="{% url 'gerar_pedido_manual' %}"><i class='bx bx-cart-add nav-icon'></i><span class="nav-label">Pedido Manual</span></a></li>
+                                <li><a href="{% url 'upload_pedido' %}"><i class='bx bx-upload nav-icon'></i><span class="nav-label">Subir Pedido</span></a></li>
+                            </ul>
+                        </li>
+
+                        <!-- GRUPO: PRODUTOS -->
+                        <li class="nav-item nav-group" id="grp-produtos">
+                            <button class="nav-group-btn" onclick="toggleGroup('grp-produtos')">
+                                <i class='bx bx-box nav-icon'></i>
+                                <span class="nav-label">Produtos</span>
+                                <i class='bx bx-chevron-down nav-chevron'></i>
+                            </button>
+                            <ul class="nav-group-items">
+                                <li><a href="{% url 'pagina_upload' %}"><i class='bx bx-calendar-plus nav-icon'></i><span class="nav-label">Preço do dia</span></a></li>
+                                <li><a href="{% url 'historico_precos' %}"><i class='bx bx-line-chart nav-icon'></i><span class="nav-label">Histórico de Preços</span></a></li>
+                            </ul>
+                        </li>
+
+                        <!-- GRUPO: ANÁLISE -->
+                        <li class="nav-item nav-group" id="grp-analise">
+                            <button class="nav-group-btn" onclick="toggleGroup('grp-analise')">
+                                <i class='bx bx-bar-chart-alt-2 nav-icon'></i>
+                                <span class="nav-label">Análise</span>
+                                <i class='bx bx-chevron-down nav-chevron'></i>
+                            </button>
+                            <ul class="nav-group-items">
+                                <li><a href="{% url 'dashboard_admin' %}"><i class='bx bxs-dashboard nav-icon'></i><span class="nav-label">Dashboard</span></a></li>
+                                <li><a href="{% url 'dashboard_analise' %}"><i class='bx bx-pie-chart-alt nav-icon'></i><span class="nav-label">Gráficos</span></a></li>
+                                <li><a href="{% url 'listar_vendas_reais' %}"><i class='bx bx-store nav-icon'></i><span class="nav-label">Vendas Reais</span></a></li>
+                                <li><a href="{% url 'sugestoes_admin' %}"><i class='bx bx-bulb nav-icon'></i><span class="nav-label">Sugestões</span></a></li>
+                                <li><a href="{% url 'listar_status_erp' %}"><i class='bx bx-git-compare nav-icon'></i><span class="nav-label">Status ERP</span></a></li>
+                                <li><a href="{% url 'upload_status_pdf' %}"><i class='bx bx-file nav-icon'></i><span class="nav-label">Upload Status</span></a></li>
+                                <li><a href="{% url 'historico_wishlist' %}"><i class='bx bx-heart nav-icon'></i><span class="nav-label">Wishlist</span></a></li>
+                            </ul>
+                        </li>
+
+                        {% else %}
+                        <li class="nav-item">
+                            <a href="{% url 'carrinho' %}" style="position:relative;">
+                                <i class='bx bx-cart nav-icon'></i>
+                                {% if carrinho_count > 0 %}
+                                    <span style="position:absolute;top:6px;left:30px;background:#9747e8;color:white;border-radius:50%;width:18px;height:18px;font-size:0.65rem;display:flex;align-items:center;justify-content:center;font-weight:bold;">{{ carrinho_count }}</span>
+                                {% endif %}
+                                <span class="nav-label">Carrinho</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'pedidos' %}">
+                                <i class='bx bx-history nav-icon'></i>
+                                <span class="nav-label">Histórico de Pedidos</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'meus_itens_comprados' %}">
+                                <i class='bx bx-search-alt nav-icon'></i>
+                                <span class="nav-label">Meus Itens Comprados</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'meus_avisos' %}">
+                                <i class='bx bx-bell nav-icon'></i>
+                                <span class="nav-label">Meus Avisos</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        <li class="nav-item">
+                            <a href="{% url 'password_change' %}">
+                                <i class="bi bi-key nav-icon"></i>
+                                <span class="nav-label">Alterar senha</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'editar_perfil' %}">
+                                <i class="bi bi-pin-map nav-icon"></i>
+                                <span class="nav-label">Endereço</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'upload_pedido_cliente' %}">
+                                <i class='bx bx-spreadsheet nav-icon'></i>
+                                <span class="nav-label">Enviar Planilha</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bottom-content">
+                    <ul class="menu-links">
+                        <li class="nav-item">
+                            <a href="{% url 'logout' %}" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                                <i class='bx bx-log-out nav-icon'></i>
+                                <span class="nav-label">Sair</span>
+                            </a>
+                            <form id="logout-form" action="{% url 'logout' %}" method="post" style="display:none;">{% csrf_token %}</form>
+                        </li>
+                    </ul>
+                </div>
             </div>
-</nav>
-    </div>
-</nav>
+        </nav>
 
         <main class="container mt-4">
         {% if messages %}
@@ -197,54 +189,42 @@
 
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-            const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
-        });
-    </script>
-
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
 
-      <script>
-          document.addEventListener('DOMContentLoaded', function () {
-        // ... (tooltips mantidos) ...
-
-        // --- Lógica do Menu Lateral (Toggle) ---
-        const body = document.querySelector("body"); 
-        const sidebar = document.querySelector(".sidebar");
-        const toggle = document.querySelector(".toggle");
-        
-        const toggleSidebarState = (shouldClose) => {
-            if (shouldClose) {
-                sidebar.classList.add('close');
-                body.classList.add('move-content'); // Aplica a margem de 78px
-                toggle.classList.remove('bx-chevron-right');
-                toggle.classList.add('bx-chevron-left');
-            } else {
-                sidebar.classList.remove('close');
-                body.classList.remove('move-content'); // Aplica a margem de 250px (definida no CSS)
-                toggle.classList.remove('bx-chevron-left');
-                toggle.classList.add('bx-chevron-right');
-            }
-        };
-
-        // 1. APLICAÇÃO DO ESTADO INICIAL
-        // A tag <nav class="sidebar close"> no HTML define o estado inicial como fechado.
-        if (sidebar.classList.contains('close')) {
-            toggleSidebarState(true);
-        } else {
-            // Isso só acontece se você remover a classe 'close' do HTML
-            toggleSidebarState(false);
+    <script>
+        // --- Accordion do menu ---
+        function toggleGroup(groupId) {
+            const group = document.getElementById(groupId);
+            if (!group) return;
+            group.classList.toggle('open');
         }
 
-        // Event listener para o botão de toggle
-        toggle.addEventListener("click", () => {
-            const isCurrentlyClosed = sidebar.classList.contains('close');
-            toggleSidebarState(!isCurrentlyClosed);
+        document.addEventListener('DOMContentLoaded', function () {
+            // Tooltips Bootstrap
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+
+            // Abre automaticamente o grupo que contém a página atual
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.nav-group-items a').forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.closest('.nav-group').classList.add('open');
+                }
+            });
+
+            // --- Toggle da sidebar ---
+            const sidebar = document.querySelector('.sidebar');
+            const toggle  = document.querySelector('.toggle');
+
+            const setSidebar = (close) => {
+                sidebar.classList.toggle('close', close);
+                document.body.classList.toggle('move-content', close);
+                toggle.classList.toggle('bx-chevron-right', close);
+                toggle.classList.toggle('bx-chevron-left', !close);
+            };
+
+            setSidebar(sidebar.classList.contains('close'));
+            toggle.addEventListener('click', () => setSidebar(!sidebar.classList.contains('close')));
         });
-        // ----------------------------------------
-    });
     </script>
 </body>
 </html>
