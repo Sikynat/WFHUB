@@ -1,7 +1,3 @@
 [deploy]
 startCommand = "gunicorn app.wsgi:application --bind 0.0.0.0:$PORT"
 releaseCommand = "python manage.py migrate --no-input"
-
-[[crons]]
-schedule = "0 0 * * *"
-command = "python manage.py update_overdue_status"

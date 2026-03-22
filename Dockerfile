@@ -38,6 +38,4 @@ ENV DEBUG="False"
 # Coleta todos os arquivos estáticos para o diretório STATIC_ROOT
 RUN python manage.py collectstatic --noinput
 
-# 8. COMANDO DE INICIALIZAÇÃO DA APLICAÇÃO
-# Usa $PORT injetada pelo Railway (geralmente 8080)
-CMD gunicorn app.wsgi:application --bind 0.0.0.0:$PORT
+# Sem CMD aqui — o startCommand do railway.toml assume o controle
