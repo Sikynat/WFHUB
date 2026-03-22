@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Pedidos para Expedir{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Pedidos para Expedir</h2>
+            <p class="text-muted">Pedidos não expedidos, agrupados por cliente.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <span class="bg-white px-3 py-2 rounded shadow-sm border-start border-warning border-4 d-flex align-items-center">
+                <small class="text-muted fw-bold text-uppercase me-2">Pedidos</small>
+                <span class="h5 fw-bold mb-0">{{ total }}</span>
+            </span>
+            <a href="{% url 'listar_status_erp' %}" class="btn btn-outline-secondary d-flex align-items-center">
+                <i class='bx bx-arrow-back me-1'></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    {% if lista_clientes %}
+        {% for cliente in lista_clientes %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-light d-flex align-items-center gap-2 py-2">
+                <i class='bx bx-user text-primary'></i>
+                <span class="fw-bold">{{ cliente.cod }}</span>
+                <span class="text-muted">—</span>
+                <span>{{ cliente.nome }}</span>
+                <small class="text-muted ms-2">| Emissão: {{ cliente.emissao }}</small>
+                <span class="badge bg-warning text-dark ms-auto me-2">{{ cliente.pedidos|length }} pedido{{ cliente.pedidos|length|pluralize }}</span>
+                <a href="{{ cliente.link_whatsapp }}" target="_blank" class="btn btn-success btn-sm d-flex align-items-center gap-1">
+                    <i class='bx bxl-whatsapp'></i> WhatsApp
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Nº Pedido</th>
+                            <th>Situação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pedido in cliente.pedidos %}
+                        <tr>
+                            <td class="ps-4 fw-bold">{{ pedido.numero }}</td>
+                            <td><span class="badge bg-danger bg-opacity-10 text-danger">{{ pedido.situacao }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class='bx bx-check-circle' style="font-size:3rem;color:#198754;"></i>
+            <p class="mt-2">Nenhum pedido pendente de expedição.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

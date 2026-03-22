@@ -3368,6 +3368,55 @@ def listar_status_erp(request):
     return render(request, 'analise/listar_status_erp.html', contexto)
 
 @staff_member_required
+def pedidos_nao_expedidos(request):
+    qs = StatusPedidoERP.objects.filter(expedido=False).order_by('cod_cliente', 'numero_pedido', '-emissao')
+
+    # Agrupa por cliente → pedido
+    clientes = {}
+    for item in qs:
+        cod = item.cod_cliente
+        if cod not in clientes:
+            clientes[cod] = {'nome': item.nome_cliente, 'cod': cod, 'pedidos': {}}
+        num = item.numero_pedido
+        if num not in clientes[cod]['pedidos']:
+            clientes[cod]['pedidos'][num] = {
+                'numero': num,
+                'emissao': item.emissao,
+                'situacao': item.situacao,
+            }
+
+    # Monta lista ordenada para o template, com link WhatsApp por cliente
+    lista_clientes = []
+    for cod, dados in sorted(clientes.items()):
+        pedidos = sorted(dados['pedidos'].values(), key=lambda x: x['numero'])
+        emissao = pedidos[0]['emissao'] if pedidos else None
+        emissao_fmt = emissao.strftime('%d/%m/%Y') if emissao else '-'
+
+        linhas = [
+            '*Pedidos para Expedir*',
+            f"*Cliente: {dados['cod']} - {dados['nome']}*",
+            f"Emissão: {emissao_fmt}",
+            '',
+        ]
+        for pedido in pedidos:
+            linhas.append(f"• Pedido {pedido['numero']} — {pedido['situacao']}")
+
+        mensagem = '\n'.join(linhas)
+        lista_clientes.append({
+            'cod': dados['cod'],
+            'nome': dados['nome'],
+            'emissao': emissao_fmt,
+            'pedidos': pedidos,
+            'link_whatsapp': f"https://wa.me/5516991273974?text={quote(mensagem)}",
+        })
+
+    return render(request, 'analise/pedidos_nao_expedidos.html', {
+        'titulo': 'Pedidos para Expedir',
+        'lista_clientes': lista_clientes,
+        'total': qs.values('numero_pedido').distinct().count(),
+    })
+
+@staff_member_required
 def exportar_status_erp_excel(request):
     # 1. Pega os dados base (respeitando filtros de busca se houver)
     status_qs = StatusPedidoERP.objects.all().order_by('-emissao', '-id')

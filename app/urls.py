@@ -20,6 +20,7 @@ urlpatterns = [
     path('analise/upload-status-pdf/', views.upload_status_pdf, name='upload_status_pdf'),
     path('analise/monitoramento-erp/', views.listar_status_erp, name='listar_status_erp'),
     path('analise/exportar-erp-excel/', views.exportar_status_erp_excel, name='exportar_status_erp_excel'),
+    path('analise/pedidos-nao-expedidos/', views.pedidos_nao_expedidos, name='pedidos_nao_expedidos'),
     path('notificar-wishlist/<int:cliente_id>/', views.notificar_wishlist_whatsapp, name='notificar_wishlist_whatsapp'),
     path('avisar-quando-disponivel/', views.avisar_quando_disponivel, name='avisar_quando_disponivel'),
     path('novidades/', views.novidades, name='novidades'),

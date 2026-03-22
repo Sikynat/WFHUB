@@ -13,6 +13,9 @@
                 <small class="text-muted d-block fw-bold text-uppercase">Expedidos</small>
                 <span class="h5 fw-bold mb-0">{{ total_expedidos|default:"0" }}</span>
             </div>
+            <a href="{% url 'pedidos_nao_expedidos' %}" class="btn btn-warning d-flex align-items-center">
+                <i class='bx bx-package me-2'></i>Pedidos para Expedir
+            </a>
             <a href="{% url 'exportar_status_erp_excel' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-outline-success d-flex align-items-center">
                 <i class="fas fa-file-excel me-2"></i>Exportar Excel
             </a>
