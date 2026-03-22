@@ -251,6 +251,12 @@
         const quantidadeInputs = document.querySelectorAll('.input-quantidade');
         const grandTotalElement = document.getElementById('grand-total');
 
+        // Limpa o carrinho automaticamente após pedido gerado com sucesso
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('pedido_gerado') === 'sucesso') {
+            localStorage.clear();
+        }
+
         loadAndCalculateTotals();
 
         // Preferências do cliente (vêm do backend)

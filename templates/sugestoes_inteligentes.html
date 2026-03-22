@@ -165,6 +165,16 @@
         background-color: var(--cor-destaque);
         border-color: var(--cor-destaque);
     }
+    .termo-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+    .termo-bar { width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+    .termo-fill { height: 100%; border-radius: 3px; }
+    .termo-alta .termo-fill { background: #ef4444; }
+    .termo-media .termo-fill { background: #f97316; }
+    .termo-baixa .termo-fill { background: #3b82f6; }
+    .termo-label { font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+    .termo-alta .termo-label { color: #f87171; }
+    .termo-media .termo-label { color: #fb923c; }
+    .termo-baixa .termo-label { color: #60a5fa; }
 </style>
 
 <header class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mt-4 mb-2 gap-3">
@@ -198,6 +208,7 @@
                     <th class="text-end">Giro Diário</th>
                     <th class="text-end">Última Compra</th>
                     <th class="text-end">Ciclo Médio</th>
+                    <th class="text-end">Relevância</th>
                     <th class="text-end">Sugestão</th>
                     <th class="text-center">Ação</th>
                 </tr>
@@ -218,6 +229,24 @@
                     <td class="text-end txt-secundario">{{ sugestao.ultima_compra|date:"d/m/Y" }}</td>
                     <td class="text-end txt-secundario">
                         <span class="txt-primario">{{ sugestao.intervalo_medio_dias }}</span> dias
+                    </td>
+                    <td class="text-end">
+                        {% if sugestao.score_relevancia >= 70 %}
+                        <div class="termo-wrap termo-alta">
+                        {% elif sugestao.score_relevancia >= 40 %}
+                        <div class="termo-wrap termo-media">
+                        {% else %}
+                        <div class="termo-wrap termo-baixa">
+                        {% endif %}
+                            <div class="termo-bar">
+                                <div class="termo-fill" style="width: {{ sugestao.score_relevancia }}%"></div>
+                            </div>
+                            <span class="termo-label">
+                                {% if sugestao.score_relevancia >= 70 %}🔴 Urgente
+                                {% elif sugestao.score_relevancia >= 40 %}🟠 Atenção
+                                {% else %}🔵 Normal{% endif %}
+                            </span>
+                        </div>
                     </td>
                     <td class="text-end">
                         <span class="tag-sugerido">{{ sugestao.quantidade_sugerida }} un.</span>

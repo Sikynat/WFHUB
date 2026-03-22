@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% block title %}Histórico de Preços{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --cor-fundo: #16001c;
+        --cor-componente: #343a40;
+        --cor-borda: #495057;
+        --cor-texto: #f8f9fa;
+        --cor-destaque: #9747e8;
+        --cor-destaque-hover: #783ae3;
+    }
+    body { background-color: var(--cor-fundo); color: var(--cor-texto); }
+    h1, h2, h3, h4, h5, h6 { color: var(--cor-texto); }
+    span { color: var(--cor-destaque); }
+    strong { color: var(--cor-destaque); }
+    .card { background-color: var(--cor-componente); border: 1px solid var(--cor-borda); }
+    .card-header { background-color: #2c3034; border-bottom: 1px solid var(--cor-borda); }
+    .form-control {
+        background-color: var(--cor-componente);
+        color: var(--cor-texto);
+        border: 1px solid var(--cor-borda);
+    }
+    .form-control:focus {
+        background-color: var(--cor-componente);
+        color: var(--cor-texto);
+        border-color: var(--cor-destaque);
+        box-shadow: 0 0 0 0.25rem rgba(111, 66, 193, 0.25);
+    }
+    .form-control::placeholder { color: #adb5bd; }
+    .table-responsive {
+        border-radius: 0.5rem;
+        overflow: hidden;
+        border: 1px solid var(--cor-borda);
+    }
+    .table { color: var(--cor-texto); margin-bottom: 0; }
+    .table thead th {
+        background-color: #2c3034;
+        color: var(--cor-destaque);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid var(--cor-destaque);
+        padding: 0.9rem;
+    }
+    .table th, .table td {
+        padding: 0.9rem;
+        vertical-align: middle;
+        border-top: 1px solid var(--cor-borda);
+        background-color: #212529;
+        color: white;
+    }
+    .table > :not(caption) > * > * { border-bottom-width: 0; }
+    .table tbody tr:hover { background-color: rgba(111, 66, 193, 0.25); }
+    .btn-primary, .btn-success {
+        background-color: var(--cor-destaque);
+        border-color: var(--cor-destaque);
+    }
+    .btn-primary:hover, .btn-success:hover {
+        background-color: var(--cor-destaque-hover);
+        border-color: var(--cor-destaque-hover);
+    }
+    .btn-warning {
+        background-color: #6c757d;
+        border-color: #6c757d;
+        color: white;
+    }
+    .pagination .page-link {
+        background-color: var(--cor-componente);
+        border-color: var(--cor-borda);
+        color: var(--cor-destaque);
+    }
+    .pagination .page-item.active .page-link {
+        background-color: var(--cor-destaque);
+        border-color: var(--cor-destaque);
+    }
+    .pagination .page-link:hover { background-color: #495057; }
+    .text-right-data { text-align: right !important; }
+</style>
+
+<h1><span>Histórico de Preços</span></h1>
+<p>Registro de todas as alterações de preço detectadas nos uploads de planilha.</p>
+
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0">Filtros</h5></div>
+    <div class="card-body">
+        <form method="get">
+            <div class="input-group">
+                <input type="text" name="codigo" class="form-control" placeholder="Código do produto" value="{{ filtro_codigo }}">
+                <input type="text" name="descricao" class="form-control" placeholder="Descrição" value="{{ filtro_descricao }}">
+                <button type="submit" class="btn btn-success">Filtrar</button>
+                <a href="{% url 'historico_precos' %}" class="btn btn-warning">Limpar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th class="text-right-data">Valor SP</th>
+                <th class="text-right-data">Valor ES</th>
+                <th>Estoque</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in page_obj %}
+            <tr>
+                <td>{{ item.data_registro|date:"d/m/Y H:i" }}</td>
+                <td>{{ item.product_code }}</td>
+                <td>{{ item.product_description|default:"-" }}</td>
+                <td class="text-right-data">
+                    {% if item.product_value_sp %}
+                        R$ {{ item.product_value_sp }}
+                    {% else %}-{% endif %}
+                </td>
+                <td class="text-right-data">
+                    {% if item.product_value_es %}
+                        R$ {{ item.product_value_es }}
+                    {% else %}-{% endif %}
+                </td>
+                <td>
+                    {% if item.status_estoque == 'SEM_ESTOQUE' %}
+                        <span class="badge" style="background-color: #6c757d;">Sem Estoque</span>
+                    {% else %}
+                        <span class="badge" style="background-color: #10b981;">Disponível</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center text-muted">Nenhum registro encontrado.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if page_obj.has_other_pages %}
+<br>
+<nav>
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page=1&codigo={{ filtro_codigo }}&descricao={{ filtro_descricao }}">Primeira</a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&codigo={{ filtro_codigo }}&descricao={{ filtro_descricao }}">Anterior</a></li>
+        {% endif %}
+        {% for i in page_obj.paginator.page_range %}
+            {% if page_obj.number == i %}
+                <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+            {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ i }}&codigo={{ filtro_codigo }}&descricao={{ filtro_descricao }}">{{ i }}</a></li>
+            {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&codigo={{ filtro_codigo }}&descricao={{ filtro_descricao }}">Próxima</a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&codigo={{ filtro_codigo }}&descricao={{ filtro_descricao }}">Última</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

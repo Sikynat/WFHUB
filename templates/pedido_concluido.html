@@ -1,16 +1,147 @@
 {% extends 'base.html' %}
-{% block title %}Pedido Concluído{% endblock %}
+{% block title %}Pedido Confirmado{% endblock %}
 
 {% block content %}
-    <div class="alert alert-success mt-4" role="alert">
-        <h4 class="alert-heading">Pedido Concluído com Sucesso!</h4>
-        <p>Agradecemos a sua compra. Seu pedido foi registrado em nosso sistema.</p>
-        <hr>
-        <p class="mb-0">Você pode <a href="{% url 'home' %}">continuar comprando</a> ou <a href="{% url 'pedidos' %}">ver o histórico dos seus pedidos</a>.</p>
-    </div>
+<style>
+    :root {
+        --cor-fundo: #16001c;
+        --cor-componente: #343a40;
+        --cor-borda: #495057;
+        --cor-texto: #f8f9fa;
+        --cor-destaque: #9747e8;
+    }
+    body { background-color: var(--cor-fundo); color: var(--cor-texto); }
+    h1, h2, h3, h4, h5, h6 { color: var(--cor-texto); }
+    .card { background-color: var(--cor-componente); border: 1px solid var(--cor-borda); }
+    .card-header { background-color: #2c3034; border-bottom: 1px solid var(--cor-borda); color: var(--cor-texto); }
+    .table { color: var(--cor-texto); margin-bottom: 0; }
+    .table thead th {
+        background-color: #2c3034;
+        color: var(--cor-destaque);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid var(--cor-destaque);
+        padding: 0.9rem;
+    }
+    .table th, .table td {
+        padding: 0.9rem;
+        vertical-align: middle;
+        border-top: 1px solid var(--cor-borda);
+        background-color: #212529;
+        color: white;
+    }
+    .table > :not(caption) > * > * { border-bottom-width: 0; }
+    .table-responsive { border-radius: 0.5rem; overflow: hidden; border: 1px solid var(--cor-borda); }
+    .text-right-data { text-align: right !important; }
+    .btn-primary {
+        background-color: var(--cor-destaque);
+        border-color: var(--cor-destaque);
+    }
+    .btn-outline-secondary {
+        border-color: var(--cor-borda);
+        color: var(--cor-texto);
+    }
+    .info-label { color: #ffffff; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .info-value { font-weight: 600; font-size: 1rem; color: #ffffff; }
+    .text-muted { color: #ffffff !important; }
+</style>
 
-    <script>
-        // Limpa o localStorage quando a página de sucesso é carregada
-        localStorage.clear();
-    </script>
+<div class="text-center my-4">
+    <div style="font-size: 3rem; color: #10b981;">✔</div>
+    <h2 class="mt-2">Pedido <strong style="color: var(--cor-destaque);">#{{ pedido.id }}</strong> confirmado!</h2>
+    <p class="text-muted">Obrigado, {{ cliente.client_name }}. Seu pedido foi registrado com sucesso.</p>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card p-3">
+            <div class="info-label">Data do Pedido</div>
+            <div class="info-value">{{ pedido.data_criacao|date:"d/m/Y" }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3">
+            <div class="info-label">Envio Solicitado</div>
+            <div class="info-value">{{ pedido.data_envio_solicitada|date:"d/m/Y"|default:"-" }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3">
+            <div class="info-label">Frete</div>
+            <div class="info-value">{{ pedido.frete_option|default:"-" }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3">
+            <div class="info-label">Nota Fiscal</div>
+            <div class="info-value">{% if pedido.nota_fiscal == 'COM' %}Com Nota Fiscal{% else %}Sem Nota Fiscal{% endif %}</div>
+        </div>
+    </div>
+</div>
+
+{% if pedido.endereco %}
+<div class="card mb-4 p-3">
+    <div class="info-label mb-1">Endereço de Entrega</div>
+    <div class="info-value">{{ pedido.endereco.logradouro }}, {{ pedido.endereco.numero }}
+        {% if pedido.endereco.complemento %} — {{ pedido.endereco.complemento }}{% endif %}
+        — {{ pedido.endereco.cidade }}/{{ pedido.endereco.estado }}
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0">Itens do Pedido</h5></div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descrição</th>
+                    <th class="text-right-data">Qtd</th>
+                    <th class="text-right-data">Valor Unit.</th>
+                    <th class="text-right-data">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in itens %}
+                <tr>
+                    <td><strong style="color: var(--cor-destaque);">{{ item.codigo }}</strong></td>
+                    <td>{{ item.descricao }}</td>
+                    <td class="text-right-data">{{ item.quantidade }}</td>
+                    <td class="text-right-data">R$ {{ item.valor_unitario|floatformat:2 }}</td>
+                    <td class="text-right-data"><strong>R$ {{ item.subtotal|floatformat:2 }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="text-end"><strong>Total:</strong></td>
+                    <td class="text-right-data">
+                        <strong style="color: var(--cor-destaque); font-size: 1.1rem;">
+                            R$ {{ pedido.valor_total|floatformat:2 }}
+                        </strong>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+{% if pedido.observacao %}
+<div class="card mb-4 p-3">
+    <div class="info-label mb-1">Observação</div>
+    <div>{{ pedido.observacao }}</div>
+</div>
+{% endif %}
+
+<div class="d-flex gap-3 justify-content-center mt-4 mb-5">
+    <a href="{% url 'home' %}" class="btn btn-primary px-4">Continuar Comprando</a>
+    <a href="{% url 'pedidos' %}" class="btn btn-outline-secondary px-4">Ver Meus Pedidos</a>
+</div>
+
+<script>
+    // Limpa localStorage ao confirmar pedido
+    localStorage.clear();
+</script>
 {% endblock %}

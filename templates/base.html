@@ -46,6 +46,12 @@
                         <span class="text nav-text">Home</span>
                     </a>
                 </li>
+                <li class="nav-links">
+                    <a href="{% url 'novidades' %}">
+                        <i class='bx bx-star'></i>
+                        <span class="text nav-text">Novidades</span>
+                    </a>
+                </li>
 
                             {% if user.is_staff %}
                     <li class="nav-links">
@@ -84,6 +90,12 @@
                         </a>
                     </li>
                     <li class="nav-links">
+                        <a href="{% url 'historico_precos' %}">
+                            <i class='bx bx-line-chart'></i>
+                            <span class="text nav-text">Histórico de Preços</span>
+                        </a>
+                    </li>
+                    <li class="nav-links">
                         <a href="{% url 'pedidos_para_hoje' %}">
                             <i class='bx bx-error'></i>
                             <span class="text nav-text">Pedidos de hoje</span>
@@ -96,6 +108,15 @@
                         </a>
                     </li>
                     {% else %}
+                    <li class="nav-links">
+                        <a href="{% url 'carrinho' %}" style="position: relative;">
+                            <i class='bx bx-cart'></i>
+                            {% if carrinho_count > 0 %}
+                                <span style="position: absolute; top: 6px; left: 30px; background: #9747e8; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: bold;">{{ carrinho_count }}</span>
+                            {% endif %}
+                            <span class="text nav-text">Carrinho</span>
+                        </a>
+                    </li>
                     <li class="nav-links">
                         <a href="{% url 'pedidos' %}">
                             <i class='bx bx-history'></i>

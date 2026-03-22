@@ -56,7 +56,7 @@ from django.db.models.functions import (
 from .models import (
     Product, Pedido, ItemPedido, WfClient, Endereco, 
     ItemPedidoIgnorado, VendaReal, StatusPedidoERP, 
-    Carrinho, ItemCarrinho, SugestaoCompraERP
+    Carrinho, ItemCarrinho, SugestaoCompraERP, HistoricoPreco
 )
 from .forms import (
     WfClientForm, EnderecoForm, GerarPedidoForm, 
@@ -488,8 +488,12 @@ def checkout(request, pedido_id_rascunho=None):
                 if 'carrinho' in request.session:
                     del request.session['carrinho']
 
-        messages.success(request, f'Pedido #{pedido_final.id} realizado com sucesso!')
-        return redirect('home')
+                # Limpa o carrinho do banco de dados
+                carrinho_bd = Carrinho.objects.filter(cliente=cliente_logado).first()
+                if carrinho_bd:
+                    carrinho_bd.itens.all().delete()
+
+        return redirect('pedido_concluido', pedido_id=pedido_final.id)
 
 
     # Lógica para o método GET (primeira vez que a página é acessada)
@@ -649,8 +653,35 @@ def salvar_pedido(request):
 
 # Fim Salvar Pedido
 
-def pedido_concluido(request):
-    return render(request, 'pedido_concluido.html')
+@login_required
+def pedido_concluido(request, pedido_id):
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente)
+    itens = pedido.itens.select_related('produto').all()
+
+    estado = cliente.client_state.uf_name if cliente.client_state else 'SP'
+    itens_detalhados = []
+    for item in itens:
+        valor = item.valor_unitario_sp if estado == 'SP' else item.valor_unitario_es
+        valor = valor or Decimal('0.00')
+        itens_detalhados.append({
+            'codigo': item.produto.product_code,
+            'descricao': item.produto.product_description,
+            'quantidade': item.quantidade,
+            'valor_unitario': valor,
+            'subtotal': valor * item.quantidade,
+        })
+
+    return render(request, 'pedido_concluido.html', {
+        'pedido': pedido,
+        'itens': itens_detalhados,
+        'cliente': cliente,
+        'estado': estado,
+    })
 
 @login_required
 def historico_pedidos(request):
@@ -1288,6 +1319,7 @@ def editar_endereco(request, endereco_id):
 
 # A página para exibir o formulário de upload
 @staff_member_required
+@staff_member_required
 def pagina_upload(request):
     return render(request, 'upload_planilha.html')
 
@@ -1383,46 +1415,63 @@ def processar_upload(request):
 
             produtos_para_criar = []
             produtos_para_atualizar = []
+            historico_para_criar = []
 
             for _, row in df_final.iterrows():
                 codigo = str(row['product_code']).strip()
-                
+
                 # Extração segura dos dados
                 desc_planilha = row.get('product_description')
                 grupo_planilha = row.get('product_group')
                 marca_planilha = row.get('product_brand')
-                
+
                 val_es = row.get('product_value_es', 0)
                 val_sp = row.get('product_value_sp', 0)
                 estoque = row.get('status_estoque', 'DISPONIVEL')
 
                 if codigo in produtos_existentes:
                     obj = produtos_existentes[codigo]
-                    
+
+                    preco_sp_antigo = obj.product_value_sp
+                    preco_es_antigo = obj.product_value_es
+
                     # ATUALIZAÇÃO CONDICIONAL: Só atualiza se a célula da planilha não for nula/vazia
                     if desc_planilha and str(desc_planilha).strip().lower() not in ['nan', 'none', '']:
                         obj.product_description = str(desc_planilha).strip()[:255]
-                    
+
                     if grupo_planilha and str(grupo_planilha).strip().lower() not in ['nan', 'none', '']:
                         obj.product_group = str(grupo_planilha).strip()[:100]
-                    
+
                     if marca_planilha and str(marca_planilha).strip().lower() not in ['nan', 'none', '']:
                         obj.product_brand = str(marca_planilha).strip()[:100]
-                    
+
                     # Atualização de preços (só atualiza se veio com valor real — evita zerar preço existente)
                     if val_sp: obj.product_value_sp = val_sp
                     if val_es: obj.product_value_es = val_es
-                    
+
                     obj.status = 'PENDENTE'
                     obj.status_estoque = estoque
                     obj.date_product = hoje
-                    
+
+                    # Registra histórico apenas se algum preço mudou
+                    preco_sp_novo = Decimal(str(val_sp)) if val_sp else preco_sp_antigo
+                    preco_es_novo = Decimal(str(val_es)) if val_es else preco_es_antigo
+                    if preco_sp_novo != preco_sp_antigo or preco_es_novo != preco_es_antigo or estoque != obj.status_estoque:
+                        historico_para_criar.append(HistoricoPreco(
+                            product_code=codigo,
+                            product_description=obj.product_description,
+                            product_value_sp=preco_sp_novo,
+                            product_value_es=preco_es_novo,
+                            status_estoque=estoque,
+                        ))
+
                     produtos_para_atualizar.append(obj)
                 else:
                     # Criação de um produto novo
+                    desc_nova = str(desc_planilha).strip()[:255] if desc_planilha and str(desc_planilha).strip().lower() not in ['nan', 'none', ''] else ""
                     produtos_para_criar.append(Product(
                         product_code=codigo,
-                        product_description=str(desc_planilha).strip()[:255] if desc_planilha and str(desc_planilha).strip().lower() not in ['nan', 'none', ''] else "",
+                        product_description=desc_nova,
                         product_group=str(grupo_planilha).strip()[:100] if grupo_planilha and str(grupo_planilha).strip().lower() not in ['nan', 'none', ''] else "",
                         product_brand=str(marca_planilha).strip()[:100] if marca_planilha and str(marca_planilha).strip().lower() not in ['nan', 'none', ''] else "",
                         product_value_sp=val_sp if val_sp is not None else 0,
@@ -1431,19 +1480,29 @@ def processar_upload(request):
                         status_estoque=estoque,
                         date_product=hoje
                     ))
+                    # Registra histórico do primeiro preço
+                    historico_para_criar.append(HistoricoPreco(
+                        product_code=codigo,
+                        product_description=desc_nova,
+                        product_value_sp=Decimal(str(val_sp)) if val_sp else None,
+                        product_value_es=Decimal(str(val_es)) if val_es else None,
+                        status_estoque=estoque,
+                    ))
 
             # 6. Gravação Atômica e em Massa
             with transaction.atomic():
                 if produtos_para_criar:
                     Product.objects.bulk_create(produtos_para_criar, batch_size=500)
-                
+
                 if produtos_para_atualizar:
-                    # Informa exatamente quais campos devem ser tocados
                     Product.objects.bulk_update(
-                        produtos_para_atualizar, 
+                        produtos_para_atualizar,
                         fields=['product_description', 'product_group', 'product_brand', 'product_value_sp', 'product_value_es', 'status', 'status_estoque', 'date_product'],
                         batch_size=500
                     )
+
+                if historico_para_criar:
+                    HistoricoPreco.objects.bulk_create(historico_para_criar, batch_size=500)
             
             messages.success(request, f'Processamento concluído: {len(produtos_para_criar)} novos e {len(produtos_para_atualizar)} atualizados.')
             return redirect('pagina_upload')
@@ -3407,6 +3466,47 @@ def avisar_quando_disponivel(request):
     return JsonResponse({'sucesso': True, 'mensagem': 'Você será avisado quando o produto estiver disponível!'})
 
 @login_required
+def novidades(request):
+    limite = timezone.now() - timedelta(days=15)
+
+    produtos = Product.objects.filter(
+        criado_em__gte=limite,
+        status_estoque='DISPONIVEL'
+    ).order_by('-criado_em')
+
+    # Filtra pelo estado do cliente se não for staff
+    preco_exibido = 'todos'
+    cliente_logado = None
+
+    if not request.user.is_staff:
+        try:
+            cliente_logado = request.user.wfclient
+            estado = cliente_logado.client_state.uf_name
+            if estado == 'SP':
+                preco_exibido = 'sp'
+                produtos = produtos.exclude(product_value_sp=0, status_estoque='DISPONIVEL')
+            elif estado == 'ES':
+                preco_exibido = 'es'
+                produtos = produtos.exclude(product_value_es=0, status_estoque='DISPONIVEL')
+        except WfClient.DoesNotExist:
+            return redirect('home')
+
+    for produto in produtos:
+        produto.valor_sp_formatado = f"{produto.product_value_sp:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if produto.product_value_sp else "0,00"
+        produto.valor_es_formatado = f"{produto.product_value_es:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if produto.product_value_es else "0,00"
+
+    paginator = Paginator(produtos, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'novidades.html', {
+        'titulo': 'Novidades',
+        'page_obj': page_obj,
+        'preco_exibido': preco_exibido,
+        'cliente_logado': cliente_logado,
+        'total_novidades': produtos.count(),
+    })
+
+@login_required
 def meus_avisos(request):
     try:
         cliente = request.user.wfclient
@@ -3430,6 +3530,23 @@ def meus_avisos(request):
         'pendentes': pendentes,
         'notificados': notificados,
     })
+
+@login_required
+@require_POST
+def cancelar_aviso(request, item_id):
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return redirect('home')
+
+    ItemPedidoIgnorado.objects.filter(
+        id=item_id,
+        cliente=cliente,
+        notificado=False
+    ).delete()
+
+    messages.success(request, 'Aviso cancelado com sucesso.')
+    return redirect('meus_avisos')
 
 @login_required
 @require_POST
@@ -3557,6 +3674,28 @@ def exportar_itens_recuperados_excel(request, cliente_id):
     return response
 
 @staff_member_required
+def historico_precos(request):
+    filtro_codigo = request.GET.get('codigo', '').strip()
+    filtro_descricao = request.GET.get('descricao', '').strip()
+
+    historico = HistoricoPreco.objects.all()
+
+    if filtro_codigo:
+        historico = historico.filter(product_code__icontains=filtro_codigo)
+    if filtro_descricao:
+        historico = historico.filter(product_description__icontains=filtro_descricao)
+
+    paginator = Paginator(historico, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'analise/historico_precos.html', {
+        'titulo': 'Histórico de Preços',
+        'page_obj': page_obj,
+        'filtro_codigo': filtro_codigo,
+        'filtro_descricao': filtro_descricao,
+    })
+
+@staff_member_required
 def historico_wishlist(request):
     """
     Exibe o histórico de lotes de reposição notificados aos clientes.
@@ -3658,6 +3797,46 @@ def reenviar_notificacao_whatsapp(request, cliente_id):
     )
     
     return redirect(f"https://api.whatsapp.com/send?text={quote(mensagem)}")
+
+
+@staff_member_required
+def sugestoes_admin(request):
+    filtro_cliente = request.GET.get('cliente', '').strip()
+
+    # Recalcular sugestões de um cliente específico via POST
+    if request.method == 'POST':
+        cliente_code = request.POST.get('recalcular_cliente')
+        if cliente_code:
+            processar_giro_cliente(cliente_code)
+        return redirect(request.get_full_path())
+
+    # Sem filtro: só mostra a barra de busca
+    if not filtro_cliente:
+        return render(request, 'analise/sugestoes_admin.html', {
+            'clientes': None,
+            'filtro_cliente': '',
+        })
+
+    sugestoes_qs = SugestaoCompraERP.objects.select_related(
+        'cliente', 'cliente__client_state'
+    ).filter(
+        Q(cliente__client_name__icontains=filtro_cliente) |
+        Q(cliente__client_code__icontains=filtro_cliente)
+    ).order_by('cliente__client_name', '-giro_diario')
+
+    clientes_map = {}
+    for s in sugestoes_qs:
+        cid = s.cliente.client_id
+        if cid not in clientes_map:
+            clientes_map[cid] = {'cliente': s.cliente, 'sugestoes': [], 'total_itens': 0}
+        clientes_map[cid]['sugestoes'].append(s)
+        clientes_map[cid]['total_itens'] += 1
+
+    return render(request, 'analise/sugestoes_admin.html', {
+        'clientes': clientes_map.values(),
+        'filtro_cliente': filtro_cliente,
+        'total_clientes': len(clientes_map),
+    })
 
 
 @staff_member_required

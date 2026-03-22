@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from decimal import Decimal
 from django.db.models import Count
+from django.utils import timezone
 # Modelo para UF
 class wefixhub_uf (models.Model):
     uf_id = models.AutoField(primary_key=True)
@@ -121,8 +122,8 @@ class Product(models.Model):
     ]
     status_estoque = models.CharField(max_length=20, choices=ESTOQUE_CHOICES, default='DISPONIVEL')
 
-    # NOVO CAMPO
     date_product = models.DateField(auto_now_add=True)
+    criado_em = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
         db_table = 'wf_products'
@@ -400,6 +401,7 @@ class SugestaoCompraERP(models.Model):
     
     # O que o sistema deduziu
     quantidade_sugerida = models.IntegerField()
+    score_relevancia = models.IntegerField(default=0, verbose_name="Score de Relevância (0-100)")
     data_calculo = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -409,3 +411,21 @@ class SugestaoCompraERP(models.Model):
 
     def __str__(self):
         return f"{self.produto_codigo} para {self.cliente.client_code} - Sugerido: {self.quantidade_sugerida}"
+
+
+class HistoricoPreco(models.Model):
+    product_code = models.CharField(max_length=20, db_index=True)
+    product_description = models.CharField(max_length=255, blank=True, null=True)
+    product_value_sp = models.DecimalField(max_digits=6, decimal_places=2, null=True)
+    product_value_es = models.DecimalField(max_digits=6, decimal_places=2, null=True)
+    status_estoque = models.CharField(max_length=20, default='DISPONIVEL')
+    data_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_historico_precos'
+        ordering = ['-data_registro']
+        verbose_name = 'Histórico de Preço'
+        verbose_name_plural = 'Histórico de Preços'
+
+    def __str__(self):
+        return f"{self.product_code} — {self.data_registro.strftime('%d/%m/%Y')}"

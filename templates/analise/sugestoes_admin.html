@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}Sugestões de Compra{% endblock %}
+
+{% block content %}
+<style>
+    .metric-card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+    .cliente-header { background: linear-gradient(135deg, #783ae3, #4361ee); color: white; border-radius: 12px 12px 0 0; padding: 1rem 1.25rem; }
+    .badge-estado { font-size: 0.7rem; padding: 0.3rem 0.6rem; border-radius: 20px; background: rgba(255,255,255,0.2); }
+    .table thead th { background-color: #f8fafc; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700; border-bottom: 2px solid #e2e8f0; }
+    .table td { font-size: 0.875rem; vertical-align: middle; border-color: #f1f5f9; }
+    .giro-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; background: #ede9fe; color: #783ae3; font-weight: 700; }
+    .intervalo-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; background: #dbeafe; color: #2563eb; font-weight: 700; }
+    .qtd-badge { font-size: 0.85rem; padding: 0.3rem 0.6rem; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 700; }
+    .btn-recalcular { background: #783ae3; color: white; border: none; border-radius: 8px; font-size: 0.75rem; padding: 0.3rem 0.75rem; }
+    .btn-recalcular:hover { background: #6d28d9; color: white; }
+    .termometro-wrap { display: flex; align-items: center; gap: 6px; min-width: 110px; }
+    .termometro-bar { flex: 1; height: 8px; border-radius: 4px; background: #e2e8f0; overflow: hidden; }
+    .termometro-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+    .nivel-alta .termometro-fill { background: #ef4444; }
+    .nivel-media .termometro-fill { background: #f97316; }
+    .nivel-baixa .termometro-fill { background: #3b82f6; }
+    .nivel-label { font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+    .nivel-alta .nivel-label { color: #ef4444; }
+    .nivel-media .nivel-label { color: #f97316; }
+    .nivel-baixa .nivel-label { color: #3b82f6; }
+    .search-input { border-radius: 10px; border: 1px solid #e2e8f0; padding: 0.6rem 1rem; }
+    .empty-state { text-align: center; padding: 3rem; color: #94a3b8; }
+</style>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">Sugestões de Compra</h2>
+            {% if filtro_cliente and total_clientes %}
+            <p class="text-muted small mb-0">{{ total_clientes }} cliente{{ total_clientes|pluralize }} encontrado{{ total_clientes|pluralize }}</p>
+            {% else %}
+            <p class="text-muted small mb-0">Busque pelo nome ou código do cliente</p>
+            {% endif %}
+        </div>
+        <a href="{% url 'dashboard_admin' %}" class="btn btn-light border shadow-sm px-4" style="border-radius: 10px;">
+            <i class="fas fa-arrow-left me-2"></i>Dashboard
+        </a>
+    </div>
+
+    <div class="metric-card p-3 mb-4">
+        <form method="GET" class="d-flex gap-2 align-items-center">
+            <input type="text" name="cliente" value="{{ filtro_cliente }}" placeholder="Buscar por nome ou código do cliente..." class="form-control search-input flex-grow-1" autofocus>
+            <button type="submit" class="btn btn-primary px-4" style="border-radius: 10px;">
+                <i class="fas fa-search me-1"></i> Buscar
+            </button>
+            {% if filtro_cliente %}
+            <a href="{% url 'sugestoes_admin' %}" class="btn btn-light border px-3" style="border-radius: 10px;">Limpar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if clientes is None %}
+        <div class="metric-card">
+            <div class="empty-state">
+                <i class="fas fa-search fa-3x mb-3" style="color: #e2e8f0;"></i>
+                <p class="fw-bold text-muted">Busque um cliente pelo nome ou código para ver as sugestões.</p>
+            </div>
+        </div>
+
+    {% elif clientes %}
+        {% for item in clientes %}
+        <div class="metric-card mb-4 overflow-hidden">
+            <div class="cliente-header d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="fw-bold fs-6">{{ item.cliente.client_code }} — {{ item.cliente.client_name }}</span>
+                    {% if item.cliente.client_state %}
+                    <span class="badge-estado ms-1">{{ item.cliente.client_state.uf_name }}</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge" style="background: rgba(255,255,255,0.2); font-size: 0.75rem;">
+                        {{ item.total_itens }} sugestão{{ item.total_itens|pluralize }}
+                    </span>
+                    <form method="POST" class="mb-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="recalcular_cliente" value="{{ item.cliente.client_code }}">
+                        <button type="submit" class="btn-recalcular">
+                            <i class="fas fa-sync-alt me-1"></i> Recalcular
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th class="text-center">Relevância</th>
+                            <th class="text-center">Qtd Sugerida</th>
+                            <th class="text-center">Giro Diário</th>
+                            <th class="text-center">Intervalo Médio</th>
+                            <th class="text-center">Última Compra</th>
+                            <th class="text-center">Calculado em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in item.sugestoes %}
+                        <tr>
+                            <td><span class="fw-bold" style="color: #783ae3;">{{ s.produto_codigo }}</span></td>
+                            <td>{{ s.produto_descricao|truncatechars:50 }}</td>
+                            <td class="text-center">
+                                {% if s.score_relevancia >= 70 %}
+                                <div class="termometro-wrap nivel-alta">
+                                {% elif s.score_relevancia >= 40 %}
+                                <div class="termometro-wrap nivel-media">
+                                {% else %}
+                                <div class="termometro-wrap nivel-baixa">
+                                {% endif %}
+                                    <div class="termometro-bar">
+                                        <div class="termometro-fill" style="width: {{ s.score_relevancia }}%"></div>
+                                    </div>
+                                    <span class="nivel-label">
+                                        {% if s.score_relevancia >= 70 %}🔴 Alta
+                                        {% elif s.score_relevancia >= 40 %}🟠 Média
+                                        {% else %}🔵 Normal{% endif %}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="text-center"><span class="qtd-badge">{{ s.quantidade_sugerida }} un</span></td>
+                            <td class="text-center"><span class="giro-badge">{{ s.giro_diario|floatformat:3 }} un/dia</span></td>
+                            <td class="text-center"><span class="intervalo-badge">{{ s.intervalo_medio_dias }} dias</span></td>
+                            <td class="text-center text-muted">{{ s.ultima_compra|date:"d/m/Y" }}</td>
+                            <td class="text-center text-muted" style="font-size: 0.75rem;">{{ s.data_calculo|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+
+    {% else %}
+        <div class="metric-card">
+            <div class="empty-state">
+                <i class="fas fa-inbox fa-3x mb-3" style="color: #e2e8f0;"></i>
+                <p class="fw-bold">Nenhum resultado para "{{ filtro_cliente }}".</p>
+                <p class="small text-muted">Verifique se o cliente já acessou a página de reposição inteligente para gerar sugestões.</p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

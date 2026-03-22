@@ -1,6 +1,7 @@
 import re
 import json
 import calendar
+import statistics
 import pandas as pd
 import pdfplumber
 from io import BytesIO
@@ -8,7 +9,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Sum, Min, Max, Count, Q
+from django.db.models import Sum, Max, Q
 
 # Removi o 'messages' daqui, pois ele pertence às views
 # Removi as duplicatas de Pedido e Product
@@ -88,7 +89,8 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
         top_clientes_dia = sorted(clientes_por_dia_acumulado[i].items(), key=lambda x: x[1]['valor'], reverse=True)[:3]
         ranking_logistica_dia.append({'dia': dias_nomes[i], 'clientes': [{'codigo': cod, 'nome': dados['nome'], 'valor': "{:,.2f}".format(dados['valor']).replace(",", "X").replace(".", ",").replace("X", ".")} for cod, dados in top_clientes_dia]})
 
-    historico_total = VendaReal.objects.values('Codigo_Cliente', 'Emissao', 'cliente_nome').order_by('Codigo_Cliente', 'Emissao')
+    data_corte_habito = hoje - timedelta(days=548)  # ~18 meses
+    historico_total = VendaReal.objects.filter(Emissao__gte=data_corte_habito).values('Codigo_Cliente', 'Emissao', 'cliente_nome').order_by('Codigo_Cliente', 'Emissao')
     dados_habito = {}
     for h in historico_total:
         cod = h['Codigo_Cliente']
@@ -353,89 +355,148 @@ def processar_status_pdf(pdf_file):
 
 def processar_giro_cliente(cliente_code):
     """
-    Calcula o giro real de produtos para um cliente com base no histórico ERP (VendaReal).
-    Analisa APENAS os últimos 6 meses para garantir que a sugestão seja do hábito atual de consumo.
-    Só sugere produtos que existam no catálogo atual e estejam com estoque/preço disponível para a região.
+    Calcula sugestões de compra para um cliente com base no histórico ERP (VendaReal).
+    v2 — Melhorias:
+      - Mínimo de 3 compras distintas para gerar sugestão
+      - Score de consistência via coeficiente de variação dos intervalos
+      - Threshold dinâmico: produtos consistentes disparam mais tarde (90%), irregulares mais cedo (70%)
+      - Tendência de consumo: compara últimos 3 meses vs 3 meses anteriores
+      - Sazonalidade: bônus de 20% se o cliente comprou muito esse produto nesse mesmo mês no ano passado
     """
     hoje = date.today()
-    
-    # --- A JANELA DE TEMPO (Lookback Period de 6 meses / ~180 dias) ---
-    data_corte = hoje - timedelta(days=180)
-    
-    # 1. Busca o cliente e descobre a região dele para a regra de estoque
-    # Usamos select_related para não fazer queries extras ao buscar o UF
+    data_corte = hoje - timedelta(days=180)   # janela de 6 meses
+    data_meio = hoje - timedelta(days=90)     # marco para cálculo de tendência
+
+    # 1. Busca o cliente
     cliente = WfClient.objects.filter(client_code=cliente_code).select_related('client_state').first()
     if not cliente:
         return []
-        
+
     estado_cliente = cliente.client_state.uf_name if cliente.client_state else 'SP'
 
-    # 2. Agregação massiva direto no Banco de Dados
-    # CORREÇÃO: Agrupando APENAS pelo Código e FILTRANDO por data_corte
-    vendas_agrupadas = VendaReal.objects.filter(
+    # 2. Uma única query com todos os registros individuais do cliente nos últimos 6 meses
+    vendas_individuais = VendaReal.objects.filter(
         Codigo_Cliente=cliente_code,
-        Emissao__gte=data_corte  # <--- O PULO DO GATO: Filtra só dos últimos 6 meses
-    ).values(
-        'Produto_Codigo'
-    ).annotate(
-        total_qtd=Sum('Quantidade'),
-        primeira_compra=Min('Emissao'),
-        ultima_compra=Max('Emissao'),
-        qtd_pedidos=Count('Emissao', distinct=True)
-    )
+        Emissao__gte=data_corte
+    ).values('Produto_Codigo', 'Quantidade', 'Emissao').order_by('Produto_Codigo', 'Emissao')
 
-    # --- OTIMIZAÇÃO DE ESTOQUE: Busca todo o catálogo de uma vez só ---
-    codigos_vendidos = [v['Produto_Codigo'] for v in vendas_agrupadas]
+    # 3. Sazonalidade: mesmo mês do ano passado
+    vendas_mesmo_mes = VendaReal.objects.filter(
+        Codigo_Cliente=cliente_code,
+        Emissao__month=hoje.month,
+        Emissao__year=hoje.year - 1
+    ).values('Produto_Codigo').annotate(qtd_mesmo_mes=Sum('Quantidade'))
+    mapa_sazonalidade = {v['Produto_Codigo']: v['qtd_mesmo_mes'] for v in vendas_mesmo_mes}
+
+    # 4. Agrupa em Python por produto
+    dados_por_produto = {}
+    for v in vendas_individuais:
+        cod = v['Produto_Codigo']
+        if cod not in dados_por_produto:
+            dados_por_produto[cod] = {'datas': [], 'qtd_total': 0, 'qtd_recente': 0, 'qtd_antiga': 0}
+        dados_por_produto[cod]['datas'].append(v['Emissao'])
+        dados_por_produto[cod]['qtd_total'] += v['Quantidade']
+        if v['Emissao'] >= data_meio:
+            dados_por_produto[cod]['qtd_recente'] += v['Quantidade']
+        else:
+            dados_por_produto[cod]['qtd_antiga'] += v['Quantidade']
+
+    # 5. Busca catálogo de uma vez
     produtos_catalogo = Product.objects.filter(
-        product_code__in=codigos_vendidos
+        product_code__in=list(dados_por_produto.keys())
     ).in_bulk(field_name='product_code')
 
     novas_sugestoes = []
 
-    # 3. Processamento da Lógica de Negócio
-    for v in vendas_agrupadas:
-        if v['qtd_pedidos'] > 1:
-            codigo = v['Produto_Codigo']
-            
-            # --- VALIDAÇÃO DE ESTOQUE E CATÁLOGO ---
-            produto_obj = produtos_catalogo.get(codigo)
-            
-            if not produto_obj:
-                continue # Pula: Produto foi descontinuado do sistema
-                
-            preco = produto_obj.product_value_sp if estado_cliente == 'SP' else produto_obj.product_value_es
-            
-            if not preco or preco <= 0:
-                continue # Pula: Produto sem estoque (preço zerado) para a região do cliente
-            # ----------------------------------------
+    for codigo, dados in dados_por_produto.items():
+        # Datas únicas e ordenadas (uma por dia de compra)
+        datas = sorted(set(dados['datas']))
+        qtd_pedidos = len(datas)
 
-            intervalo_total_dias = (v['ultima_compra'] - v['primeira_compra']).days
-            
-            if intervalo_total_dias > 0:
-                giro_diario = Decimal(v['total_qtd']) / Decimal(intervalo_total_dias)
-                intervalo_medio = intervalo_total_dias / (v['qtd_pedidos'] - 1)
-                dias_sem_comprar = (hoje - v['ultima_compra']).days
+        # Mínimo de 3 compras distintas
+        if qtd_pedidos < 3:
+            continue
 
-                if dias_sem_comprar >= (intervalo_medio * 0.8):
-                    
-                    # ADIÇÃO DE SEGURANÇA: Colocamos +10% de margem de segurança na sugestão
-                    qtd_base = float(giro_diario) * float(intervalo_medio)
-                    qtd_sugerida = int(qtd_base * 1.10) # + 10%
-                    
-                    novas_sugestoes.append(
-                        SugestaoCompraERP(
-                            cliente=cliente,
-                            produto_codigo=codigo,
-                            # CORREÇÃO: Usa SOMENTE a descrição oficial, limpa e atualizada do Catálogo
-                            produto_descricao=produto_obj.product_description,
-                            giro_diario=giro_diario,
-                            intervalo_medio_dias=int(intervalo_medio),
-                            ultima_compra=v['ultima_compra'],
-                            quantidade_sugerida=qtd_sugerida if qtd_sugerida > 0 else 1
-                        )
-                    )
+        # Validação catálogo e estoque
+        produto_obj = produtos_catalogo.get(codigo)
+        if not produto_obj:
+            continue
 
-    # 4. Transação Atômica: Salva o backup
+        preco = produto_obj.product_value_sp if estado_cliente == 'SP' else produto_obj.product_value_es
+        if not preco or preco <= 0:
+            continue
+
+        # Intervalos entre compras consecutivas
+        intervalos = [(datas[i] - datas[i - 1]).days for i in range(1, len(datas))]
+        intervalo_medio = sum(intervalos) / len(intervalos)
+        if intervalo_medio <= 0:
+            continue
+
+        # Score de consistência via coeficiente de variação (CV = desvio/média)
+        # CV baixo = padrão regular; CV alto = padrão caótico
+        if len(intervalos) >= 2:
+            desvio = statistics.stdev(intervalos)
+            cv = desvio / intervalo_medio
+        else:
+            cv = 0.5  # moderado quando só há 2 intervalos
+        consistencia = max(0.0, 1.0 - cv)  # 1.0 = perfeito, 0.0 = caótico
+
+        # Threshold dinâmico: produto consistente espera mais para sugerir
+        if consistencia > 0.7:
+            threshold = 0.90
+        elif consistencia > 0.4:
+            threshold = 0.80
+        else:
+            threshold = 0.70
+
+        dias_sem_comprar = (hoje - datas[-1]).days
+        if dias_sem_comprar < (intervalo_medio * threshold):
+            continue
+
+        # Tendência de consumo: compara recente vs antigo
+        if dados['qtd_antiga'] > 0:
+            fator_tendencia = dados['qtd_recente'] / dados['qtd_antiga']
+            fator_tendencia = max(0.5, min(2.0, fator_tendencia))  # limita entre 50% e 200%
+        else:
+            fator_tendencia = 1.0  # sem histórico antigo, neutro
+
+        # Quantidade base: giro diário × intervalo médio
+        intervalo_total_dias = (datas[-1] - datas[0]).days
+        giro_diario = Decimal(str(dados['qtd_total'])) / Decimal(str(max(intervalo_total_dias, 1)))
+        qtd_base = float(giro_diario) * float(intervalo_medio)
+
+        # Aplica tendência + margem de segurança de 10%
+        qtd_sugerida = int(qtd_base * fator_tendencia * 1.10)
+
+        # Bônus de sazonalidade: se comprou muito nesse mês no ano passado, +20%
+        qtd_sazonalidade = mapa_sazonalidade.get(codigo)
+        if qtd_sazonalidade and qtd_sazonalidade > (qtd_base * 1.5):
+            qtd_sugerida = int(qtd_sugerida * 1.20)
+
+        # Score de relevância (0-100):
+        # Urgência (50 pts): quanto mais atrasado, maior a urgência
+        urgency_ratio = dias_sem_comprar / intervalo_medio
+        urgency_score = min(50, int(urgency_ratio * 40))
+        # Consistência (30 pts): padrão regular = sugestão mais confiável
+        consistency_score = int(consistencia * 30)
+        # Tendência (20 pts): consumo crescente = maior relevância
+        trend_score = int(min(20, max(0, (fator_tendencia - 0.5) * 20)))
+        score_relevancia = min(100, urgency_score + consistency_score + trend_score)
+
+        novas_sugestoes.append(
+            SugestaoCompraERP(
+                cliente=cliente,
+                produto_codigo=codigo,
+                produto_descricao=produto_obj.product_description,
+                giro_diario=giro_diario,
+                intervalo_medio_dias=int(intervalo_medio),
+                ultima_compra=datas[-1],
+                quantidade_sugerida=max(qtd_sugerida, 1),
+                score_relevancia=score_relevancia,
+            )
+        )
+
+    # Salva atomicamente: apaga sugestões antigas e insere as novas
     with transaction.atomic():
         SugestaoCompraERP.objects.filter(cliente=cliente).delete()
         if novas_sugestoes:
