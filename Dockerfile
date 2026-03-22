@@ -39,4 +39,4 @@ ENV DEBUG="False"
 RUN python manage.py collectstatic --noinput
 
 # 8. COMANDO DE INICIALIZAÇÃO
-CMD gunicorn app.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --log-level debug --access-logfile - --error-logfile - --preload --capture-output
+CMD gunicorn app.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --log-level info --access-logfile - --error-logfile -
