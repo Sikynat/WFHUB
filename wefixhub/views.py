@@ -98,8 +98,20 @@ def home(request):
         product_code=OuterRef('product_code')
     ).order_by('-date_product').values('date_product')[:1]
 
+    # Subquery para o preço anterior via HistoricoPreco (segundo registro mais recente)
+    prev_sp_sq = HistoricoPreco.objects.filter(
+        product_code=OuterRef('product_code')
+    ).order_by('-data_registro').values('product_value_sp')[1:2]
+
+    prev_es_sq = HistoricoPreco.objects.filter(
+        product_code=OuterRef('product_code')
+    ).order_by('-data_registro').values('product_value_es')[1:2]
+
     products = Product.objects.filter(
         date_product=Subquery(latest_dates)
+    ).annotate(
+        prev_value_sp=Subquery(prev_sp_sq),
+        prev_value_es=Subquery(prev_es_sq),
     ).order_by('product_code')
 
     # 3. Aplicação dos Filtros de Busca
@@ -200,6 +212,18 @@ def home(request):
     for product in products:
         product.valor_sp_formatado = f"{product.product_value_sp.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_sp else "0,00"
         product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
+
+        # Desconto SP
+        product.desconto_sp = None
+        if product.prev_value_sp and product.product_value_sp and product.prev_value_sp > 0:
+            if product.product_value_sp < product.prev_value_sp:
+                product.desconto_sp = round((product.prev_value_sp - product.product_value_sp) / product.prev_value_sp * 100, 1)
+
+        # Desconto ES
+        product.desconto_es = None
+        if product.prev_value_es and product.product_value_es and product.prev_value_es > 0:
+            if product.product_value_es < product.prev_value_es:
+                product.desconto_es = round((product.prev_value_es - product.product_value_es) / product.prev_value_es * 100, 1)
     
     # 6. Paginação
     paginator = Paginator(products, 30)

@@ -337,12 +337,40 @@
                 <td>{{ product.product_brand }}</td>
                 
                 {% if preco_exibido == 'todos' %}
-                    <td class="text-right-data unit-price-sp" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
-                    <td class="text-right-data unit-price-es" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                    <td class="text-right-data unit-price-sp" data-value="{{ product.product_value_sp }}">
+                        {% if product.desconto_sp %}
+                            <span style="color:#fd7e14;font-weight:600;">{{ product.valor_sp_formatado }}</span>
+                            <span class="badge ms-1" style="background:#fd7e14;font-size:0.7rem;">-{{ product.desconto_sp }}%</span>
+                        {% else %}
+                            {{ product.valor_sp_formatado }}
+                        {% endif %}
+                    </td>
+                    <td class="text-right-data unit-price-es" data-value="{{ product.product_value_es }}">
+                        {% if product.desconto_es %}
+                            <span style="color:#fd7e14;font-weight:600;">{{ product.valor_es_formatado }}</span>
+                            <span class="badge ms-1" style="background:#fd7e14;font-size:0.7rem;">-{{ product.desconto_es }}%</span>
+                        {% else %}
+                            {{ product.valor_es_formatado }}
+                        {% endif %}
+                    </td>
                 {% elif preco_exibido == 'sp' %}
-                    <td class="product-value text-right-data unit-price" data-value="{{ product.product_value_sp }}">{{ product.valor_sp_formatado }}</td>
+                    <td class="product-value text-right-data unit-price" data-value="{{ product.product_value_sp }}">
+                        {% if product.desconto_sp %}
+                            <span style="color:#fd7e14;font-weight:600;">{{ product.valor_sp_formatado }}</span>
+                            <span class="badge ms-1" style="background:#fd7e14;font-size:0.7rem;">-{{ product.desconto_sp }}%</span>
+                        {% else %}
+                            {{ product.valor_sp_formatado }}
+                        {% endif %}
+                    </td>
                 {% elif preco_exibido == 'es' %}
-                    <td class="product-value text-right-data unit-price" data-value="{{ product.product_value_es }}">{{ product.valor_es_formatado }}</td>
+                    <td class="product-value text-right-data unit-price" data-value="{{ product.product_value_es }}">
+                        {% if product.desconto_es %}
+                            <span style="color:#fd7e14;font-weight:600;">{{ product.valor_es_formatado }}</span>
+                            <span class="badge ms-1" style="background:#fd7e14;font-size:0.7rem;">-{{ product.desconto_es }}%</span>
+                        {% else %}
+                            {{ product.valor_es_formatado }}
+                        {% endif %}
+                    </td>
                 {% endif %}
                 
                 {% if not user.is_staff %}
