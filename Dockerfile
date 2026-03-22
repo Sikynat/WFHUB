@@ -39,5 +39,5 @@ ENV DEBUG="False"
 RUN python manage.py collectstatic --noinput
 
 # 8. COMANDO DE INICIALIZAÇÃO DA APLICAÇÃO
-# Este é o comando que será executado quando o contêiner iniciar
-CMD ["gunicorn", "app.wsgi:application", "--bind", "0.0.0.0:8000"]
+# Usa $PORT injetada pelo Railway (geralmente 8080)
+CMD gunicorn app.wsgi:application --bind 0.0.0.0:$PORT
