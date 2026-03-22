@@ -3824,6 +3824,22 @@ def sugestoes_admin(request):
         Q(cliente__client_code__icontains=filtro_cliente)
     ).order_by('cliente__client_name', '-giro_diario')
 
+    # Se não há sugestões calculadas, tenta calcular para os clientes encontrados
+    if not sugestoes_qs.exists():
+        clientes_encontrados = WfClient.objects.filter(
+            Q(client_name__icontains=filtro_cliente) |
+            Q(client_code__icontains=filtro_cliente)
+        )
+        for cliente in clientes_encontrados:
+            processar_giro_cliente(cliente.client_code)
+        # Re-executa a query após calcular
+        sugestoes_qs = SugestaoCompraERP.objects.select_related(
+            'cliente', 'cliente__client_state'
+        ).filter(
+            Q(cliente__client_name__icontains=filtro_cliente) |
+            Q(cliente__client_code__icontains=filtro_cliente)
+        ).order_by('cliente__client_name', '-giro_diario')
+
     clientes_map = {}
     for s in sugestoes_qs:
         cid = s.cliente.client_id
