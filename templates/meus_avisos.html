@@ -73,9 +73,8 @@
                             <form method="post" action="{% url 'cancelar_aviso' item.id %}">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm"
-                                    style="background: transparent; border: 1px solid #dc3545; color: #dc3545; font-size: 0.75rem; padding: 0.15rem 0.5rem;"
-                                    onclick="return confirm('Cancelar aviso para {{ item.codigo_produto }}?')">
-                                    Cancelar
+                                    style="background: transparent; border: 1px solid #dc3545; color: #dc3545; font-size: 0.75rem; padding: 0.15rem 0.5rem;">
+                                    Remover
                                 </button>
                             </form>
                         </td>
