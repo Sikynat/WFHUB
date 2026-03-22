@@ -1,2 +1,0 @@
-[deploy]
-releaseCommand = "python manage.py migrate --no-input"
