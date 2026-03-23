@@ -4234,10 +4234,10 @@ def adicionar_membro_empresa(request, empresa_id):
     if usuario:
         # Verifica se já tem perfil em outra empresa
         if hasattr(usuario, 'perfil') and usuario.perfil.empresa != empresa:
-            messages.error(request, f'Usuário "{username}" já pertence a outra empresa.')
+            messages.error(request, f'O username "{username}" já está em uso. Cada usuário só pode pertencer a uma empresa. Escolha um username diferente, por exemplo: "{username}_{empresa.slug}".')
             return redirect('detalhe_empresa', empresa_id=empresa_id)
         if hasattr(usuario, 'perfil'):
-            messages.warning(request, f'Usuário "{username}" já é membro desta empresa.')
+            messages.warning(request, f'O usuário "{username}" já é membro desta empresa.')
             return redirect('detalhe_empresa', empresa_id=empresa_id)
     else:
         if not senha or not email:

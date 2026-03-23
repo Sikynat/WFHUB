@@ -58,7 +58,7 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
     top_produtos_raw = vendas_qs.values('Produto_Codigo', 'Produto_Descricao').annotate(total_gerado=Sum('Total'), qtd_vendida=Sum('Quantidade')).order_by('-total_gerado')[:10]
     top_produtos_formatados = [{'codigo': p['Produto_Codigo'], 'descricao': p['Produto_Descricao'], 'qtd': p['qtd_vendida'], 'total_formatado': "{:,.2f}".format(float(p['total_gerado'])).replace(",", "X").replace(".", ",").replace("X", ".")} for p in top_produtos_raw]
     
-    top_clientes_raw = vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(total_gasto=Sum('Total')).order_by('-total_gasto')[:10]
+    top_clientes_raw = vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(total_gasto=Sum('Total')).order_by('-total_gasto')
     top_clientes_formatados = [{'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': "{:,.2f}".format(float(c['total_gasto'])).replace(",", "X").replace(".", ",").replace("X", ".")} for c in top_clientes_raw]
 
     vendas_por_cliente_periodo = vendas_qs.values('Codigo_Cliente').annotate(total_periodo=Sum('Total'))
