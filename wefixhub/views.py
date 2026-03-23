@@ -3242,22 +3242,22 @@ def meus_itens_comprados(request):
     efetivo_formatado = "{:,.2f}".format(float(total_efetivo_mes)).replace(",", "X").replace(".", ",").replace("X", ".")
     # ----------------------------------------------
 
-    # Lógica de agrupamento compatível com MySQL (mantida)
-    vendas_ids = VendaReal.objects.filter(
-        Codigo_Cliente=cliente.client_code
-    ).values('Produto_Codigo').annotate(
+    filtro_produto = request.GET.get('produto', '').strip()
+
+    # Aplica filtro de produto ANTES do agrupamento para evitar query pesada
+    base_qs = VendaReal.objects.filter(Codigo_Cliente=cliente.client_code)
+    if filtro_produto:
+        base_qs = base_qs.filter(
+            Q(Produto_Codigo__icontains=filtro_produto) |
+            Q(Produto_Descricao__icontains=filtro_produto)
+        )
+
+    # Lógica de agrupamento compatível com MySQL
+    vendas_ids = base_qs.values('Produto_Codigo').annotate(
         ultima_venda=Max('id')
     ).values_list('ultima_venda', flat=True)
 
     vendas_qs = VendaReal.objects.filter(id__in=vendas_ids).order_by('-id')
-
-    # Filtros de busca
-    filtro_produto = request.GET.get('produto', '').strip()
-    if filtro_produto:
-        vendas_qs = vendas_qs.filter(
-            Q(Produto_Codigo__icontains=filtro_produto) | 
-            Q(Produto_Descricao__icontains=filtro_produto)
-        )
 
     # Paginação
     paginator = Paginator(vendas_qs, 50)
