@@ -37,6 +37,37 @@
     </div>
     {% endif %}
 
+    <!-- Checklist de onboarding -->
+    {% if not checklist_completo %}
+    <div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid #7c3aed !important;">
+        <div class="card-body py-3">
+            <div class="d-flex align-items-center mb-2">
+                <i class='bx bx-list-check me-2 text-purple' style="color:#7c3aed;font-size:1.2rem;"></i>
+                <span class="fw-semibold">Configuração da empresa</span>
+                <span class="ms-auto text-muted small">{{ checklist_done }}/{{ checklist|length }} concluídos</span>
+            </div>
+            <div class="d-flex flex-column gap-1">
+                {% for item in checklist %}
+                <div class="d-flex align-items-center gap-2" style="font-size:14px;">
+                    {% if item.ok %}
+                        <i class='bx bx-check-circle text-success'></i>
+                        <span class="text-muted text-decoration-line-through">{{ item.label }}</span>
+                    {% else %}
+                        <i class='bx bx-circle' style="color:#ccc;"></i>
+                        <span>{{ item.label }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-success d-flex align-items-center mb-4 py-2">
+        <i class='bx bx-check-shield me-2'></i>
+        <span>Configuração completa! Esta empresa está pronta para uso.</span>
+    </div>
+    {% endif %}
+
     <!-- Cards de estatísticas -->
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-3">
@@ -96,6 +127,12 @@
                             <input type="text" name="telefone" class="form-control" value="{{ empresa.telefone|default:'' }}">
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">Expira em</label>
+                            <input type="date" name="expira_em" class="form-control"
+                                value="{{ empresa.expira_em|date:'Y-m-d'|default:'' }}">
+                            <div class="form-text">Deixe em branco para sem expiração.</div>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label text-muted">Slug</label>
                             <input type="text" class="form-control" value="{{ empresa.slug }}" disabled>
                             <div class="form-text">Identificador único — não pode ser alterado.</div>
@@ -142,12 +179,20 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
-                                    <form method="post" action="{% url 'remover_membro_empresa' empresa.id membro.id %}" class="d-inline">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remover {{ membro.user.username }}?')">
-                                            <i class='bx bx-trash'></i>
-                                        </button>
-                                    </form>
+                                    <div class="d-flex gap-1 justify-content-center">
+                                        <form method="post" action="{% url 'impersonar_membro' empresa.id membro.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Acessar como este usuário">
+                                                <i class='bx bx-log-in'></i>
+                                            </button>
+                                        </form>
+                                        <form method="post" action="{% url 'remover_membro_empresa' empresa.id membro.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remover {{ membro.user.username }}?')">
+                                                <i class='bx bx-trash'></i>
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             {% empty %}
@@ -201,5 +246,69 @@
         </div>
 
     </div>
+
+    <!-- Clientes -->
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            Clientes
+            <span class="badge bg-secondary">{{ clientes_count }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Código</th>
+                        <th>Nome</th>
+                        <th>CNPJ</th>
+                        <th class="text-center">UF</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Login</th>
+                        <th class="text-center">Acessar como</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in clientes %}
+                    <tr>
+                        <td class="ps-3 text-muted">{{ cliente.client_code }}</td>
+                        <td class="fw-semibold">{{ cliente.client_name }}</td>
+                        <td><small class="text-muted">{{ cliente.client_cnpj }}</small></td>
+                        <td class="text-center">{{ cliente.client_state }}</td>
+                        <td class="text-center">
+                            {% if cliente.client_is_active %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if cliente.user %}
+                                <span class="badge bg-info text-dark">{{ cliente.user.username }}</span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if cliente.user %}
+                                <form method="post" action="{% url 'impersonar_cliente' empresa.id cliente.client_id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Acessar como este cliente">
+                                        <i class='bx bx-log-in'></i> Acessar
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="text-muted small">Sem login</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-3">Nenhum cliente cadastrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
 {% endblock %}

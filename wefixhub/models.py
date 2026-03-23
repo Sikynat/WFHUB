@@ -21,6 +21,7 @@ class Empresa(models.Model):
     ativo = models.BooleanField(default=True, verbose_name='Ativa?')
     email_contato = models.EmailField(blank=True, null=True, verbose_name='E-mail de Contato')
     telefone = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefone')
+    expira_em = models.DateField(null=True, blank=True, verbose_name='Expira em')
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
 
     class Meta:
@@ -159,7 +160,7 @@ class Product(models.Model):
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True, related_name='produtos', verbose_name='Empresa')
     product_id = models.AutoField(primary_key=True)
-    product_code = models.CharField(max_length=20, unique=True)
+    product_code = models.CharField(max_length=20)
     product_description = models.CharField(max_length=255, blank=True, null=True)
     product_group = models.CharField(max_length=32, blank=True, null=True)
     product_brand = models.CharField(max_length=32, blank=True, null=True)
@@ -183,6 +184,7 @@ class Product(models.Model):
         db_table = 'wf_products'
         verbose_name = 'Produto'
         verbose_name_plural = 'Produtos'
+        unique_together = [('empresa', 'product_code')]
 
     def __str__(self):
         return self.product_description or self.product_code or ''

@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard SaaS{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="mb-0 fw-bold">Dashboard SaaS</h4>
+    <a href="{% url 'cadastrar_empresa' %}" class="btn btn-sm btn-primary">
+        <i class='bx bx-plus me-1'></i> Nova Empresa
+    </a>
+</div>
+
+<!-- Cards globais -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold text-primary">{{ total_empresas }}</div>
+                <div class="small text-muted">Empresas</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold text-success">{{ total_ativas }}</div>
+                <div class="small text-muted">Ativas</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold text-danger">{{ total_inativas }}</div>
+                <div class="small text-muted">Inativas</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold text-info">{{ total_clientes }}</div>
+                <div class="small text-muted">Clientes</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold text-warning">{{ total_pedidos }}</div>
+                <div class="small text-muted">Pedidos</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold text-secondary">{{ total_usuarios }}</div>
+                <div class="small text-muted">Usuários</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alertas -->
+{% if alertas_expirados or alertas_expirando %}
+<div class="mb-4">
+    <h6 class="fw-semibold mb-2 text-muted">Atenção</h6>
+    <div class="d-flex flex-column gap-2">
+
+        {% for emp in alertas_expirados %}
+        <div class="alert alert-danger d-flex align-items-center justify-content-between py-2 mb-0">
+            <span><i class='bx bx-error-circle me-1'></i> <strong>{{ emp.nome }}</strong> — plano expirado em {{ emp.expira_em|date:"d/m/Y" }}</span>
+            <a href="{% url 'detalhe_empresa' emp.id %}" class="btn btn-sm btn-danger">Gerenciar</a>
+        </div>
+        {% endfor %}
+
+        {% for emp in alertas_expirando %}
+        <div class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-0">
+            <span><i class='bx bx-time me-1'></i> <strong>{{ emp.nome }}</strong> — plano expira em {{ emp.expira_em|date:"d/m/Y" }}</span>
+            <a href="{% url 'detalhe_empresa' emp.id %}" class="btn btn-sm btn-warning">Gerenciar</a>
+        </div>
+        {% endfor %}
+
+    </div>
+</div>
+{% endif %}
+
+<!-- Tabela por empresa -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold py-3">Resumo por Empresa</div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Empresa</th>
+                    <th>Plano</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Expira em</th>
+                    <th class="text-center">Clientes</th>
+                    <th class="text-center">Ativos</th>
+                    <th class="text-center">Pedidos</th>
+                    <th class="text-center">Último pedido</th>
+                    <th class="text-center">Último login</th>
+                    <th class="text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in tabela %}
+                <tr class="{% if row.expirado %}table-danger{% elif row.expirando %}table-warning{% endif %}">
+                    <td class="fw-semibold">{{ row.empresa.nome }}</td>
+
+                    <!-- Plano editável inline -->
+                    <td>
+                        <form method="post" action="{% url 'atualizar_plano_empresa' row.empresa.id %}" class="d-flex align-items-center gap-1">
+                            {% csrf_token %}
+                            <select name="plano" class="form-select form-select-sm" style="min-width:110px;" onchange="this.form.submit()">
+                                {% for val, label in plano_choices %}
+                                <option value="{{ val }}" {% if row.empresa.plano == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </td>
+
+                    <!-- Toggle ativo inline -->
+                    <td class="text-center">
+                        <form method="post" action="{% url 'toggle_empresa_ativo' row.empresa.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm {% if row.empresa.ativo %}btn-success{% else %}btn-outline-danger{% endif %}"
+                                onclick="return confirm('{% if row.empresa.ativo %}Desativar{% else %}Reativar{% endif %} {{ row.empresa.nome }}?')">
+                                {% if row.empresa.ativo %}Ativa{% else %}Inativa{% endif %}
+                            </button>
+                        </form>
+                    </td>
+
+                    <td class="text-center">
+                        {% if row.empresa.expira_em %}
+                            <span class="{% if row.expirado %}text-danger fw-bold{% elif row.expirando %}text-warning fw-bold{% else %}text-muted{% endif %}">
+                                {{ row.empresa.expira_em|date:"d/m/Y" }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-center">{{ row.clientes }}</td>
+                    <td class="text-center"><span class="text-success fw-semibold">{{ row.clientes_ativos }}</span></td>
+                    <td class="text-center">{{ row.pedidos }}</td>
+
+                    <td class="text-center">
+                        {% if row.ultimo_pedido %}
+                            <small class="text-muted">{{ row.ultimo_pedido|date:"d/m/Y" }}</small>
+                        {% else %}
+                            <small class="text-muted">—</small>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-center">
+                        {% if row.ultimo_login %}
+                            <small class="text-muted">{{ row.ultimo_login|date:"d/m/Y" }}</small>
+                        {% else %}
+                            <small class="text-muted">—</small>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-center">
+                        <a href="{% url 'detalhe_empresa' row.empresa.id %}" class="btn btn-sm btn-outline-primary" title="Detalhes">
+                            <i class='bx bx-show'></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10" class="text-center text-muted py-4">Nenhuma empresa cadastrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

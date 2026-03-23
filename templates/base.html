@@ -45,14 +45,31 @@
                                 <span class="nav-label">Home</span>
                             </a>
                         </li>
+
+                        {% if user.is_superuser %}
+
+                        <!-- MENU SUPERUSUÁRIO -->
+                        <li class="nav-item nav-group" id="grp-saas">
+                            <button class="nav-group-btn" onclick="toggleGroup('grp-saas')">
+                                <i class='bx bx-buildings nav-icon'></i>
+                                <span class="nav-label">SaaS</span>
+                                <i class='bx bx-chevron-down nav-chevron'></i>
+                            </button>
+                            <ul class="nav-group-items">
+                                <li><a href="{% url 'saas_dashboard' %}"><i class='bx bxs-dashboard nav-icon'></i><span class="nav-label">Visão Geral</span></a></li>
+                                <li><a href="{% url 'listar_empresas' %}"><i class='bx bx-building nav-icon'></i><span class="nav-label">Empresas</span></a></li>
+                                <li><a href="{% url 'cadastrar_empresa' %}"><i class='bx bx-plus-circle nav-icon'></i><span class="nav-label">Nova Empresa</span></a></li>
+                            </ul>
+                        </li>
+
+                        {% elif user.is_staff %}
+
                         <li class="nav-item">
                             <a href="{% url 'novidades' %}">
                                 <i class='bx bx-star nav-icon'></i>
                                 <span class="nav-label">Novidades</span>
                             </a>
                         </li>
-
-                        {% if user.is_staff %}
 
                         <!-- CLIENTES -->
                         <li class="nav-item">
@@ -113,21 +130,6 @@
                             </ul>
                         </li>
 
-                        {% if user.is_superuser %}
-                        <!-- GRUPO: SAAS -->
-                        <li class="nav-item nav-group" id="grp-saas">
-                            <button class="nav-group-btn" onclick="toggleGroup('grp-saas')">
-                                <i class='bx bx-buildings nav-icon'></i>
-                                <span class="nav-label">SaaS</span>
-                                <i class='bx bx-chevron-down nav-chevron'></i>
-                            </button>
-                            <ul class="nav-group-items">
-                                <li><a href="{% url 'listar_empresas' %}"><i class='bx bx-building nav-icon'></i><span class="nav-label">Empresas</span></a></li>
-                                <li><a href="{% url 'cadastrar_empresa' %}"><i class='bx bx-plus-circle nav-icon'></i><span class="nav-label">Nova Empresa</span></a></li>
-                            </ul>
-                        </li>
-                        {% endif %}
-
                         {% else %}
                         <li class="nav-item">
                             <a href="{% url 'carrinho' %}" style="position:relative;">
@@ -156,14 +158,6 @@
                                 <span class="nav-label">Meus Avisos</span>
                             </a>
                         </li>
-                        {% endif %}
-
-                        <li class="nav-item">
-                            <a href="{% url 'password_change' %}">
-                                <i class="bi bi-key nav-icon"></i>
-                                <span class="nav-label">Alterar senha</span>
-                            </a>
-                        </li>
                         <li class="nav-item">
                             <a href="{% url 'editar_perfil' %}">
                                 <i class="bi bi-pin-map nav-icon"></i>
@@ -174,6 +168,14 @@
                             <a href="{% url 'upload_pedido_cliente' %}">
                                 <i class='bx bx-spreadsheet nav-icon'></i>
                                 <span class="nav-label">Enviar Planilha</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        <li class="nav-item">
+                            <a href="{% url 'password_change' %}">
+                                <i class="bi bi-key nav-icon"></i>
+                                <span class="nav-label">Alterar senha</span>
                             </a>
                         </li>
                     </ul>
@@ -192,6 +194,18 @@
                 </div>
             </div>
         </nav>
+
+        {% if request.is_impersonando %}
+        <div style="background:#7c3aed;color:white;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:13px;z-index:1050;">
+            <span><i class='bx bx-user-check me-2'></i> Sessão como <strong>{{ request.user.username }}</strong> — você está visualizando o portal como este usuário</span>
+            <form method="post" action="{% url 'sair_impersonacao' %}" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit" style="background:white;color:#7c3aed;border:none;border-radius:4px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;">
+                    <i class='bx bx-exit'></i> Encerrar sessão
+                </button>
+            </form>
+        </div>
+        {% endif %}
 
         <main class="container mt-4">
         {% if messages %}

@@ -41,5 +41,7 @@ class EmpresaMiddleware:
                 except Exception:
                     pass
 
+        request.is_impersonando = bool(request.session.get('impersonando_su_id'))
+
         response = self.get_response(request)
         return response

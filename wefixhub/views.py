@@ -107,6 +107,10 @@ except locale.Error:
 # View para a página inicial com filtros e paginação
 @login_required
 def home(request):
+    # Superuser vai para o dashboard SaaS
+    if request.user.is_authenticated and request.user.is_superuser:
+        return redirect('saas_dashboard')
+
     # 1. Parâmetros de Filtro e Busca
     codigo = request.GET.get('codigo', None)
     descricao = request.GET.get('descricao', None)
@@ -1462,7 +1466,10 @@ def processar_upload(request):
             hoje = date.today()
             
             produtos_existentes = {
-                p.product_code: p for p in Product.objects.filter(product_code__in=codigos_na_planilha)
+                p.product_code: p for p in Product.objects.filter(
+                    product_code__in=codigos_na_planilha,
+                    empresa=request.empresa,
+                )
             }
 
             produtos_para_criar = []
@@ -4146,31 +4153,48 @@ def detalhe_empresa(request, empresa_id):
         plano = request.POST.get('plano', 'FREE')
         email_contato = request.POST.get('email_contato', '').strip() or None
         telefone = request.POST.get('telefone', '').strip() or None
+        expira_em_raw = request.POST.get('expira_em', '').strip() or None
 
         if nome:
             empresa.nome = nome
             empresa.plano = plano
             empresa.email_contato = email_contato
             empresa.telefone = telefone
-            empresa.save(update_fields=['nome', 'plano', 'email_contato', 'telefone'])
+            empresa.expira_em = expira_em_raw
+            empresa.save(update_fields=['nome', 'plano', 'email_contato', 'telefone', 'expira_em'])
             messages.success(request, 'Empresa atualizada.')
 
         return redirect('detalhe_empresa', empresa_id=empresa.id)
 
     membros = empresa.membros.select_related('user').order_by('papel', 'user__username')
-    clientes_count = WfClient.objects.filter(empresa=empresa).count()
+    clientes = WfClient.objects.filter(empresa=empresa).select_related('user', 'client_state').order_by('client_name')
+    clientes_count = clientes.count()
     produtos_count = Product.objects.filter(empresa=empresa).count()
     pedidos_count = Pedido.objects.filter(empresa=empresa).count()
     vendas_count = VendaReal.objects.filter(empresa=empresa).count()
 
+    checklist = [
+        {'label': 'Empresa criada', 'ok': True},
+        {'label': 'E-mail de contato configurado', 'ok': bool(empresa.email_contato)},
+        {'label': 'Pelo menos 1 membro adicionado', 'ok': membros.exists()},
+        {'label': 'Pelo menos 1 cliente cadastrado', 'ok': clientes_count > 0},
+        {'label': 'Produtos carregados', 'ok': produtos_count > 0},
+    ]
+    checklist_completo = all(item['ok'] for item in checklist)
+    checklist_done = sum(1 for item in checklist if item['ok'])
+
     ctx = {
         'empresa': empresa,
         'membros': membros,
+        'clientes': clientes,
         'clientes_count': clientes_count,
         'produtos_count': produtos_count,
         'pedidos_count': pedidos_count,
         'vendas_count': vendas_count,
         'plano_choices': Empresa.PLANO_CHOICES,
+        'checklist': checklist,
+        'checklist_completo': checklist_completo,
+        'checklist_done': checklist_done,
     }
     return render(request, 'saas/detalhe_empresa.html', ctx)
 
@@ -4421,4 +4445,132 @@ def editar_cliente(request, client_id):
         'erros': {},
         'frete_choices': WfClient.FRETE_CHOICES,
         'nf_choices': WfClient.NOTA_FISCAL_CHOICES,
+    })
+
+
+# ==============================================================================
+# IMPERSONAÇÃO E AÇÕES RÁPIDAS (superuser)
+# ==============================================================================
+
+@login_required
+def impersonar_cliente(request, empresa_id, client_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+    cliente = get_object_or_404(WfClient, client_id=client_id, empresa_id=empresa_id)
+    if not cliente.user:
+        messages.error(request, 'Este cliente não possui login vinculado.')
+        return redirect('detalhe_empresa', empresa_id=empresa_id)
+    su_id = request.user.id
+    from django.contrib.auth import login as auth_login
+    auth_login(request, cliente.user, backend='django.contrib.auth.backends.ModelBackend')
+    request.session['impersonando_su_id'] = su_id  # restaura após flush do login
+    return redirect('home')
+
+
+@login_required
+def impersonar_membro(request, empresa_id, membro_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+    membro = get_object_or_404(PerfilUsuario, id=membro_id, empresa_id=empresa_id)
+    su_id = request.user.id
+    from django.contrib.auth import login as auth_login
+    auth_login(request, membro.user, backend='django.contrib.auth.backends.ModelBackend')
+    request.session['impersonando_su_id'] = su_id  # restaura após flush do login
+    return redirect('home')
+
+
+@login_required
+def sair_impersonacao(request):
+    su_id = request.session.get('impersonando_su_id')
+    if su_id:
+        su = get_object_or_404(User, id=su_id, is_superuser=True)
+        del request.session['impersonando_su_id']
+        from django.contrib.auth import login as auth_login
+        auth_login(request, su, backend='django.contrib.auth.backends.ModelBackend')
+        messages.success(request, 'Voltou ao superusuário.')
+    return redirect('saas_dashboard')
+
+
+@login_required
+def atualizar_plano_empresa(request, empresa_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+    if request.method == 'POST':
+        empresa = get_object_or_404(Empresa, id=empresa_id)
+        plano = request.POST.get('plano', empresa.plano)
+        if plano in dict(Empresa.PLANO_CHOICES):
+            empresa.plano = plano
+            empresa.save(update_fields=['plano'])
+    return redirect('saas_dashboard')
+
+
+# ==============================================================================
+# DASHBOARD SAAS (superuser)
+# ==============================================================================
+
+def saas_dashboard(request):
+    if not request.user.is_superuser:
+        return redirect('home')
+
+    from datetime import date, timedelta
+    hoje = date.today()
+
+    empresas = Empresa.objects.prefetch_related('membros').order_by('nome')
+
+    total_empresas = empresas.count()
+    total_ativas = empresas.filter(ativo=True).count()
+    total_inativas = total_empresas - total_ativas
+    total_clientes = WfClient.objects.count()
+    total_usuarios = User.objects.count()
+    total_pedidos = Pedido.objects.count()
+
+    # Alertas
+    alertas_expirando = empresas.filter(
+        ativo=True,
+        expira_em__isnull=False,
+        expira_em__lte=hoje + timedelta(days=7),
+        expira_em__gte=hoje,
+    )
+    alertas_expirados = empresas.filter(
+        ativo=True,
+        expira_em__isnull=False,
+        expira_em__lt=hoje,
+    )
+    tabela = []
+    for emp in empresas:
+        ultimo_pedido = Pedido.objects.filter(empresa=emp).order_by('-data_criacao').first()
+        ultimo_login = (
+            emp.membros.select_related('user')
+            .filter(user__last_login__isnull=False)
+            .order_by('-user__last_login')
+            .values_list('user__last_login', flat=True)
+            .first()
+        )
+        expirado = emp.expira_em and emp.expira_em < hoje
+        expirando = emp.expira_em and hoje <= emp.expira_em <= hoje + timedelta(days=7)
+        tabela.append({
+            'empresa': emp,
+            'clientes': WfClient.objects.filter(empresa=emp).count(),
+            'clientes_ativos': WfClient.objects.filter(empresa=emp, client_is_active=True).count(),
+            'produtos': Product.objects.filter(empresa=emp).count(),
+            'pedidos': Pedido.objects.filter(empresa=emp).count(),
+            'membros': emp.membros.count(),
+            'ultimo_pedido': ultimo_pedido.data_criacao if ultimo_pedido else None,
+            'ultimo_login': ultimo_login,
+            'expirado': expirado,
+            'expirando': expirando,
+            'plano_choices': Empresa.PLANO_CHOICES,
+        })
+
+    return render(request, 'saas/dashboard_saas.html', {
+        'total_empresas': total_empresas,
+        'total_ativas': total_ativas,
+        'total_inativas': total_inativas,
+        'total_clientes': total_clientes,
+        'total_usuarios': total_usuarios,
+        'total_pedidos': total_pedidos,
+        'tabela': tabela,
+        'alertas_expirando': alertas_expirando,
+        'alertas_expirados': alertas_expirados,
+        'plano_choices': Empresa.PLANO_CHOICES,
     })
