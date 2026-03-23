@@ -118,26 +118,42 @@ def home(request):
     marca = request.GET.get('marca', None)
     pedidos_rascunho_count = Pedido.objects.filter(status='RASCUNHO').count()
 
-    # 2. Obter o registro mais recente para cada produto (Otimização de Subquery)
-    latest_dates = Product.objects.filter(
-        product_code=OuterRef('product_code')
-    ).order_by('-date_product').values('date_product')[:1]
+    # 2. Obter o registro mais recente para cada produto
+    is_staff = request.user.is_authenticated and request.user.is_staff
 
-    # Subquery para o preço anterior via HistoricoPreco (segundo registro mais recente)
-    prev_sp_sq = HistoricoPreco.objects.filter(
-        product_code=OuterRef('product_code')
-    ).order_by('-data_registro').values('product_value_sp')[1:2]
+    empresa_key = request.empresa.slug if request.empresa else 'global'
+    cache_key = f'home_products_{empresa_key}'
 
-    prev_es_sq = HistoricoPreco.objects.filter(
-        product_code=OuterRef('product_code')
-    ).order_by('-data_registro').values('product_value_es')[1:2]
+    products = cache.get(cache_key) if is_staff and not any([codigo, descricao, grupo, marca]) else None
 
-    products = por_empresa(Product.objects.filter(
-        date_product=Subquery(latest_dates)
-    ), request).annotate(
-        prev_value_sp=Subquery(prev_sp_sq),
-        prev_value_es=Subquery(prev_es_sq),
-    ).order_by('product_code')
+    if products is None:
+        latest_dates = Product.objects.filter(
+            product_code=OuterRef('product_code')
+        ).order_by('-date_product').values('date_product')[:1]
+
+        products_qs = por_empresa(Product.objects.filter(
+            date_product=Subquery(latest_dates)
+        ), request).order_by('product_code')
+
+        # Subqueries de preço anterior — apenas para clientes (indicadores de variação)
+        if not is_staff:
+            prev_sp_sq = HistoricoPreco.objects.filter(
+                product_code=OuterRef('product_code')
+            ).order_by('-data_registro').values('product_value_sp')[1:2]
+
+            prev_es_sq = HistoricoPreco.objects.filter(
+                product_code=OuterRef('product_code')
+            ).order_by('-data_registro').values('product_value_es')[1:2]
+
+            products_qs = products_qs.annotate(
+                prev_value_sp=Subquery(prev_sp_sq),
+                prev_value_es=Subquery(prev_es_sq),
+            )
+
+        products = products_qs
+
+        if is_staff and not any([codigo, descricao, grupo, marca]):
+            cache.set(cache_key, products, 300)  # cache de 5 min para staff
 
     # 3. Aplicação dos Filtros de Busca
     if codigo:
@@ -240,15 +256,17 @@ def home(request):
 
         # Desconto SP
         product.desconto_sp = None
-        if product.prev_value_sp and product.product_value_sp and product.prev_value_sp > 0:
-            if product.product_value_sp < product.prev_value_sp:
-                product.desconto_sp = round((product.prev_value_sp - product.product_value_sp) / product.prev_value_sp * 100, 1)
+        prev_sp = getattr(product, 'prev_value_sp', None)
+        if prev_sp and product.product_value_sp and prev_sp > 0:
+            if product.product_value_sp < prev_sp:
+                product.desconto_sp = round((prev_sp - product.product_value_sp) / prev_sp * 100, 1)
 
         # Desconto ES
         product.desconto_es = None
-        if product.prev_value_es and product.product_value_es and product.prev_value_es > 0:
-            if product.product_value_es < product.prev_value_es:
-                product.desconto_es = round((product.prev_value_es - product.product_value_es) / product.prev_value_es * 100, 1)
+        prev_es = getattr(product, 'prev_value_es', None)
+        if prev_es and product.product_value_es and prev_es > 0:
+            if product.product_value_es < prev_es:
+                product.desconto_es = round((prev_es - product.product_value_es) / prev_es * 100, 1)
     
     # 6. Paginação
     paginator = Paginator(products, 30)
