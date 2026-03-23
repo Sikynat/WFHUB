@@ -3,6 +3,54 @@ from django.contrib.auth.models import User
 from decimal import Decimal
 from django.db.models import Count
 from django.utils import timezone
+
+# ==========================================
+# SAAS — MODELO DE EMPRESA (TENANT)
+# ==========================================
+
+class Empresa(models.Model):
+    PLANO_CHOICES = [
+        ('FREE', 'Gratuito'),
+        ('BASICO', 'Básico'),
+        ('PRO', 'Profissional'),
+    ]
+
+    nome = models.CharField(max_length=128, verbose_name='Nome da Empresa')
+    slug = models.SlugField(max_length=64, unique=True, verbose_name='Identificador único')
+    plano = models.CharField(max_length=10, choices=PLANO_CHOICES, default='FREE', verbose_name='Plano')
+    ativo = models.BooleanField(default=True, verbose_name='Ativa?')
+    email_contato = models.EmailField(blank=True, null=True, verbose_name='E-mail de Contato')
+    telefone = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefone')
+    criado_em = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
+
+    class Meta:
+        db_table = 'wf_empresa'
+        verbose_name = 'Empresa'
+        verbose_name_plural = 'Empresas'
+
+    def __str__(self):
+        return self.nome
+
+
+class PerfilUsuario(models.Model):
+    PAPEL_CHOICES = [
+        ('ADMIN', 'Administrador'),
+        ('VENDEDOR', 'Vendedor'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='perfil')
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='membros')
+    papel = models.CharField(max_length=10, choices=PAPEL_CHOICES, default='ADMIN', verbose_name='Papel')
+
+    class Meta:
+        db_table = 'wf_perfil_usuario'
+        verbose_name = 'Perfil de Usuário'
+        verbose_name_plural = 'Perfis de Usuários'
+
+    def __str__(self):
+        return f"{self.user.username} — {self.empresa.nome} ({self.papel})"
+
+
 # Modelo para UF
 class wefixhub_uf (models.Model):
     uf_id = models.AutoField(primary_key=True)
@@ -48,11 +96,12 @@ class WfClient(models.Model):
         ('SEM', 'Sem Nota Fiscal'),
     ]
 
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True, related_name='clientes', verbose_name='Empresa')
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True)
     client_id = models.AutoField(primary_key=True)
-    client_code = models.IntegerField(unique=True)
+    client_code = models.IntegerField()
     client_name = models.CharField(max_length=128)
-    client_cnpj = models.CharField(max_length=14, unique=True)
+    client_cnpj = models.CharField(max_length=14)
     client_adress = models.CharField(max_length=255)
     client_city = models.CharField(max_length=100)
     client_state = models.ForeignKey(wefixhub_uf, on_delete=models.PROTECT, related_name='state_uf')
@@ -73,6 +122,10 @@ class WfClient(models.Model):
         db_table = 'wf_client'
         verbose_name = 'Cliente'
         verbose_name_plural = 'Clientes'
+        unique_together = [
+            ('empresa', 'client_code'),
+            ('empresa', 'client_cnpj'),
+        ]
 
     def __str__(self):
          return f"{self.client_code} - ({self.client_name})"
@@ -104,6 +157,7 @@ class Product(models.Model):
         ('ENTREGUE', 'Entregue'),
     ]
 
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True, related_name='produtos', verbose_name='Empresa')
     product_id = models.AutoField(primary_key=True)
     product_code = models.CharField(max_length=20, unique=True)
     product_description = models.CharField(max_length=255, blank=True, null=True)
@@ -191,6 +245,7 @@ class Pedido(models.Model):
     ]
 
     
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True, related_name='pedidos', verbose_name='Empresa')
     cliente = models.ForeignKey(WfClient, on_delete=models.CASCADE, related_name='pedidos_cliente')
     data_criacao = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
@@ -305,6 +360,7 @@ class ItemPedidoIgnorado(models.Model):
     
 # models.py
 class VendaReal(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True, related_name='vendas_reais', verbose_name='Empresa')
     # Identificação da Nota
     Emissao = models.DateField(db_index=True, verbose_name="Emissão")
     Codigo_Cliente = models.IntegerField(verbose_name="Código Cliente")
@@ -328,6 +384,7 @@ class VendaReal(models.Model):
 
 
 class StatusPedidoERP(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True, related_name='status_erp', verbose_name='Empresa')
     # Dados extraídos do PDF
     emissao = models.DateField(verbose_name="Data de Emissão")
     numero_pedido = models.CharField(max_length=50, db_index=True, verbose_name="Número do Pedido")
@@ -414,6 +471,7 @@ class SugestaoCompraERP(models.Model):
 
 
 class HistoricoPreco(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True, related_name='historico_precos', verbose_name='Empresa')
     product_code = models.CharField(max_length=20, db_index=True)
     product_description = models.CharField(max_length=255, blank=True, null=True)
     product_value_sp = models.DecimalField(max_digits=6, decimal_places=2, null=True)

@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Nova Empresa{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:700px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Nova Empresa</h2>
+            <p class="text-muted">Cadastre um novo representante no sistema.</p>
+        </div>
+        <a href="{% url 'listar_empresas' %}" class="btn btn-outline-secondary">
+            <i class='bx bx-arrow-back me-1'></i> Voltar
+        </a>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold">Dados da Empresa</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label">{{ form.nome.label }}</label>
+                        <input type="text" name="nome" class="form-control {% if form.nome.errors %}is-invalid{% endif %}" value="{{ form.nome.value|default:'' }}">
+                        {% for e in form.nome.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{{ form.plano.label }}</label>
+                        <select name="plano" class="form-select">
+                            {% for val, label in form.fields.plano.choices %}
+                            <option value="{{ val }}" {% if form.plano.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ form.slug.label }}</label>
+                        <input type="text" name="slug" class="form-control {% if form.slug.errors %}is-invalid{% endif %}" value="{{ form.slug.value|default:'' }}" placeholder="ex: wefix-sp">
+                        <div class="form-text">{{ form.fields.slug.help_text }}</div>
+                        {% for e in form.slug.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ form.email_contato.label }}</label>
+                        <input type="email" name="email_contato" class="form-control" value="{{ form.email_contato.value|default:'' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{{ form.telefone.label }}</label>
+                        <input type="text" name="telefone" class="form-control" value="{{ form.telefone.value|default:'' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold">Usuário Administrador</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">{{ form.username.label }}</label>
+                        <input type="text" name="username" class="form-control {% if form.username.errors %}is-invalid{% endif %}" value="{{ form.username.value|default:'' }}">
+                        {% for e in form.username.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ form.email_usuario.label }}</label>
+                        <input type="email" name="email_usuario" class="form-control {% if form.email_usuario.errors %}is-invalid{% endif %}" value="{{ form.email_usuario.value|default:'' }}">
+                        {% for e in form.email_usuario.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ form.senha.label }}</label>
+                        <input type="password" name="senha" class="form-control {% if form.senha.errors %}is-invalid{% endif %}">
+                        {% for e in form.senha.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ form.confirmar_senha.label }}</label>
+                        <input type="password" name="confirmar_senha" class="form-control {% if form.confirmar_senha.errors %}is-invalid{% endif %}">
+                        {% for e in form.confirmar_senha.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary px-4">
+                <i class='bx bx-plus me-1'></i> Criar Empresa
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

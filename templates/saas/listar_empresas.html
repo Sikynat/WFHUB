@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}Empresas Cadastradas{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Empresas Cadastradas</h2>
+            <p class="text-muted">Gerencie os representantes do sistema.</p>
+        </div>
+        <a href="{% url 'cadastrar_empresa' %}" class="btn btn-primary">
+            <i class='bx bx-plus me-1'></i> Nova Empresa
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Empresa</th>
+                        <th>Slug</th>
+                        <th>Plano</th>
+                        <th>Administrador</th>
+                        <th>Contato</th>
+                        <th class="text-center">Status</th>
+                        <th>Criado em</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for empresa in empresas %}
+                    <tr>
+                        <td class="ps-4 fw-bold">{{ empresa.nome }}</td>
+                        <td><code>{{ empresa.slug }}</code></td>
+                        <td>
+                            {% if empresa.plano == 'PRO' %}
+                                <span class="badge bg-primary">Pro</span>
+                            {% elif empresa.plano == 'BASICO' %}
+                                <span class="badge bg-info text-dark">Básico</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Gratuito</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for membro in empresa.membros.all %}
+                                {% if membro.papel == 'ADMIN' %}
+                                    {{ membro.user.username }}<br>
+                                    <small class="text-muted">{{ membro.user.email }}</small>
+                                {% endif %}
+                            {% empty %}
+                                <span class="text-muted">—</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% if empresa.email_contato %}{{ empresa.email_contato }}<br>{% endif %}
+                            {% if empresa.telefone %}<small class="text-muted">{{ empresa.telefone }}</small>{% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if empresa.ativo %}
+                                <span class="badge bg-success">Ativa</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inativa</span>
+                            {% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ empresa.criado_em|date:"d/m/Y" }}</small></td>
+                        <td>
+                            <a href="{% url 'detalhe_empresa' empresa.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class='bx bx-show'></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">Nenhuma empresa cadastrada ainda.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

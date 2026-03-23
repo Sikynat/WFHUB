@@ -24,6 +24,7 @@ import pdb
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
@@ -55,13 +56,33 @@ from django.db.models.functions import (
 # 5. Aplicações Locais (Models e Forms)
 from .models import (
     Product, Pedido, ItemPedido, WfClient, Endereco, 
-    ItemPedidoIgnorado, VendaReal, StatusPedidoERP, 
-    Carrinho, ItemCarrinho, SugestaoCompraERP, HistoricoPreco
+    ItemPedidoIgnorado, VendaReal, StatusPedidoERP,
+    Carrinho, ItemCarrinho, SugestaoCompraERP, HistoricoPreco,
+    Empresa, PerfilUsuario
 )
 from .forms import (
-    WfClientForm, EnderecoForm, GerarPedidoForm, 
-    UploadPedidoForm, SelectClientForm
+    WfClientForm, EnderecoForm, GerarPedidoForm,
+    UploadPedidoForm, SelectClientForm, CadastroEmpresaForm
 )
+
+# ==========================================
+# SAAS — HELPER DE ISOLAMENTO POR EMPRESA
+# ==========================================
+
+def por_empresa(queryset, request, campo='empresa'):
+    """Filtra o queryset pela empresa do usuário. Superuser vê tudo (empresa=None)."""
+    if request.empresa:
+        return queryset.filter(**{campo: request.empresa})
+    return queryset
+
+
+def get_empresa_or_404(model, request, **kwargs):
+    """get_object_or_404 + filtra por empresa para usuários não-superuser."""
+    if request.empresa:
+        kwargs['empresa'] = request.empresa
+    return get_object_or_404(model, **kwargs)
+
+
 
 # Configuração do locale para o formato brasileiro
 try:
@@ -107,9 +128,9 @@ def home(request):
         product_code=OuterRef('product_code')
     ).order_by('-data_registro').values('product_value_es')[1:2]
 
-    products = Product.objects.filter(
+    products = por_empresa(Product.objects.filter(
         date_product=Subquery(latest_dates)
-    ).annotate(
+    ), request).annotate(
         prev_value_sp=Subquery(prev_sp_sq),
         prev_value_es=Subquery(prev_es_sq),
     ).order_by('product_code')
@@ -428,7 +449,7 @@ def checkout(request, pedido_id_rascunho=None):
 
         try:
             if id_do_pedido:
-                pedido_rascunho = get_object_or_404(Pedido, id=id_do_pedido)
+                pedido_rascunho = get_empresa_or_404(Pedido, request, id=id_do_pedido)
                 cliente_logado = pedido_rascunho.cliente
             else:
                 if request.user.is_staff:
@@ -525,7 +546,7 @@ def checkout(request, pedido_id_rascunho=None):
     initial_data = {}
     
     if pedido_id_rascunho:
-        pedido_para_finalizar = get_object_or_404(Pedido, id=pedido_id_rascunho)
+        pedido_para_finalizar = get_empresa_or_404(Pedido, request, id=pedido_id_rascunho)
         cliente_logado = pedido_para_finalizar.cliente
         carrinho_detalhes = [
             {
@@ -753,7 +774,7 @@ def detalhes_pedido(request, pedido_id):
     # Garante que o usuário logado só possa ver o próprio pedido, a menos que seja um admin.
     # A lógica aqui é mais robusta. Admins podem ver qualquer pedido.
     if request.user.is_staff:
-        pedido = get_object_or_404(Pedido, id=pedido_id)
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
     else:
         pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente_logado)
 
@@ -809,62 +830,61 @@ def dashboard_admin(request):
     filtro = request.GET.get('filtro')
     hoje = timezone.localdate()
 
+    # Cache key única por empresa para evitar vazamento entre tenants
+    empresa_key = request.empresa.slug if request.empresa else 'superuser'
+
     # =========================================================
     # 1. CÁLCULO DO FATURAMENTO REAL (CACHE: 15 MINUTOS)
     # =========================================================
-    faturamento_formatado = cache.get('dashboard_faturamento')
-    
+    cache_fat_key = f'dashboard_faturamento_{empresa_key}'
+    faturamento_formatado = cache.get(cache_fat_key)
+
     if not faturamento_formatado:
-        total_faturamento_real = VendaReal.objects.aggregate(
+        total_faturamento_real = por_empresa(VendaReal.objects.all(), request).aggregate(
             total=Sum('Total')
         )['total'] or Decimal('0.00')
         faturamento_formatado = "{:,.2f}".format(float(total_faturamento_real)).replace(",", "X").replace(".", ",").replace("X", ".")
-        
-        # Salva na memória por 900 segundos (15 minutos)
-        cache.set('dashboard_faturamento', faturamento_formatado, 900)
+        cache.set(cache_fat_key, faturamento_formatado, 900)
 
     # =========================================================
     # 2. MÉTRICAS DO SITE E STATUS ERP (CACHE: 5 MINUTOS)
     # =========================================================
-    metricas = cache.get('dashboard_metricas')
-    
+    cache_met_key = f'dashboard_metricas_{empresa_key}'
+    metricas = cache.get(cache_met_key)
+
     if not metricas:
+        pedidos_qs = por_empresa(Pedido.objects.all(), request)
+        erp_qs = por_empresa(StatusPedidoERP.objects.all(), request)
         metricas = {
-            'total_clientes': WfClient.objects.count(),
-            'total_pedidos': Pedido.objects.count(),
-            
-            # (Mantidos por segurança caso você use no futuro)
-            'pendentes': Pedido.objects.filter(status='PENDENTE').count(),
-            'concluidos': Pedido.objects.filter(status='FINALIZADO').count(),
-            'orcamento': Pedido.objects.filter(status='ORCAMENTO').count(),
-            'adc': Pedido.objects.filter(status='FINANCEIRO').count(),
-            'separacao': Pedido.objects.filter(status='SEPARACAO').count(),
-            'expedicao': Pedido.objects.filter(status='EXPEDICAO').count(),
-            'atrasados': Pedido.objects.filter(status='ATRASADO').count(),
-            
-            # --- NOVAS MÉTRICAS: STATUS DO ERP ---
-            # ATENÇÃO: Se o nome do seu modelo não for StatusPedidoERP, troque aqui abaixo:
-            'erp_total': StatusPedidoERP.objects.count(),
-            'erp_credito': StatusPedidoERP.objects.filter(situacao__icontains='Crédito').count(),
-            'erp_preco': StatusPedidoERP.objects.filter(situacao__icontains='Preço').count(),
-            'erp_separacao': StatusPedidoERP.objects.filter(Q(situacao__icontains='Separação') | Q(situacao__icontains='Bloqueado')).count(),
-            'erp_faturados': StatusPedidoERP.objects.filter(situacao__icontains='Faturado').count(),
-            'erp_expedidos': StatusPedidoERP.objects.filter(expedido=True).count(),
+            'total_clientes': por_empresa(WfClient.objects.all(), request).count(),
+            'total_pedidos': pedidos_qs.count(),
+            'pendentes': pedidos_qs.filter(status='PENDENTE').count(),
+            'concluidos': pedidos_qs.filter(status='FINALIZADO').count(),
+            'orcamento': pedidos_qs.filter(status='ORCAMENTO').count(),
+            'adc': pedidos_qs.filter(status='FINANCEIRO').count(),
+            'separacao': pedidos_qs.filter(status='SEPARACAO').count(),
+            'expedicao': pedidos_qs.filter(status='EXPEDICAO').count(),
+            'atrasados': pedidos_qs.filter(status='ATRASADO').count(),
+            'erp_total': erp_qs.count(),
+            'erp_credito': erp_qs.filter(situacao__icontains='Crédito').count(),
+            'erp_preco': erp_qs.filter(situacao__icontains='Preço').count(),
+            'erp_separacao': erp_qs.filter(Q(situacao__icontains='Separação') | Q(situacao__icontains='Bloqueado')).count(),
+            'erp_faturados': erp_qs.filter(situacao__icontains='Faturado').count(),
+            'erp_expedidos': erp_qs.filter(expedido=True).count(),
         }
-        # Salva na memória por 300 segundos (5 minutos)
-        cache.set('dashboard_metricas', metricas, 300)
+        cache.set(cache_met_key, metricas, 300)
     
     # =========================================================
     # 3. FILTRAGEM DE PEDIDOS (SEM CACHE - TEMPO REAL)
     # =========================================================
     if filtro == 'sincronizados':
         status_erp = ['SEPARACAO', 'EXPEDICAO', 'FINALIZADO']
-        pedidos_qs = Pedido.objects.filter(
-            status__in=status_erp, 
+        pedidos_qs = por_empresa(Pedido.objects.filter(
+            status__in=status_erp,
             data_criacao__date=hoje
-        ).order_by('-data_criacao')[:20]
+        ), request).order_by('-data_criacao')[:20]
     else:
-        pedidos_qs = Pedido.objects.all().order_by('-data_criacao')[:5]
+        pedidos_qs = por_empresa(Pedido.objects.all(), request).order_by('-data_criacao')[:5]
     
     pedidos_com_total = []
     for pedido in pedidos_qs:
@@ -889,10 +909,12 @@ def dashboard_admin(request):
     # Usamos "is None" porque a lista de cache pode estar propositalmente vazia []
     if oportunidades_wishlist_cache is None:
         data_limite = hoje - timedelta(days=30)
-        itens_pendentes = ItemPedidoIgnorado.objects.filter(
-            notificado=False, 
-            motivo_erro__icontains="estoque",
-            data_tentativa__gte=data_limite
+        itens_pendentes = por_empresa(
+            ItemPedidoIgnorado.objects.filter(
+                notificado=False,
+                motivo_erro__icontains="estoque",
+                data_tentativa__gte=data_limite
+            ), request, campo='cliente__empresa'
         ).select_related('cliente', 'cliente__client_state')
 
         oportunidades_wishlist = {}
@@ -1045,7 +1067,7 @@ def exportar_detalhes_pedido_excel(request, pedido_id):
 @staff_member_required
 def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     try:
-        pedido = get_object_or_404(Pedido, id=pedido_id)
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
         cliente = pedido.cliente 
         uf_cliente = cliente.client_state.uf_name
     except Pedido.DoesNotExist:
@@ -1187,7 +1209,7 @@ def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
 
 @staff_member_required
 def todos_os_pedidos(request):
-    pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
+    pedidos_qs = por_empresa(Pedido.objects.all(), request).order_by('-data_criacao')
 
     paginator = Paginator(pedidos_qs, 20)
     page_number = request.GET.get('page', 1)
@@ -1262,7 +1284,7 @@ def todos_os_pedidos(request):
 @staff_member_required
 def atualizar_status_pedido(request, pedido_id):
     if request.method == 'POST':
-        pedido = get_object_or_404(Pedido, id=pedido_id)
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
         novo_status = request.POST.get('status')
         # CORREÇÃO AQUI: Atualize a lista de status permitidos
         if novo_status in ['PENDENTE', 'ORCAMENTO', 'FINANCEIRO', 'SEPARACAO', 'EXPEDICAO', 'FINALIZADO', 'CANCELADO']:
@@ -1493,6 +1515,7 @@ def processar_upload(request):
                             product_value_sp=preco_sp_novo,
                             product_value_es=preco_es_novo,
                             status_estoque=estoque,
+                            empresa=request.empresa,
                         ))
 
                     produtos_para_atualizar.append(obj)
@@ -1508,7 +1531,8 @@ def processar_upload(request):
                         product_value_es=val_es if val_es is not None else 0,
                         status='PENDENTE',
                         status_estoque=estoque,
-                        date_product=hoje
+                        date_product=hoje,
+                        empresa=request.empresa,
                     ))
                     # Registra histórico do primeiro preço
                     historico_para_criar.append(HistoricoPreco(
@@ -1517,6 +1541,7 @@ def processar_upload(request):
                         product_value_sp=Decimal(str(val_sp)) if val_sp else None,
                         product_value_es=Decimal(str(val_es)) if val_es else None,
                         status_estoque=estoque,
+                        empresa=request.empresa,
                     ))
 
             # 6. Gravação Atômica e em Massa
@@ -1647,7 +1672,7 @@ def atualizar_rascunho(request):
 @staff_member_required
 def detalhes_pedido_admin(request, pedido_id):
     try:
-        pedido = get_object_or_404(Pedido, id=pedido_id) 
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
         
         estado_cliente = pedido.cliente.client_state.uf_name
         preco_exibido = 'sp' if estado_cliente == 'SP' else 'es'
@@ -1708,18 +1733,16 @@ def pedidos_para_hoje(request):
     hoje = timezone.localdate()
 
     # --- Consulta 1: Pedidos agendados para HOJE que ainda precisam de ação ---
-    pedidos_hoje = Pedido.objects.filter(
+    pedidos_hoje = por_empresa(Pedido.objects.filter(
         data_envio_solicitada=hoje
-    ).exclude(
-        status__in=['FINALIZADO', 'CANCELADO'] # Exclui os que já foram concluídos
-    )
+    ), request).exclude(status__in=['FINALIZADO', 'CANCELADO'])
 
     # --- Consulta 2: Pedidos ATRASADOS que ainda precisam de ação ---
-    pedidos_atrasados = Pedido.objects.filter(
-        data_envio_solicitada__lt=hoje  # __lt = 'less than' (data anterior a hoje)
-    ).exclude(
-        status__in=['FINALIZADO', 'CANCELADO'] # Exclui os que já foram concluídos
-    ).order_by('data_envio_solicitada') # Mostra os mais antigos primeiro
+    pedidos_atrasados = por_empresa(Pedido.objects.filter(
+        data_envio_solicitada__lt=hoje
+    ), request).exclude(
+        status__in=['FINALIZADO', 'CANCELADO']
+    ).order_by('data_envio_solicitada')
 
     # Monta o contexto com as duas listas de pedidos
     context = {
@@ -1744,6 +1767,7 @@ def gerar_pedido_manual(request):
     cliente_selecionado = None
     # Usamos request.GET para manter o estado do formulário de seleção de cliente
     form_cliente = SelectClientForm(request.GET or None)
+    form_cliente.fields['cliente'].queryset = por_empresa(WfClient.objects.all(), request).order_by('client_name')
     product_list = []
     query_params = request.GET.copy()
     preco_exibido = 'todos'
@@ -1760,7 +1784,7 @@ def gerar_pedido_manual(request):
     if form_cliente.is_valid() and form_cliente.cleaned_data.get('cliente'):
         cliente_selecionado = form_cliente.cleaned_data['cliente']
     elif cliente_id_get:
-        cliente_selecionado = get_object_or_404(WfClient, pk=cliente_id_get)
+        cliente_selecionado = get_empresa_or_404(WfClient, request, pk=cliente_id_get)
         # Atualiza o form para mostrar o cliente correto no select
         form_cliente = SelectClientForm(initial={'cliente': cliente_selecionado})
 
@@ -1862,7 +1886,7 @@ def processar_pedido_manual(request):
                 return redirect('gerar_pedido_manual')
 
         try:
-            cliente_selecionado = get_object_or_404(WfClient, client_id=cliente_id)
+            cliente_selecionado = get_empresa_or_404(WfClient, request, client_id=cliente_id)
             data_envio = datetime.strptime(data_envio, '%Y-%m-%d').date()
             cart_data = json.loads(cart_data_json)
 
@@ -1960,9 +1984,9 @@ def upload_pedido(request):
     salva os itens válidos em ItemPedido e os itens com falha em ItemPedidoIgnorado.
     Ignora linhas de somatório (TOTAL, SUBTOTAL) silenciosamente.
     """
-    clientes_ordenados = WfClient.objects.all().order_by('client_code')
     cliente_selecionado = None
     form_cliente = SelectClientForm(request.GET or None)
+    form_cliente.fields['cliente'].queryset = por_empresa(WfClient.objects.all(), request).order_by('client_code')
     initial_data = {}
     upload_form = None
 
@@ -1983,7 +2007,7 @@ def upload_pedido(request):
             messages.error(request, 'Por favor, selecione um cliente.')
             return redirect('upload_pedido')
 
-        cliente_para_validacao = get_object_or_404(WfClient, pk=cliente_id_post)
+        cliente_para_validacao = get_empresa_or_404(WfClient, request, pk=cliente_id_post)
         
         form = UploadPedidoForm(request.POST, request.FILES)
         enderecos_do_cliente = Endereco.objects.filter(cliente=cliente_para_validacao)
@@ -2204,7 +2228,6 @@ def upload_pedido(request):
 
     context = {
         'form_cliente': form_cliente,
-        'clientes_ordenados': clientes_ordenados,
         'cliente_selecionado': cliente_selecionado,
         'upload_form': upload_form,
     }
@@ -2218,9 +2241,9 @@ def pedidos_em_andamento(request):
     Exibe uma lista de pedidos com o status 'ORCAMENTO' (rascunhos)
     para que o administrador possa visualizá-los e continuar a edição.
     """
-    pedidos_rascunho = Pedido.objects.filter(
+    pedidos_rascunho = por_empresa(Pedido.objects.filter(
         status='RASCUNHO'
-    ).order_by('-data_criacao')
+    ), request).order_by('-data_criacao')
     
     context = {
         'titulo': 'Pedidos em Andamento (Rascunhos)',
@@ -2240,7 +2263,7 @@ def pedidos_em_andamento(request):
 @staff_member_required
 def continuar_pedido(request, pedido_id):
     try:
-        pedido = get_object_or_404(Pedido, id=pedido_id, status='RASCUNHO')
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id, status='RASCUNHO')
     except Pedido.DoesNotExist:
         messages.error(request, 'O pedido especificado não é um rascunho válido.')
         return redirect('pedidos_em_andamento')
@@ -2277,7 +2300,7 @@ def continuar_pedido(request, pedido_id):
 @staff_member_required
 def upload_orcamento_pdf(request, pedido_id):
     if request.method == 'POST':
-        pedido = get_object_or_404(Pedido, id=pedido_id)
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
         orcamento_file = request.FILES.get('orcamento_pdf_file')
 
         if orcamento_file:
@@ -2421,7 +2444,7 @@ def encurtar_url(long_url):
 
 @staff_member_required
 def enviar_whatsapp(request, pedido_id):
-    pedido = get_object_or_404(Pedido, id=pedido_id)
+    pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
 
     # Construir o link de download público da planilha
     link_download_excel = request.build_absolute_uri(
@@ -2529,7 +2552,7 @@ def enviar_whatsapp(request, pedido_id):
 
 @staff_member_required
 def enviar_whatsapp(request, pedido_id):
-    pedido = get_object_or_404(Pedido, id=pedido_id)
+    pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
 
     # 1. Link para a nova planilha simplificada (Cód, Qtd, Preço)
     link_download_excel = request.build_absolute_uri(
@@ -2597,7 +2620,7 @@ def marcar_pedido_finalizado(request, pedido_id):
     # Apenas aceita requisições POST por segurança
     if request.method == 'POST':
         # Pega o pedido ou retorna um erro 404 se não existir
-        pedido = get_object_or_404(Pedido, id=pedido_id)
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
         
         # Altera o status para 'FINALIZADO'
         pedido.status = 'FINALIZADO'
@@ -3073,13 +3096,14 @@ def upload_vendas_reais(request):
                     Emissao=row['Emissão_dt'].date(),
                     Codigo_Cliente=int(float(row['Código_Cliente'])),
                     # Limpa formato float caso o Excel tenha mandado o Pedido como número
-                    Pedido=str(row['Pedido']).replace('.0', ''), 
+                    Pedido=str(row['Pedido']).replace('.0', ''),
                     Produto_Codigo=str(row['Produto_Código']).replace('.0', ''),
                     cliente_nome=nome_cliente,
                     Produto_Descricao=str(row['Produto_Descrição']),
                     Quantidade=int(row['Quantidade']),
                     Unitario=Decimal(str(row['Unitário'])),
                     Total=Decimal(str(row['Total'])),
+                    empresa=request.empresa,
                 )
                 novas_vendas.append(venda)
 
@@ -3117,7 +3141,7 @@ def listar_vendas_reais(request):
     filtro_mes = request.GET.get('mes', '').strip()
     filtro_ano = request.GET.get('ano', '').strip()
 
-    vendas_qs = VendaReal.objects.all().order_by('-Emissao', '-Pedido')
+    vendas_qs = por_empresa(VendaReal.objects.all(), request).order_by('-Emissao', '-Pedido')
 
     # 2. Aplica Filtros Dinâmicos
     if filtro_pedido:
@@ -3342,7 +3366,7 @@ def upload_status_pdf(request):
         
         try:
             # Chama o serviço que faz todo o processamento de texto e banco
-            qtd_processados = processar_status_pdf(pdf_file)
+            qtd_processados = processar_status_pdf(pdf_file, empresa=request.empresa)
             
             messages.success(request, f"Sucesso! {qtd_processados} pedidos processados.")
             return redirect('dashboard_admin')
@@ -3357,7 +3381,7 @@ def upload_status_pdf(request):
 @staff_member_required
 def listar_status_erp(request):
     # 1. Busca todos os registros
-    status_qs = StatusPedidoERP.objects.all().order_by('-emissao', '-id')
+    status_qs = por_empresa(StatusPedidoERP.objects.all(), request).order_by('-emissao', '-id')
     
     # 2. Filtro de busca por número do pedido
     numero_pedido = request.GET.get('numero_pedido')
@@ -3464,7 +3488,7 @@ def exportar_status_erp_excel(request):
 
 @staff_member_required
 def notificar_wishlist_whatsapp(request, cliente_id):
-    cliente = get_object_or_404(WfClient, client_id=cliente_id)
+    cliente = get_empresa_or_404(WfClient, request, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
     itens_pendentes = ItemPedidoIgnorado.objects.filter(
@@ -3556,10 +3580,10 @@ def avisar_quando_disponivel(request):
 def novidades(request):
     limite = timezone.now() - timedelta(days=15)
 
-    produtos = Product.objects.filter(
+    produtos = por_empresa(Product.objects.filter(
         criado_em__gte=limite,
         status_estoque='DISPONIVEL'
-    ).order_by('-criado_em')
+    ), request).order_by('-criado_em')
 
     # Filtra pelo estado do cliente se não for staff
     preco_exibido = 'todos'
@@ -3765,7 +3789,7 @@ def historico_precos(request):
     filtro_codigo = request.GET.get('codigo', '').strip()
     filtro_descricao = request.GET.get('descricao', '').strip()
 
-    historico = HistoricoPreco.objects.all()
+    historico = por_empresa(HistoricoPreco.objects.all(), request)
 
     if filtro_codigo:
         historico = historico.filter(product_code__icontains=filtro_codigo)
@@ -3788,9 +3812,9 @@ def historico_wishlist(request):
     Exibe o histórico de lotes de reposição notificados aos clientes.
     """
     # Agrupa os itens arquivados pelo Lote e pelo Cliente
-    lotes_arquivados = ItemPedidoIgnorado.objects.filter(
-        notificado=True,
-        motivo_erro__icontains="estoque"
+    lotes_arquivados = por_empresa(
+        ItemPedidoIgnorado.objects.filter(notificado=True, motivo_erro__icontains="estoque"),
+        request, campo='cliente__empresa'
     ).values(
         'lote_notificacao',
         'cliente__client_id',
@@ -3819,7 +3843,7 @@ def historico_wishlist(request):
 
 @staff_member_required
 def reenviar_notificacao_whatsapp(request, cliente_id):
-    cliente = get_object_or_404(WfClient, client_id=cliente_id)
+    cliente = get_empresa_or_404(WfClient, request, client_id=cliente_id)
     estado = cliente.client_state.uf_name
     
     # 1. Pega o parâmetro do lote da URL (enviado pelo botão do painel)
@@ -3904,19 +3928,19 @@ def sugestoes_admin(request):
             'filtro_cliente': '',
         })
 
-    sugestoes_qs = SugestaoCompraERP.objects.select_related(
+    sugestoes_qs = por_empresa(SugestaoCompraERP.objects.select_related(
         'cliente', 'cliente__client_state'
     ).filter(
         Q(cliente__client_name__icontains=filtro_cliente) |
         Q(cliente__client_code__icontains=filtro_cliente)
-    ).order_by('cliente__client_name', '-giro_diario')
+    ), request, campo='cliente__empresa').order_by('cliente__client_name', '-giro_diario')
 
     # Se não há sugestões calculadas, tenta calcular para os clientes encontrados
     if not sugestoes_qs.exists():
-        clientes_encontrados = WfClient.objects.filter(
+        clientes_encontrados = por_empresa(WfClient.objects.filter(
             Q(client_name__icontains=filtro_cliente) |
             Q(client_code__icontains=filtro_cliente)
-        )
+        ), request)
         for cliente in clientes_encontrados:
             processar_giro_cliente(cliente.client_code)
         # Re-executa a query após calcular
@@ -4054,3 +4078,347 @@ def adicionar_sugestoes_ao_carrinho(request):
         return redirect('carrinho') 
 
     return redirect('sugestoes_inteligentes_erp')
+
+# ==========================================
+# SAAS — CADASTRO DE EMPRESA
+# ==========================================
+
+@login_required
+def cadastrar_empresa(request):
+    if not request.user.is_superuser:
+        return redirect('home')
+
+    if request.method == 'POST':
+        form = CadastroEmpresaForm(request.POST)
+        if form.is_valid():
+            d = form.cleaned_data
+
+            # Cria a empresa
+            empresa = Empresa.objects.create(
+                nome=d['nome'],
+                slug=d['slug'],
+                plano=d['plano'],
+                email_contato=d['email_contato'],
+                telefone=d['telefone'],
+            )
+
+            # Cria o usuário administrador da empresa
+            usuario = User.objects.create_user(
+                username=d['username'],
+                email=d['email_usuario'],
+                password=d['senha'],
+                is_staff=True,
+            )
+
+            # Liga o usuário à empresa
+            PerfilUsuario.objects.create(
+                user=usuario,
+                empresa=empresa,
+                papel='ADMIN',
+            )
+
+            messages.success(request, f'Empresa "{empresa.nome}" criada com sucesso!')
+            return redirect('listar_empresas')
+    else:
+        form = CadastroEmpresaForm()
+
+    return render(request, 'saas/cadastrar_empresa.html', {'form': form, 'titulo': 'Nova Empresa'})
+
+
+@login_required
+def listar_empresas(request):
+    if not request.user.is_superuser:
+        return redirect('home')
+
+    empresas = Empresa.objects.prefetch_related('membros__user').order_by('nome')
+    return render(request, 'saas/listar_empresas.html', {'empresas': empresas, 'titulo': 'Empresas Cadastradas'})
+
+
+@login_required
+def detalhe_empresa(request, empresa_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+
+    if request.method == 'POST' and request.POST.get('action') == 'editar':
+        nome = request.POST.get('nome', '').strip()
+        plano = request.POST.get('plano', 'FREE')
+        email_contato = request.POST.get('email_contato', '').strip() or None
+        telefone = request.POST.get('telefone', '').strip() or None
+
+        if nome:
+            empresa.nome = nome
+            empresa.plano = plano
+            empresa.email_contato = email_contato
+            empresa.telefone = telefone
+            empresa.save(update_fields=['nome', 'plano', 'email_contato', 'telefone'])
+            messages.success(request, 'Empresa atualizada.')
+
+        return redirect('detalhe_empresa', empresa_id=empresa.id)
+
+    membros = empresa.membros.select_related('user').order_by('papel', 'user__username')
+    clientes_count = WfClient.objects.filter(empresa=empresa).count()
+    produtos_count = Product.objects.filter(empresa=empresa).count()
+    pedidos_count = Pedido.objects.filter(empresa=empresa).count()
+    vendas_count = VendaReal.objects.filter(empresa=empresa).count()
+
+    ctx = {
+        'empresa': empresa,
+        'membros': membros,
+        'clientes_count': clientes_count,
+        'produtos_count': produtos_count,
+        'pedidos_count': pedidos_count,
+        'vendas_count': vendas_count,
+        'plano_choices': Empresa.PLANO_CHOICES,
+    }
+    return render(request, 'saas/detalhe_empresa.html', ctx)
+
+
+@login_required
+def toggle_empresa_ativo(request, empresa_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+    if request.method == 'POST':
+        empresa = get_object_or_404(Empresa, id=empresa_id)
+        empresa.ativo = not empresa.ativo
+        empresa.save(update_fields=['ativo'])
+        status = 'ativada' if empresa.ativo else 'desativada'
+        messages.success(request, f'Empresa "{empresa.nome}" {status}.')
+    return redirect('detalhe_empresa', empresa_id=empresa_id)
+
+
+@login_required
+def adicionar_membro_empresa(request, empresa_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+    if request.method != 'POST':
+        return redirect('detalhe_empresa', empresa_id=empresa_id)
+
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    username = request.POST.get('username', '').strip()
+    email = request.POST.get('email', '').strip()
+    senha = request.POST.get('senha', '').strip()
+    papel = request.POST.get('papel', 'VENDEDOR')
+
+    if not username:
+        messages.error(request, 'Username obrigatório.')
+        return redirect('detalhe_empresa', empresa_id=empresa_id)
+
+    # Tenta encontrar usuário existente; se não, cria
+    usuario = User.objects.filter(username=username).first()
+    if usuario:
+        # Verifica se já tem perfil em outra empresa
+        if hasattr(usuario, 'perfil') and usuario.perfil.empresa != empresa:
+            messages.error(request, f'Usuário "{username}" já pertence a outra empresa.')
+            return redirect('detalhe_empresa', empresa_id=empresa_id)
+        if hasattr(usuario, 'perfil'):
+            messages.warning(request, f'Usuário "{username}" já é membro desta empresa.')
+            return redirect('detalhe_empresa', empresa_id=empresa_id)
+    else:
+        if not senha or not email:
+            messages.error(request, 'E-mail e senha obrigatórios para criar novo usuário.')
+            return redirect('detalhe_empresa', empresa_id=empresa_id)
+        usuario = User.objects.create_user(
+            username=username,
+            email=email,
+            password=senha,
+            is_staff=True,
+        )
+
+    PerfilUsuario.objects.create(user=usuario, empresa=empresa, papel=papel)
+    messages.success(request, f'Usuário "{username}" adicionado como {papel}.')
+    return redirect('detalhe_empresa', empresa_id=empresa_id)
+
+
+@login_required
+def remover_membro_empresa(request, empresa_id, membro_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+    if request.method == 'POST':
+        membro = get_object_or_404(PerfilUsuario, id=membro_id, empresa_id=empresa_id)
+        username = membro.user.username
+        membro.delete()
+        messages.success(request, f'Membro "{username}" removido.')
+    return redirect('detalhe_empresa', empresa_id=empresa_id)
+
+
+# ==============================================================================
+# GESTÃO DE CLIENTES
+# ==============================================================================
+
+@staff_member_required
+def listar_clientes(request):
+    busca = request.GET.get('q', '').strip()
+    clientes_qs = por_empresa(WfClient.objects.select_related('client_state'), request).order_by('client_name')
+
+    if busca:
+        clientes_qs = clientes_qs.filter(
+            Q(client_name__icontains=busca) |
+            Q(client_code__icontains=busca) |
+            Q(client_cnpj__icontains=busca) |
+            Q(client_city__icontains=busca)
+        )
+
+    paginator = Paginator(clientes_qs, 25)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'clientes/listar_clientes.html', {
+        'page_obj': page_obj,
+        'busca': busca,
+    })
+
+
+@staff_member_required
+def cadastrar_cliente(request):
+    from .models import wefixhub_uf
+    ufs = wefixhub_uf.objects.all().order_by('uf_name')
+
+    if request.method == 'POST':
+        erros = {}
+
+        client_code = request.POST.get('client_code', '').strip()
+        client_name = request.POST.get('client_name', '').strip()
+        client_cnpj = request.POST.get('client_cnpj', '').strip()
+        client_adress = request.POST.get('client_adress', '').strip()
+        client_city = request.POST.get('client_city', '').strip()
+        client_state_id = request.POST.get('client_state', '')
+        client_state_subscription = request.POST.get('client_state_subscription', '').strip()
+        client_is_active = request.POST.get('client_is_active') == 'on'
+        frete_preferencia = request.POST.get('frete_preferencia', 'CORREIOS')
+        nota_fiscal_preferencia = request.POST.get('nota_fiscal_preferencia', 'SEM')
+        observacao_preferencia = request.POST.get('observacao_preferencia', '').strip()
+
+        # Criar login de acesso ao portal (opcional)
+        criar_login = request.POST.get('criar_login') == 'on'
+        username = request.POST.get('username', '').strip()
+        email_login = request.POST.get('email_login', '').strip()
+        senha_login = request.POST.get('senha_login', '').strip()
+
+        if not client_code:
+            erros['client_code'] = 'Código obrigatório.'
+        elif WfClient.objects.filter(empresa=request.empresa, client_code=client_code).exists():
+            erros['client_code'] = 'Código já cadastrado nesta empresa.'
+
+        if not client_name:
+            erros['client_name'] = 'Nome obrigatório.'
+
+        if not client_cnpj:
+            erros['client_cnpj'] = 'CNPJ obrigatório.'
+        elif WfClient.objects.filter(empresa=request.empresa, client_cnpj=client_cnpj).exists():
+            erros['client_cnpj'] = 'CNPJ já cadastrado nesta empresa.'
+
+        if not client_state_id:
+            erros['client_state'] = 'Estado obrigatório.'
+
+        if criar_login:
+            if not username:
+                erros['username'] = 'Username obrigatório para login.'
+            elif User.objects.filter(username=username).exists():
+                erros['username'] = 'Username já existe.'
+            if not senha_login:
+                erros['senha_login'] = 'Senha obrigatória.'
+
+        if erros:
+            return render(request, 'clientes/cadastrar_cliente.html', {
+                'ufs': ufs, 'erros': erros, 'post': request.POST,
+                'frete_choices': WfClient.FRETE_CHOICES,
+                'nf_choices': WfClient.NOTA_FISCAL_CHOICES,
+            })
+
+        uf = get_object_or_404(wefixhub_uf, pk=client_state_id)
+
+        usuario = None
+        if criar_login:
+            usuario = User.objects.create_user(username=username, email=email_login, password=senha_login)
+
+        WfClient.objects.create(
+            empresa=request.empresa,
+            user=usuario,
+            client_code=int(client_code),
+            client_name=client_name,
+            client_cnpj=client_cnpj,
+            client_adress=client_adress,
+            client_city=client_city,
+            client_state=uf,
+            client_state_subscription=client_state_subscription or None,
+            client_is_active=client_is_active,
+            frete_preferencia=frete_preferencia,
+            nota_fiscal_preferencia=nota_fiscal_preferencia,
+            observacao_preferencia=observacao_preferencia or None,
+        )
+
+        messages.success(request, f'Cliente "{client_name}" cadastrado com sucesso!')
+        return redirect('listar_clientes')
+
+    return render(request, 'clientes/cadastrar_cliente.html', {
+        'ufs': ufs,
+        'erros': {},
+        'post': {},
+        'frete_choices': WfClient.FRETE_CHOICES,
+        'nf_choices': WfClient.NOTA_FISCAL_CHOICES,
+    })
+
+
+@staff_member_required
+def editar_cliente(request, client_id):
+    from .models import wefixhub_uf
+    cliente = get_empresa_or_404(WfClient, request, client_id=client_id)
+    ufs = wefixhub_uf.objects.all().order_by('uf_name')
+
+    if request.method == 'POST':
+        erros = {}
+
+        client_name = request.POST.get('client_name', '').strip()
+        client_cnpj = request.POST.get('client_cnpj', '').strip()
+        client_adress = request.POST.get('client_adress', '').strip()
+        client_city = request.POST.get('client_city', '').strip()
+        client_state_id = request.POST.get('client_state', '')
+        client_state_subscription = request.POST.get('client_state_subscription', '').strip()
+        client_is_active = request.POST.get('client_is_active') == 'on'
+        frete_preferencia = request.POST.get('frete_preferencia', 'CORREIOS')
+        nota_fiscal_preferencia = request.POST.get('nota_fiscal_preferencia', 'SEM')
+        observacao_preferencia = request.POST.get('observacao_preferencia', '').strip()
+
+        if not client_name:
+            erros['client_name'] = 'Nome obrigatório.'
+
+        if not client_cnpj:
+            erros['client_cnpj'] = 'CNPJ obrigatório.'
+        elif WfClient.objects.filter(empresa=request.empresa, client_cnpj=client_cnpj).exclude(client_id=cliente.client_id).exists():
+            erros['client_cnpj'] = 'CNPJ já cadastrado em outro cliente desta empresa.'
+
+        if not client_state_id:
+            erros['client_state'] = 'Estado obrigatório.'
+
+        if erros:
+            return render(request, 'clientes/editar_cliente.html', {
+                'cliente': cliente, 'ufs': ufs, 'erros': erros,
+                'frete_choices': WfClient.FRETE_CHOICES,
+                'nf_choices': WfClient.NOTA_FISCAL_CHOICES,
+            })
+
+        uf = get_object_or_404(wefixhub_uf, pk=client_state_id)
+
+        cliente.client_name = client_name
+        cliente.client_cnpj = client_cnpj
+        cliente.client_adress = client_adress
+        cliente.client_city = client_city
+        cliente.client_state = uf
+        cliente.client_state_subscription = client_state_subscription or None
+        cliente.client_is_active = client_is_active
+        cliente.frete_preferencia = frete_preferencia
+        cliente.nota_fiscal_preferencia = nota_fiscal_preferencia
+        cliente.observacao_preferencia = observacao_preferencia or None
+        cliente.save()
+
+        messages.success(request, f'Cliente "{cliente.client_name}" atualizado.')
+        return redirect('listar_clientes')
+
+    return render(request, 'clientes/editar_cliente.html', {
+        'cliente': cliente,
+        'ufs': ufs,
+        'erros': {},
+        'frete_choices': WfClient.FRETE_CHOICES,
+        'nf_choices': WfClient.NOTA_FISCAL_CHOICES,
+    })

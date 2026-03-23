@@ -1,5 +1,6 @@
 from django import forms
-from .models import Endereco, WfClient, wefixhub_uf, Pedido
+from django.contrib.auth.models import User
+from .models import Endereco, WfClient, wefixhub_uf, Pedido, Empresa
 
 class WfClientForm(forms.ModelForm):
     class Meta:
@@ -27,6 +28,41 @@ class GerarPedidoForm(forms.Form):
         required=False
 
     )
+
+class CadastroEmpresaForm(forms.Form):
+    # Dados da empresa
+    nome = forms.CharField(max_length=128, label='Nome da Empresa')
+    slug = forms.SlugField(max_length=64, label='Identificador único (ex: wefix-sp)', help_text='Só letras minúsculas, números e hífens. Sem espaços.')
+    plano = forms.ChoiceField(choices=Empresa.PLANO_CHOICES, label='Plano')
+    email_contato = forms.EmailField(label='E-mail de contato', required=False)
+    telefone = forms.CharField(max_length=20, label='Telefone', required=False)
+
+    # Dados do usuário administrador
+    username = forms.CharField(max_length=150, label='Usuário (login)')
+    email_usuario = forms.EmailField(label='E-mail do administrador')
+    senha = forms.CharField(widget=forms.PasswordInput, label='Senha')
+    confirmar_senha = forms.CharField(widget=forms.PasswordInput, label='Confirmar senha')
+
+    def clean_slug(self):
+        slug = self.cleaned_data['slug']
+        if Empresa.objects.filter(slug=slug).exists():
+            raise forms.ValidationError('Este identificador já está em uso.')
+        return slug
+
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        if User.objects.filter(username=username).exists():
+            raise forms.ValidationError('Este nome de usuário já existe.')
+        return username
+
+    def clean(self):
+        cleaned_data = super().clean()
+        senha = cleaned_data.get('senha')
+        confirmar = cleaned_data.get('confirmar_senha')
+        if senha and confirmar and senha != confirmar:
+            self.add_error('confirmar_senha', 'As senhas não coincidem.')
+        return cleaned_data
+
 
 class SelectClientForm(forms.Form):
     cliente = forms.ModelChoiceField(

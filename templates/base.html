@@ -54,6 +54,14 @@
 
                         {% if user.is_staff %}
 
+                        <!-- CLIENTES -->
+                        <li class="nav-item">
+                            <a href="{% url 'listar_clientes' %}">
+                                <i class='bx bx-group nav-icon'></i>
+                                <span class="nav-label">Clientes</span>
+                            </a>
+                        </li>
+
                         <!-- GRUPO: PEDIDOS -->
                         <li class="nav-item nav-group" id="grp-pedidos">
                             <button class="nav-group-btn" onclick="toggleGroup('grp-pedidos')">
@@ -104,6 +112,21 @@
                                 <li><a href="{% url 'historico_wishlist' %}"><i class='bx bx-heart nav-icon'></i><span class="nav-label">Wishlist</span></a></li>
                             </ul>
                         </li>
+
+                        {% if user.is_superuser %}
+                        <!-- GRUPO: SAAS -->
+                        <li class="nav-item nav-group" id="grp-saas">
+                            <button class="nav-group-btn" onclick="toggleGroup('grp-saas')">
+                                <i class='bx bx-buildings nav-icon'></i>
+                                <span class="nav-label">SaaS</span>
+                                <i class='bx bx-chevron-down nav-chevron'></i>
+                            </button>
+                            <ul class="nav-group-items">
+                                <li><a href="{% url 'listar_empresas' %}"><i class='bx bx-building nav-icon'></i><span class="nav-label">Empresas</span></a></li>
+                                <li><a href="{% url 'cadastrar_empresa' %}"><i class='bx bx-plus-circle nav-icon'></i><span class="nav-label">Nova Empresa</span></a></li>
+                            </ul>
+                        </li>
+                        {% endif %}
 
                         {% else %}
                         <li class="nav-item">

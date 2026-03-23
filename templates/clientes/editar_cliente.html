@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Editar {{ cliente.client_name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">{{ cliente.client_name }}</h2>
+            <p class="text-muted mb-0">Código <code>{{ cliente.client_code }}</code></p>
+        </div>
+        <a href="{% url 'listar_clientes' %}" class="btn btn-outline-secondary">
+            <i class='bx bx-arrow-back me-1'></i> Voltar
+        </a>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold">Dados do Cliente</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" name="client_name" class="form-control {% if erros.client_name %}is-invalid{% endif %}" value="{{ cliente.client_name }}">
+                        {% if erros.client_name %}<div class="invalid-feedback">{{ erros.client_name }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Código</label>
+                        <input type="text" class="form-control" value="{{ cliente.client_code }}" disabled>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">CNPJ <span class="text-danger">*</span></label>
+                        <input type="text" name="client_cnpj" class="form-control {% if erros.client_cnpj %}is-invalid{% endif %}" value="{{ cliente.client_cnpj }}" maxlength="14">
+                        {% if erros.client_cnpj %}<div class="invalid-feedback">{{ erros.client_cnpj }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Inscrição Estadual</label>
+                        <input type="text" name="client_state_subscription" class="form-control" value="{{ cliente.client_state_subscription|default:'' }}">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Endereço</label>
+                        <input type="text" name="client_adress" class="form-control" value="{{ cliente.client_adress }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cidade</label>
+                        <input type="text" name="client_city" class="form-control" value="{{ cliente.client_city }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Estado (UF) <span class="text-danger">*</span></label>
+                        <select name="client_state" class="form-select {% if erros.client_state %}is-invalid{% endif %}">
+                            {% for uf in ufs %}
+                            <option value="{{ uf.uf_id }}" {% if cliente.client_state_id == uf.uf_id %}selected{% endif %}>{{ uf.uf_name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if erros.client_state %}<div class="invalid-feedback">{{ erros.client_state }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Frete padrão</label>
+                        <select name="frete_preferencia" class="form-select">
+                            {% for val, label in frete_choices %}
+                            <option value="{{ val }}" {% if cliente.frete_preferencia == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Nota Fiscal padrão</label>
+                        <select name="nota_fiscal_preferencia" class="form-select">
+                            {% for val, label in nf_choices %}
+                            <option value="{{ val }}" {% if cliente.nota_fiscal_preferencia == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Observação padrão</label>
+                        <textarea name="observacao_preferencia" class="form-control" rows="2">{{ cliente.observacao_preferencia|default:'' }}</textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="client_is_active" id="client_is_active" class="form-check-input" {% if cliente.client_is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="client_is_active">Cliente ativo</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if cliente.user %}
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold">Acesso ao Portal</div>
+            <div class="card-body">
+                <p class="mb-0">Login vinculado: <strong>{{ cliente.user.username }}</strong> — <small class="text-muted">{{ cliente.user.email }}</small></p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary px-4">
+                <i class='bx bx-save me-1'></i> Salvar alterações
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

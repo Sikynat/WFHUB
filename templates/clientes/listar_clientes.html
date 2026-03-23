@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Clientes{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Clientes</h2>
+            <p class="text-muted mb-0">{{ page_obj.paginator.count }} cliente{{ page_obj.paginator.count|pluralize }} cadastrado{{ page_obj.paginator.count|pluralize }}</p>
+        </div>
+        <a href="{% url 'cadastrar_cliente' %}" class="btn btn-primary">
+            <i class='bx bx-plus me-1'></i> Novo Cliente
+        </a>
+    </div>
+
+    <!-- Busca -->
+    <form method="get" class="mb-4">
+        <div class="input-group">
+            <input type="text" name="q" value="{{ busca }}" class="form-control" placeholder="Buscar por nome, código, CNPJ ou cidade...">
+            <button class="btn btn-outline-secondary" type="submit"><i class='bx bx-search'></i></button>
+            {% if busca %}
+            <a href="{% url 'listar_clientes' %}" class="btn btn-outline-danger">Limpar</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Código</th>
+                        <th>Nome</th>
+                        <th>CNPJ</th>
+                        <th>Cidade</th>
+                        <th>Estado</th>
+                        <th class="text-center">Ativo</th>
+                        <th class="text-center">Portal</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in page_obj %}
+                    <tr>
+                        <td class="ps-4"><code>{{ cliente.client_code }}</code></td>
+                        <td class="fw-bold">{{ cliente.client_name }}</td>
+                        <td><small class="text-muted">{{ cliente.client_cnpj }}</small></td>
+                        <td>{{ cliente.client_city }}</td>
+                        <td>{{ cliente.client_state }}</td>
+                        <td class="text-center">
+                            {% if cliente.client_is_active %}
+                                <span class="badge bg-success">Sim</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Não</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if cliente.user %}
+                                <span class="badge bg-primary">{{ cliente.user.username }}</span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3">
+                            <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-sm btn-outline-secondary">
+                                <i class='bx bx-edit'></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            {% if busca %}Nenhum cliente encontrado para "{{ busca }}".{% else %}Nenhum cliente cadastrado ainda.{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    {% if page_obj.has_other_pages %}
+    <nav class="mt-3">
+        <ul class="pagination justify-content-center mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?{% if busca %}q={{ busca }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?{% if busca %}q={{ busca }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

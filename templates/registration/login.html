@@ -25,6 +25,18 @@
                         </svg>
                     </div>
                 
+                    {% if request.GET.inativo %}
+                    <div class="alert alert-danger text-start mb-3" role="alert">
+                        <i class='bx bx-block me-1'></i> Sua conta está <strong>inativa</strong>. Entre em contato com o seu representante.
+                    </div>
+                    {% endif %}
+
+                    {% if form.errors %}
+                    <div class="alert alert-danger text-start mb-3" role="alert">
+                        Usuário ou senha inválidos.
+                    </div>
+                    {% endif %}
+
                     <form method="post" class="d-grid gap-3">
                         {% csrf_token %}
                         

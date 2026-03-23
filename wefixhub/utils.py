@@ -215,7 +215,7 @@ def gerar_excel_vendas_reais(filtro_pedido, filtro_produto, filtro_cliente, filt
 # 3. FUNÇÃO DE PROCESSAMENTO DE STATUS PDF
 # ====================================================================
 
-def processar_status_pdf(pdf_file):
+def processar_status_pdf(pdf_file, empresa=None):
     import re
     from datetime import datetime
     import pdfplumber
@@ -340,15 +340,15 @@ def processar_status_pdf(pdf_file):
         with transaction.atomic():
             for data in novos_status_preparados:
                 StatusPedidoERP.objects.filter(numero_pedido=data['numero_pedido']).delete()
-                StatusPedidoERP.objects.create(**data)
-                
+                StatusPedidoERP.objects.create(**data, empresa=empresa)
+
                 pedido_site = Pedido.objects.filter(id=data['numero_pedido']).first()
                 if pedido_site:
                     novo_status_interno = MAP_SINC_STATUS.get(data['situacao'])
                     if novo_status_interno:
                         pedido_site.status = novo_status_interno
                         pedido_site.save(update_fields=['status'])
-                        
+
     return len(novos_status_preparados)
 
 

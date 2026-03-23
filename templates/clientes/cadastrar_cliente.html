@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}Novo Cliente{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Novo Cliente</h2>
+            <p class="text-muted mb-0">Cadastre um novo cliente na sua empresa.</p>
+        </div>
+        <a href="{% url 'listar_clientes' %}" class="btn btn-outline-secondary">
+            <i class='bx bx-arrow-back me-1'></i> Voltar
+        </a>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <!-- Dados principais -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold">Dados do Cliente</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Código <span class="text-danger">*</span></label>
+                        <input type="number" name="client_code" class="form-control {% if erros.client_code %}is-invalid{% endif %}" value="{{ post.client_code|default:'' }}">
+                        {% if erros.client_code %}<div class="invalid-feedback">{{ erros.client_code }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" name="client_name" class="form-control {% if erros.client_name %}is-invalid{% endif %}" value="{{ post.client_name|default:'' }}">
+                        {% if erros.client_name %}<div class="invalid-feedback">{{ erros.client_name }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">CNPJ <span class="text-danger">*</span></label>
+                        <input type="text" name="client_cnpj" class="form-control {% if erros.client_cnpj %}is-invalid{% endif %}" value="{{ post.client_cnpj|default:'' }}" maxlength="14" placeholder="Somente números">
+                        {% if erros.client_cnpj %}<div class="invalid-feedback">{{ erros.client_cnpj }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Inscrição Estadual</label>
+                        <input type="text" name="client_state_subscription" class="form-control" value="{{ post.client_state_subscription|default:'' }}">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Endereço</label>
+                        <input type="text" name="client_adress" class="form-control" value="{{ post.client_adress|default:'' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cidade</label>
+                        <input type="text" name="client_city" class="form-control" value="{{ post.client_city|default:'' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Estado (UF) <span class="text-danger">*</span></label>
+                        <select name="client_state" class="form-select {% if erros.client_state %}is-invalid{% endif %}">
+                            <option value="">---</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf.uf_id }}" {% if post.client_state == uf.uf_id|stringformat:"s" %}selected{% endif %}>{{ uf.uf_name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if erros.client_state %}<div class="invalid-feedback">{{ erros.client_state }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Frete padrão</label>
+                        <select name="frete_preferencia" class="form-select">
+                            {% for val, label in frete_choices %}
+                            <option value="{{ val }}" {% if post.frete_preferencia == val or not post and val == 'CORREIOS' %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Nota Fiscal padrão</label>
+                        <select name="nota_fiscal_preferencia" class="form-select">
+                            {% for val, label in nf_choices %}
+                            <option value="{{ val }}" {% if post.nota_fiscal_preferencia == val or not post and val == 'SEM' %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Observação padrão</label>
+                        <textarea name="observacao_preferencia" class="form-control" rows="2">{{ post.observacao_preferencia|default:'' }}</textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="client_is_active" id="client_is_active" class="form-check-input" {% if post.client_is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="client_is_active">Cliente ativo</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acesso ao portal -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                Acesso ao Portal (opcional)
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="criar_login" id="criar_login" onchange="document.getElementById('login-fields').style.display=this.checked?'block':'none'" {% if post.criar_login %}checked{% endif %}>
+                    <label class="form-check-label" for="criar_login">Criar login</label>
+                </div>
+            </div>
+            <div class="card-body" id="login-fields" style="display:{% if post.criar_login %}block{% else %}none{% endif %};">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Username <span class="text-danger">*</span></label>
+                        <input type="text" name="username" class="form-control {% if erros.username %}is-invalid{% endif %}" value="{{ post.username|default:'' }}">
+                        {% if erros.username %}<div class="invalid-feedback">{{ erros.username }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">E-mail</label>
+                        <input type="email" name="email_login" class="form-control" value="{{ post.email_login|default:'' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Senha <span class="text-danger">*</span></label>
+                        <input type="password" name="senha_login" class="form-control {% if erros.senha_login %}is-invalid{% endif %}">
+                        {% if erros.senha_login %}<div class="invalid-feedback">{{ erros.senha_login }}</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary px-4">
+                <i class='bx bx-plus me-1'></i> Cadastrar Cliente
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
