@@ -1584,6 +1584,10 @@ def processar_upload(request):
                 if historico_para_criar:
                     HistoricoPreco.objects.bulk_create(historico_para_criar, batch_size=500)
             
+            # Invalida cache da home para esta empresa
+            empresa_key = request.empresa.slug if request.empresa else 'global'
+            cache.delete(f'home_products_{empresa_key}')
+
             messages.success(request, f'Processamento concluído: {len(produtos_para_criar)} novos e {len(produtos_para_atualizar)} atualizados.')
             return redirect('pagina_upload')
 
