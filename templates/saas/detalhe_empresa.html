@@ -14,6 +14,9 @@
             <a href="{% url 'listar_empresas' %}" class="btn btn-outline-secondary">
                 <i class='bx bx-arrow-back me-1'></i> Voltar
             </a>
+            <a href="{% url 'criar_checkout_stripe' empresa.id %}" class="btn btn-outline-success">
+                <i class='bx bx-credit-card me-1'></i> Assinar / Renovar
+            </a>
             <form method="post" action="{% url 'toggle_empresa_ativo' empresa.id %}">
                 {% csrf_token %}
                 {% if empresa.ativo %}

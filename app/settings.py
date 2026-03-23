@@ -206,3 +206,11 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 # else:
 #     MEDIA_URL = '/media/'
 #     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# ==============================================================================
+# STRIPE
+# ==============================================================================
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
+STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
+STRIPE_PRICE_BASICO = config('STRIPE_PRICE_BASICO', default='')

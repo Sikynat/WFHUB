@@ -11,6 +11,7 @@ from io import BytesIO
 from urllib.parse import quote
 
 # 2. Bibliotecas de Terceiros
+import stripe
 import pandas as pd
 import numpy as np
 import openpyxl
@@ -4596,3 +4597,120 @@ def saas_dashboard(request):
         'alertas_expirados': alertas_expirados,
         'plano_choices': Empresa.PLANO_CHOICES,
     })
+
+
+# ==============================================================================
+# STRIPE — CHECKOUT E WEBHOOK
+# ==============================================================================
+
+from django.conf import settings as django_settings
+from django.views.decorators.csrf import csrf_exempt
+
+def _get_stripe():
+    stripe.api_key = django_settings.STRIPE_SECRET_KEY
+    return stripe
+
+
+@login_required
+def criar_checkout_stripe(request, empresa_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    st = _get_stripe()
+
+    # Cria ou recupera o customer no Stripe
+    if not empresa.stripe_customer_id:
+        customer = st.Customer.create(
+            name=empresa.nome,
+            email=empresa.email_contato or '',
+            metadata={'empresa_id': empresa.id, 'slug': empresa.slug},
+        )
+        empresa.stripe_customer_id = customer.id
+        empresa.save(update_fields=['stripe_customer_id'])
+    
+    base_url = request.build_absolute_uri('/').rstrip('/')
+
+    session = st.checkout.Session.create(
+        customer=empresa.stripe_customer_id,
+        payment_method_types=['card'],
+        line_items=[{'price': django_settings.STRIPE_PRICE_BASICO, 'quantity': 1}],
+        mode='subscription',
+        success_url=f"{base_url}/saas/stripe/sucesso/?session_id={{CHECKOUT_SESSION_ID}}&empresa_id={empresa.id}",
+        cancel_url=f"{base_url}/saas/empresas/{empresa.id}/",
+        metadata={'empresa_id': empresa.id},
+    )
+
+    return redirect(session.url, permanent=False)
+
+
+@login_required
+def stripe_sucesso(request):
+    if not request.user.is_superuser:
+        return redirect('home')
+
+    session_id = request.GET.get('session_id')
+    empresa_id = request.GET.get('empresa_id')
+
+    if session_id and empresa_id:
+        st = _get_stripe()
+        try:
+            session = st.checkout.Session.retrieve(session_id, expand=['subscription'])
+            empresa = get_object_or_404(Empresa, id=empresa_id)
+            sub = session.subscription
+
+            empresa.stripe_subscription_id = sub.id
+            empresa.plano = 'BASICO'
+            empresa.ativo = True
+
+            # Define expira_em com base no período da assinatura
+            from datetime import date
+            import datetime
+            periodo_fim = sub.current_period_end
+            empresa.expira_em = date.fromtimestamp(periodo_fim)
+            empresa.save(update_fields=['stripe_subscription_id', 'plano', 'ativo', 'expira_em'])
+
+            messages.success(request, f'Assinatura ativada para "{empresa.nome}"!')
+        except Exception as e:
+            messages.error(request, f'Erro ao confirmar assinatura: {e}')
+
+    return redirect('saas_dashboard')
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+    webhook_secret = django_settings.STRIPE_WEBHOOK_SECRET
+
+    st = _get_stripe()
+
+    try:
+        event = st.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except Exception:
+        from django.http import HttpResponse
+        return HttpResponse(status=400)
+
+    from django.http import HttpResponse
+    data = event['data']['object']
+
+    if event['type'] == 'invoice.paid':
+        sub_id = data.get('subscription')
+        periodo_fim = data.get('lines', {}).get('data', [{}])[0].get('period', {}).get('end')
+        if sub_id:
+            empresa = Empresa.objects.filter(stripe_subscription_id=sub_id).first()
+            if empresa and periodo_fim:
+                from datetime import date
+                empresa.expira_em = date.fromtimestamp(periodo_fim)
+                empresa.ativo = True
+                empresa.save(update_fields=['expira_em', 'ativo'])
+
+    elif event['type'] in ('customer.subscription.deleted', 'invoice.payment_failed'):
+        sub_id = data.get('id') or data.get('subscription')
+        if sub_id:
+            empresa = Empresa.objects.filter(stripe_subscription_id=sub_id).first()
+            if empresa:
+                empresa.ativo = False
+                empresa.save(update_fields=['ativo'])
+
+    return HttpResponse(status=200)
