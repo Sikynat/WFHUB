@@ -563,8 +563,14 @@ def checkout(request, pedido_id_rascunho=None):
         carrinho_detalhes = []
         total_geral = Decimal('0.00')
 
+        # Batch fetch: 1 query para todos os produtos do carrinho
+        product_ids = list(carrinho_da_sessao.keys())
+        produtos_dict = {str(p.product_id): p for p in Product.objects.filter(product_id__in=product_ids)}
+
         for product_id, quantidade in carrinho_da_sessao.items():
-            product = get_object_or_404(Product, product_id=product_id)
+            product = produtos_dict.get(str(product_id))
+            if not product:
+                continue
             if cliente_logado.client_state.uf_name == 'SP':
                 valor_unitario = product.product_value_sp
             elif cliente_logado.client_state.uf_name == 'ES':
@@ -1608,9 +1614,15 @@ def atualizar_rascunho(request):
             # Apaga todos os itens do pedido antigo
             pedido.itens.all().delete()
 
+            # Batch fetch: 1 query para todos os produtos do carrinho
+            product_ids = list(carrinho_da_sessao.keys())
+            produtos_dict = {str(p.product_id): p for p in Product.objects.filter(product_id__in=product_ids)}
+
             # Adiciona os itens atualizados do carrinho na sessão
             for product_id, quantidade in carrinho_da_sessao.items():
-                product = get_object_or_404(Product, product_id=product_id)
+                product = produtos_dict.get(str(product_id))
+                if not product:
+                    continue
                 
                 # ... (sua lógica de valor unitário) ...
 
@@ -2237,7 +2249,7 @@ def continuar_pedido(request, pedido_id):
 
     # 1. Popula o carrinho da sessão com os itens do pedido rascunho
     carrinho_da_sessao = {}
-    for item in pedido.itens.all():
+    for item in pedido.itens.select_related('produto').all():
         carrinho_da_sessao[str(item.produto.product_id)] = item.quantidade
     request.session['carrinho'] = carrinho_da_sessao
     
@@ -3039,9 +3051,11 @@ def upload_vendas_reais(request):
             })
 
             # 4. PROCESSAMENTO PARA O BANCO
+            # Busca apenas os clientes presentes na planilha, não todos
+            codigos_na_planilha = df_grouped['Código_Cliente'].astype(str).str.replace('.0', '', regex=False).unique().tolist()
             clientes_dict = {
-                str(c.client_code): c.client_name 
-                for c in WfClient.objects.all().only('client_code', 'client_name')
+                str(c.client_code): c.client_name
+                for c in WfClient.objects.filter(client_code__in=codigos_na_planilha).only('client_code', 'client_name')
             }
 
             novas_vendas = []
