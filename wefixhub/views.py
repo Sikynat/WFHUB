@@ -4654,9 +4654,6 @@ def criar_checkout_stripe(request, empresa_id):
 
 @login_required
 def stripe_sucesso(request):
-    if not request.user.is_superuser:
-        return redirect('home')
-
     session_id = request.GET.get('session_id')
     empresa_id = request.GET.get('empresa_id')
 
@@ -4665,24 +4662,29 @@ def stripe_sucesso(request):
         try:
             session = st.checkout.Session.retrieve(session_id, expand=['subscription'])
             empresa = get_object_or_404(Empresa, id=empresa_id)
-            sub = session.subscription
 
+            # Verifica permissão: superuser ou ADMIN da própria empresa
+            if not request.user.is_superuser:
+                try:
+                    perfil = request.user.perfil
+                    if perfil.empresa_id != empresa.id or perfil.papel != 'ADMIN':
+                        return redirect('home')
+                except Exception:
+                    return redirect('home')
+
+            sub = session.subscription
             empresa.stripe_subscription_id = sub.id
             empresa.plano = 'BASICO'
             empresa.ativo = True
-
-            # Define expira_em com base no período da assinatura
-            from datetime import date
-            import datetime
-            periodo_fim = sub.current_period_end
-            empresa.expira_em = date.fromtimestamp(periodo_fim)
+            empresa.expira_em = date.fromtimestamp(sub.current_period_end)
             empresa.save(update_fields=['stripe_subscription_id', 'plano', 'ativo', 'expira_em'])
-
             messages.success(request, f'Assinatura ativada para "{empresa.nome}"!')
         except Exception as e:
             messages.error(request, f'Erro ao confirmar assinatura: {e}')
 
-    return redirect('saas_dashboard')
+    if request.user.is_superuser:
+        return redirect('saas_dashboard')
+    return redirect('perfil_representante')
 
 
 @csrf_exempt
@@ -4702,13 +4704,22 @@ def stripe_webhook(request):
     from django.http import HttpResponse
     data = event['data']['object']
 
-    if event['type'] == 'invoice.paid':
+    if event['type'] == 'checkout.session.completed':
+        sub_id = data.get('subscription')
+        empresa_id = data.get('metadata', {}).get('empresa_id')
+        if sub_id and empresa_id:
+            empresa = Empresa.objects.filter(id=empresa_id).first()
+            if empresa:
+                empresa.stripe_subscription_id = sub_id
+                empresa.ativo = True
+                empresa.save(update_fields=['stripe_subscription_id', 'ativo'])
+
+    elif event['type'] == 'invoice.paid':
         sub_id = data.get('subscription')
         periodo_fim = data.get('lines', {}).get('data', [{}])[0].get('period', {}).get('end')
         if sub_id:
             empresa = Empresa.objects.filter(stripe_subscription_id=sub_id).first()
             if empresa and periodo_fim:
-                from datetime import date
                 empresa.expira_em = date.fromtimestamp(periodo_fim)
                 empresa.ativo = True
                 empresa.save(update_fields=['expira_em', 'ativo'])
