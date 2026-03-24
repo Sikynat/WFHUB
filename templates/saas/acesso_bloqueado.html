@@ -18,7 +18,7 @@
 
         <div class="d-flex gap-2 justify-content-center">
             {% if empresa and empresa.ativo %}
-            <a href="{% url 'perfil_representante' %}" class="btn text-white" style="background:#6d28d9;">
+            <a href="{% url 'criar_checkout_stripe' empresa.id %}" class="btn text-white" style="background:#6d28d9;">
                 <i class='bx bx-credit-card me-1'></i> Renovar assinatura
             </a>
             {% endif %}

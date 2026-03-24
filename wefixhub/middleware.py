@@ -4,6 +4,7 @@ from django.shortcuts import redirect
 from .models import PerfilUsuario
 
 ROTAS_LIVRES = {'/accounts/login/', '/accounts/logout/', '/saas/acesso-bloqueado/'}
+PREFIXOS_LIVRES = ('/saas/empresas/', '/saas/stripe/')
 
 
 class EmpresaMiddleware:
@@ -44,7 +45,8 @@ class EmpresaMiddleware:
                     pass
 
             # Bloqueia empresa inativa ou expirada (para staff e clientes)
-            if request.empresa is not None and request.path not in ROTAS_LIVRES:
+            rota_livre = request.path in ROTAS_LIVRES or request.path.startswith(PREFIXOS_LIVRES)
+            if request.empresa is not None and not rota_livre:
                 empresa = request.empresa
                 if not empresa.acesso_permanente:
                     bloqueada = not empresa.ativo
