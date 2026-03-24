@@ -1,3 +1,2 @@
 [deploy]
-releaseCommand = "python manage.py migrate --no-input"
-startCommand = "python manage.py migrate --no-input && gunicorn app.wsgi --workers 2 --bind 0.0.0.0:$PORT"
+startCommand = "python manage.py migrate --no-input && gunicorn app.wsgi"
