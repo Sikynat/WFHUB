@@ -29,8 +29,16 @@
                         <a href="{% url 'home' %}"><img src="{% static 'wefixhub/images/1.png' %}" alt="Logo"></a>
                     </span>
                     <div class="header-text">
-                        <a href="{% url 'home' %}" style="font-weight:600; color:var(--text-color); font-size:14px;">Charles Monteiro</a>
-                        <a href="{% url 'home' %}" style="font-size:12px; color:var(--text-color);">Representante</a>
+                        {% if user.is_staff and not user.is_superuser %}
+                        <a href="{% url 'perfil_representante' %}" style="font-weight:600; color:var(--text-color); font-size:14px;">{{ user.get_full_name|default:user.username }}</a>
+                        <a href="{% url 'perfil_representante' %}" style="font-size:12px; color:var(--text-color);">Representante</a>
+                        {% elif user.is_superuser %}
+                        <a href="{% url 'saas_dashboard' %}" style="font-weight:600; color:var(--text-color); font-size:14px;">{{ user.get_full_name|default:user.username }}</a>
+                        <a href="{% url 'saas_dashboard' %}" style="font-size:12px; color:var(--text-color);">Super Admin</a>
+                        {% else %}
+                        <a href="{% url 'editar_perfil' %}" style="font-weight:600; color:var(--text-color); font-size:14px;">{{ user.get_full_name|default:user.username }}</a>
+                        <a href="{% url 'editar_perfil' %}" style="font-size:12px; color:var(--text-color);">Cliente</a>
+                        {% endif %}
                     </div>
                 </div>
                 <i class='bx bx-chevron-right toggle'></i>
