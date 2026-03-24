@@ -471,7 +471,15 @@ def checkout(request, pedido_id_rascunho=None):
 
         try:
             if id_do_pedido:
-                pedido_rascunho = get_empresa_or_404(Pedido, request, id=id_do_pedido)
+                if request.empresa:
+                    from django.db.models import Q
+                    pedido_rascunho = get_object_or_404(
+                        Pedido,
+                        Q(empresa=request.empresa) | Q(empresa__isnull=True, cliente__empresa=request.empresa),
+                        id=id_do_pedido,
+                    )
+                else:
+                    pedido_rascunho = get_object_or_404(Pedido, id=id_do_pedido)
                 cliente_logado = pedido_rascunho.cliente
             else:
                 if request.user.is_staff:
@@ -515,6 +523,7 @@ def checkout(request, pedido_id_rascunho=None):
 
                 pedido = Pedido.objects.create(
                     cliente=cliente_logado,
+                    empresa=cliente_logado.empresa,
                     endereco=endereco_selecionado,
                     data_envio_solicitada=data_envio_obj,
                     frete_option=frete_option,
@@ -568,7 +577,15 @@ def checkout(request, pedido_id_rascunho=None):
     initial_data = {}
     
     if pedido_id_rascunho:
-        pedido_para_finalizar = get_empresa_or_404(Pedido, request, id=pedido_id_rascunho)
+        if request.empresa:
+            from django.db.models import Q
+            pedido_para_finalizar = get_object_or_404(
+                Pedido,
+                Q(empresa=request.empresa) | Q(empresa__isnull=True, cliente__empresa=request.empresa),
+                id=pedido_id_rascunho,
+            )
+        else:
+            pedido_para_finalizar = get_object_or_404(Pedido, id=pedido_id_rascunho)
         cliente_logado = pedido_para_finalizar.cliente
         carrinho_detalhes = [
             {
