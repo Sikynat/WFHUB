@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block title %}Meu Perfil{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:760px;">
+
+    <h4 class="fw-bold mb-4">Meu Perfil</h4>
+
+    {% if messages %}
+        {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2">
+            {{ msg }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+
+        <!-- Dados pessoais -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-light fw-bold">Dados Pessoais</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Nome completo</label>
+                            <input type="text" name="nome" class="form-control"
+                                value="{{ request.user.get_full_name|default:request.user.username }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">E-mail</label>
+                            <input type="email" name="email" class="form-control"
+                                value="{{ request.user.email }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Usuário</label>
+                            <input type="text" class="form-control" value="{{ request.user.username }}" disabled>
+                        </div>
+                        {% if perfil %}
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Papel</label>
+                            <input type="text" class="form-control"
+                                value="{% if perfil.papel == 'ADMIN' %}Administrador{% else %}Vendedor{% endif %}" disabled>
+                        </div>
+                        {% endif %}
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class='bx bx-save me-1'></i> Salvar
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plano e assinatura -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-light fw-bold">Plano & Assinatura</div>
+                <div class="card-body d-flex flex-column">
+
+                    {% if empresa %}
+
+                    <div class="mb-3">
+                        <div class="text-muted small mb-1">Empresa</div>
+                        <div class="fw-semibold fs-6">{{ empresa.nome }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="text-muted small mb-1">Plano atual</div>
+                        <span class="badge fs-6
+                            {% if empresa.plano == 'PRO' %}bg-primary
+                            {% elif empresa.plano == 'BASICO' %}bg-success
+                            {% else %}bg-secondary{% endif %}">
+                            {{ empresa.get_plano_display }}
+                        </span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="text-muted small mb-1">Status da assinatura</div>
+                        {% if status_assinatura == 'ativo' %}
+                            <span class="badge bg-success">Ativa</span>
+                        {% elif status_assinatura == 'expirando' %}
+                            <span class="badge bg-warning text-dark">Expirando em breve</span>
+                        {% elif status_assinatura == 'expirado' %}
+                            <span class="badge bg-danger">Expirada</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Sem assinatura</span>
+                        {% endif %}
+                    </div>
+
+                    {% if empresa.expira_em %}
+                    <div class="mb-3">
+                        <div class="text-muted small mb-1">Válido até</div>
+                        <div class="fw-semibold">{{ empresa.expira_em|date:"d/m/Y" }}</div>
+                        {% if dias_restantes is not None %}
+                            {% if dias_restantes > 0 %}
+                                <div class="text-muted small">{{ dias_restantes }} dia{{ dias_restantes|pluralize }} restante{{ dias_restantes|pluralize }}</div>
+                            {% elif dias_restantes == 0 %}
+                                <div class="text-warning small">Expira hoje!</div>
+                            {% else %}
+                                <div class="text-danger small">Expirou há {{ dias_restantes|cut:"-" }} dia{{ dias_restantes|cut:"-"|pluralize }}</div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mt-auto">
+                        {% if perfil and perfil.papel == 'ADMIN' %}
+                            {% if status_assinatura == 'expirado' or status_assinatura == 'sem_plano' %}
+                            <a href="{% url 'criar_checkout_stripe' empresa.id %}" class="btn btn-success w-100">
+                                <i class='bx bx-credit-card me-1'></i> Assinar agora
+                            </a>
+                            {% elif status_assinatura == 'expirando' %}
+                            <a href="{% url 'criar_checkout_stripe' empresa.id %}" class="btn btn-warning w-100">
+                                <i class='bx bx-refresh me-1'></i> Renovar assinatura
+                            </a>
+                            {% else %}
+                            <a href="{% url 'criar_checkout_stripe' empresa.id %}" class="btn btn-outline-secondary w-100">
+                                <i class='bx bx-refresh me-1'></i> Gerenciar assinatura
+                            </a>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-muted small mb-0">Para gerenciar a assinatura, fale com o administrador da sua empresa.</p>
+                        {% endif %}
+                    </div>
+
+                    {% else %}
+                    <p class="text-muted">Nenhuma empresa vinculada a este perfil.</p>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

@@ -35,6 +35,7 @@ urlpatterns = [
     path('saas/empresas/<int:empresa_id>/impersonar-cliente/<int:client_id>/', views.impersonar_cliente, name='impersonar_cliente'),
     path('saas/empresas/<int:empresa_id>/atualizar-plano/', views.atualizar_plano_empresa, name='atualizar_plano_empresa'),
     path('saas/sair-impersonacao/', views.sair_impersonacao, name='sair_impersonacao'),
+    path('saas/meu-perfil/', views.perfil_representante, name='perfil_representante'),
     path('saas/empresas/<int:empresa_id>/checkout/', views.criar_checkout_stripe, name='criar_checkout_stripe'),
     path('saas/stripe/sucesso/', views.stripe_sucesso, name='stripe_sucesso'),
     path('saas/stripe/webhook/', views.stripe_webhook, name='stripe_webhook'),

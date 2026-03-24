@@ -4613,10 +4613,16 @@ def _get_stripe():
 
 @login_required
 def criar_checkout_stripe(request, empresa_id):
-    if not request.user.is_superuser:
-        return redirect('home')
-
     empresa = get_object_or_404(Empresa, id=empresa_id)
+    # Superuser sempre pode; membro ADMIN da própria empresa também pode
+    if not request.user.is_superuser:
+        try:
+            perfil = request.user.perfil
+            if perfil.empresa_id != empresa.id or perfil.papel != 'ADMIN':
+                return redirect('home')
+        except Exception:
+            return redirect('home')
+
     st = _get_stripe()
 
     # Cria ou recupera o customer no Stripe
@@ -4714,3 +4720,50 @@ def stripe_webhook(request):
                 empresa.save(update_fields=['ativo'])
 
     return HttpResponse(status=200)
+
+
+@login_required
+@staff_member_required
+def perfil_representante(request):
+    try:
+        perfil = request.user.perfil
+        empresa = perfil.empresa
+    except Exception:
+        empresa = getattr(request, 'empresa', None)
+        perfil = None
+
+    hoje = date.today()
+    dias_restantes = None
+    status_assinatura = 'sem_plano'
+
+    if empresa:
+        if empresa.expira_em:
+            dias_restantes = (empresa.expira_em - hoje).days
+            if dias_restantes < 0:
+                status_assinatura = 'expirado'
+            elif dias_restantes <= 7:
+                status_assinatura = 'expirando'
+            else:
+                status_assinatura = 'ativo'
+        elif empresa.plano != 'FREE':
+            status_assinatura = 'ativo'
+
+    if request.method == 'POST':
+        nome = request.POST.get('nome', '').strip()
+        email = request.POST.get('email', '').strip()
+        if nome:
+            request.user.first_name = nome.split()[0]
+            request.user.last_name = ' '.join(nome.split()[1:])
+        if email:
+            request.user.email = email
+        request.user.save()
+        messages.success(request, 'Perfil atualizado com sucesso.')
+        return redirect('perfil_representante')
+
+    return render(request, 'saas/perfil_representante.html', {
+        'perfil': perfil,
+        'empresa': empresa,
+        'dias_restantes': dias_restantes,
+        'status_assinatura': status_assinatura,
+        'hoje': hoje,
+    })

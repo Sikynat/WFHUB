@@ -65,6 +65,13 @@
                         {% elif user.is_staff %}
 
                         <li class="nav-item">
+                            <a href="{% url 'perfil_representante' %}">
+                                <i class='bx bx-user-circle nav-icon'></i>
+                                <span class="nav-label">Meu Perfil</span>
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
                             <a href="{% url 'novidades' %}">
                                 <i class='bx bx-star nav-icon'></i>
                                 <span class="nav-label">Novidades</span>
