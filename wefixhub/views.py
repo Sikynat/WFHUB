@@ -2106,12 +2106,14 @@ def upload_pedido(request):
                     total_valor_pedido = Decimal('0.0')
 
                     # Otimização: Busca produtos em lote para evitar N queries
-                    latest_dates = Product.objects.filter(product_code=OuterRef('product_code')).order_by('-date_product').values('date_product')[:1]
-                    produtos_atuais = Product.objects.filter(date_product=Subquery(latest_dates)).in_bulk(field_name='product_code')
+                    from django.db.models import Max as _Max
+                    _base = por_empresa(Product.objects, request)
+                    _latest = _base.aggregate(d=_Max('date_product'))['d']
+                    produtos_atuais = {p.product_code: p for p in _base.filter(date_product=_latest)}
 
                     # 4. Processamento linha a linha
                     for index, row in df.iterrows():
-                        
+
                         codigo_produto_raw = row[col_mapping['codigo']]
                         if pd.isna(codigo_produto_raw):
                              continue
@@ -2866,8 +2868,10 @@ def upload_pedido_cliente(request):
                     total_valor_pedido = Decimal('0.0')
 
                     # Otimização: Busca produtos em lote
-                    latest_dates = Product.objects.filter(product_code=OuterRef('product_code')).order_by('-date_product').values('date_product')[:1]
-                    produtos_atuais = Product.objects.filter(date_product=Subquery(latest_dates)).in_bulk(field_name='product_code')
+                    from django.db.models import Max as _Max
+                    _base = por_empresa(Product.objects, request)
+                    _latest = _base.aggregate(d=_Max('date_product'))['d']
+                    produtos_atuais = {p.product_code: p for p in _base.filter(date_product=_latest)}
 
                     # 4. Processamento linha a linha
                     for index, row in df.iterrows():
@@ -4062,9 +4066,10 @@ def adicionar_sugestoes_ao_carrinho(request):
             carrinho, _ = Carrinho.objects.get_or_create(cliente=cliente)
 
             codigos_sugeridos = sugestoes.values_list('produto_codigo', flat=True)
-            produtos_catalogo = Product.objects.filter(
-                product_code__in=codigos_sugeridos
-            ).in_bulk(field_name='product_code')
+            produtos_catalogo = {
+                p.product_code: p
+                for p in por_empresa(Product.objects, request).filter(product_code__in=codigos_sugeridos)
+            }
 
             itens_carrinho_existentes = {
                 item.produto.product_code: item 
