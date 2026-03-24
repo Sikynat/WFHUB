@@ -71,15 +71,40 @@ from .forms import (
 # ==========================================
 
 def por_empresa(queryset, request, campo='empresa'):
-    """Filtra o queryset pela empresa do usuário. Superuser vê tudo (empresa=None)."""
+    """Filtra o queryset pela empresa do usuário. Superuser vê tudo (empresa=None).
+    Para modelos com campo 'cliente', também inclui registros sem empresa definida
+    cujo cliente pertença à empresa (compatibilidade com registros antigos).
+    """
+    from django.db.models import Q
     if request.empresa:
+        model = queryset.model
+        fields = [f.name for f in model._meta.get_fields()]
+        if 'cliente' in fields:
+            return queryset.filter(
+                Q(**{campo: request.empresa}) |
+                Q(**{campo + '__isnull': True, 'cliente__empresa': request.empresa})
+            )
         return queryset.filter(**{campo: request.empresa})
     return queryset
 
 
 def get_empresa_or_404(model, request, **kwargs):
-    """get_object_or_404 + filtra por empresa para usuários não-superuser."""
+    """get_object_or_404 + filtra por empresa para usuários não-superuser.
+    Para modelos com campo 'cliente', também encontra registros antigos sem empresa.
+    """
+    from django.db.models import Q
     if request.empresa:
+        fields = [f.name for f in model._meta.get_fields()]
+        if 'cliente' in fields:
+            qs = model.objects.filter(
+                Q(empresa=request.empresa) |
+                Q(empresa__isnull=True, cliente__empresa=request.empresa),
+                **kwargs
+            )
+            if not qs.exists():
+                from django.http import Http404
+                raise Http404
+            return qs.first()
         kwargs['empresa'] = request.empresa
     return get_object_or_404(model, **kwargs)
 
@@ -117,7 +142,7 @@ def home(request):
     descricao = request.GET.get('descricao', None)
     grupo = request.GET.get('grupo', None)
     marca = request.GET.get('marca', None)
-    pedidos_rascunho_count = Pedido.objects.filter(status='RASCUNHO').count()
+    pedidos_rascunho_count = por_empresa(Pedido.objects.filter(status='RASCUNHO'), request).count()
 
     # 2. Obter o registro mais recente para cada produto
     is_staff = request.user.is_authenticated and request.user.is_staff
@@ -1682,8 +1707,8 @@ def atualizar_rascunho(request):
             return redirect('carrinho')
 
         try:
-            pedido = get_object_or_404(Pedido, id=pedido_id_rascunho)
-        except Pedido.DoesNotExist:
+            pedido = get_empresa_or_404(Pedido, request, id=pedido_id_rascunho)
+        except Exception:
             messages.error(request, 'Pedido rascunho não encontrado.')
             return redirect('home')
 
@@ -2401,7 +2426,7 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
     Exporta os detalhes de um pedido para uma planilha Excel.
     A planilha é personalizada para o estado do cliente.
     """
-    pedido = get_object_or_404(Pedido, id=pedido_id)
+    pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
     itens_pedido = ItemPedido.objects.filter(pedido=pedido).select_related('produto')
     
     # Obtém o estado do cliente para definir a lógica de exportação
@@ -2656,11 +2681,11 @@ def pedidos_atrasados_view(request):
     hoje = date.today()
 
     # Esta é a consulta principal:
-    pedidos_atrasados = Pedido.objects.filter(
-        data_envio_solicitada__lt=hoje  # __lt significa 'less than' (menor que)
+    pedidos_atrasados = por_empresa(Pedido.objects.filter(
+        data_envio_solicitada__lt=hoje
     ).exclude(
-        status__in=['FINALIZADO', 'CANCELADO']  # Exclui os status da lista
-    ).order_by('data_envio_solicitada')  # Opcional: ordena pelos mais antigos primeiro
+        status__in=['FINALIZADO', 'CANCELADO']
+    ), request).order_by('data_envio_solicitada')
 
     contexto = {
         'titulo': 'Pedidos Atrasados',
@@ -3016,10 +3041,10 @@ def upload_pedido_cliente(request):
 
 def exportar_detalhes_pedido_whatsapp_excel(request, pedido_id):
     """
-    Exporta uma planilha simplificada (Código, Quantidade, Preço) 
+    Exporta uma planilha simplificada (Código, Quantidade, Preço)
     para facilitar a digitação via WhatsApp.
     """
-    pedido = get_object_or_404(Pedido, id=pedido_id)
+    pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
     itens_pedido = ItemPedido.objects.filter(pedido=pedido).select_related('produto')
     uf_cliente = pedido.cliente.client_state.uf_name
 
