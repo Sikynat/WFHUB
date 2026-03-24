@@ -106,7 +106,7 @@
             </thead>
             <tbody>
                 {% for row in tabela %}
-                <tr class="{% if row.expirado %}table-danger{% elif row.expirando %}table-warning{% endif %}">
+                <tr class="{% if not row.empresa.acesso_permanente %}{% if row.expirado %}table-danger{% elif row.expirando %}table-warning{% endif %}{% endif %}">
                     <td class="fw-semibold">{{ row.empresa.nome }}</td>
 
                     <!-- Plano editável inline -->
@@ -133,7 +133,11 @@
                     </td>
 
                     <td class="text-center">
-                        {% if row.empresa.expira_em %}
+                        {% if row.empresa.acesso_permanente %}
+                            <span class="badge" style="background:#ede9fe;color:#6d28d9;" title="Acesso permanente ativo">
+                                <i class='bx bx-infinite'></i> Permanente
+                            </span>
+                        {% elif row.empresa.expira_em %}
                             <span class="{% if row.expirado %}text-danger fw-bold{% elif row.expirando %}text-warning fw-bold{% else %}text-muted{% endif %}">
                                 {{ row.empresa.expira_em|date:"d/m/Y" }}
                             </span>

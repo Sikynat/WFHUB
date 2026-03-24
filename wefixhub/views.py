@@ -4550,12 +4550,14 @@ def saas_dashboard(request):
     # Alertas
     alertas_expirando = empresas.filter(
         ativo=True,
+        acesso_permanente=False,
         expira_em__isnull=False,
         expira_em__lte=hoje + timedelta(days=7),
         expira_em__gte=hoje,
     )
     alertas_expirados = empresas.filter(
         ativo=True,
+        acesso_permanente=False,
         expira_em__isnull=False,
         expira_em__lt=hoje,
     )
