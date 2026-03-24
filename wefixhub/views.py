@@ -128,13 +128,12 @@ def home(request):
     products = cache.get(cache_key) if is_staff and not any([codigo, descricao, grupo, marca]) else None
 
     if products is None:
-        latest_dates = Product.objects.filter(
-            product_code=OuterRef('product_code')
-        ).order_by('-date_product').values('date_product')[:1]
+        # Usa Max em vez de subquery correlacionada — muito mais rápido
+        from django.db.models import Max
+        base_qs = por_empresa(Product.objects, request)
+        latest_date = base_qs.aggregate(max_date=Max('date_product'))['max_date']
 
-        products_qs = por_empresa(Product.objects.filter(
-            date_product=Subquery(latest_dates)
-        ), request).order_by('product_code')
+        products_qs = base_qs.filter(date_product=latest_date).order_by('product_code')
 
         # Subqueries de preço anterior — apenas para clientes (indicadores de variação)
         if not is_staff:
@@ -154,7 +153,7 @@ def home(request):
         products = products_qs
 
         if is_staff and not any([codigo, descricao, grupo, marca]):
-            cache.set(cache_key, products, 300)  # cache de 5 min para staff
+            cache.set(cache_key, products, 300)
 
     # 3. Aplicação dos Filtros de Busca
     if codigo:
@@ -250,26 +249,7 @@ def home(request):
     if not request.user.is_authenticated:
         products = Product.objects.none()
     
-    # 5. Formatação de Valores para Exibição
-    for product in products:
-        product.valor_sp_formatado = f"{product.product_value_sp.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_sp else "0,00"
-        product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
-
-        # Desconto SP
-        product.desconto_sp = None
-        prev_sp = getattr(product, 'prev_value_sp', None)
-        if prev_sp and product.product_value_sp and prev_sp > 0:
-            if product.product_value_sp < prev_sp:
-                product.desconto_sp = round((prev_sp - product.product_value_sp) / prev_sp * 100, 1)
-
-        # Desconto ES
-        product.desconto_es = None
-        prev_es = getattr(product, 'prev_value_es', None)
-        if prev_es and product.product_value_es and prev_es > 0:
-            if product.product_value_es < prev_es:
-                product.desconto_es = round((prev_es - product.product_value_es) / prev_es * 100, 1)
-    
-    # 6. Paginação
+    # 5. Paginação — antes da formatação para não carregar tudo na memória
     paginator = Paginator(products, 30)
     page = request.GET.get('page')
 
@@ -279,6 +259,21 @@ def home(request):
         product_list = paginator.page(1)
     except EmptyPage:
         product_list = paginator.page(paginator.num_pages)
+
+    # 6. Formatação apenas dos produtos da página atual (30 itens)
+    for product in product_list:
+        product.valor_sp_formatado = f"{product.product_value_sp.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_sp else "0,00"
+        product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
+
+        prev_sp = getattr(product, 'prev_value_sp', None)
+        product.desconto_sp = None
+        if prev_sp and product.product_value_sp and prev_sp > 0 and product.product_value_sp < prev_sp:
+            product.desconto_sp = round((prev_sp - product.product_value_sp) / prev_sp * 100, 1)
+
+        prev_es = getattr(product, 'prev_value_es', None)
+        product.desconto_es = None
+        if prev_es and product.product_value_es and prev_es > 0 and product.product_value_es < prev_es:
+            product.desconto_es = round((prev_es - product.product_value_es) / prev_es * 100, 1)
         
     # 7. Contexto do Template
     context = {
