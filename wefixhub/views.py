@@ -704,11 +704,11 @@ def salvar_pedido(request):
                 # 1. Cria o Pedido primeiro
                 novo_pedido = Pedido.objects.create(
                     cliente=cliente,
+                    empresa=cliente.empresa,
                     endereco=endereco_selecionado,
                     data_envio_solicitada=data_envio,
-                    status='RASCUNHO', # Ou o status inicial do seu sistema
+                    status='RASCUNHO',
                     criado_por=request.user,
-                    # ... outros campos como frete_option, nota_fiscal ...
                 )
 
                 # 2. Cria os Itens do Pedido (Loop)
@@ -1248,7 +1248,13 @@ def exportar_detalhes_pedido_cliente_excel(request, pedido_id):
 
 @staff_member_required
 def todos_os_pedidos(request):
-    pedidos_qs = por_empresa(Pedido.objects.all(), request).order_by('-data_criacao')
+    if request.empresa:
+        from django.db.models import Q
+        pedidos_qs = Pedido.objects.filter(
+            Q(empresa=request.empresa) | Q(empresa__isnull=True, cliente__empresa=request.empresa)
+        ).order_by('-data_criacao')
+    else:
+        pedidos_qs = Pedido.objects.all().order_by('-data_criacao')
 
     paginator = Paginator(pedidos_qs, 20)
     page_number = request.GET.get('page', 1)
@@ -1943,6 +1949,7 @@ def processar_pedido_manual(request):
             with transaction.atomic():
                 pedido_criado = Pedido.objects.create(
                     cliente=cliente_selecionado,
+                    empresa=cliente_selecionado.empresa,
                     endereco=endereco_selecionado,
                     data_envio_solicitada=data_envio,
                     frete_option=frete_option,
@@ -2107,6 +2114,7 @@ def upload_pedido(request):
                     # 3. Criação do Pedido Rascunho
                     novo_pedido = Pedido.objects.create(
                         cliente=cliente_para_validacao,
+                        empresa=cliente_para_validacao.empresa,
                         endereco=form.cleaned_data.get('endereco_selecionado'),
                         data_criacao=timezone.now(),
                         data_envio_solicitada=form.cleaned_data['data_expedicao'],
@@ -2869,6 +2877,7 @@ def upload_pedido_cliente(request):
                     # 3. Criação do Pedido Rascunho
                     novo_pedido = Pedido.objects.create(
                         cliente=cliente,
+                        empresa=cliente.empresa,
                         endereco=form.cleaned_data.get('endereco_selecionado'),
                         data_criacao=timezone.now(),
                         data_envio_solicitada=form.cleaned_data['data_expedicao'],
