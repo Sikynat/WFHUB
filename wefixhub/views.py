@@ -224,8 +224,8 @@ def home(request):
                         if not produto: continue
 
                         preco_atual = getattr(produto, 'product_value_sp' if estado_cliente == 'SP' else 'product_value_es')
-                        
-                        if preco_atual and preco_atual > 0:
+
+                        if preco_atual and preco_atual > 0 and produto.status_estoque != 'SEM_ESTOQUE':
                             if not any(p['codigo'] == produto.product_code for p in produtos_wishlist_cliente):
                                 produtos_wishlist_cliente.append({
                                     'codigo': produto.product_code,
@@ -262,8 +262,12 @@ def home(request):
 
     # 6. Formatação apenas dos produtos da página atual (30 itens)
     for product in product_list:
-        product.valor_sp_formatado = f"{product.product_value_sp.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_sp else "0,00"
-        product.valor_es_formatado = f"{product.product_value_es.quantize(Decimal('0.01'))}".replace('.', ',') if product.product_value_es else "0,00"
+        # Produto sem estoque mostra preço como 0,00 para o cliente
+        sem_estoque = product.status_estoque == 'SEM_ESTOQUE'
+        sp = product.product_value_sp if not sem_estoque else None
+        es = product.product_value_es if not sem_estoque else None
+        product.valor_sp_formatado = f"{sp.quantize(Decimal('0.01'))}".replace('.', ',') if sp else "0,00"
+        product.valor_es_formatado = f"{es.quantize(Decimal('0.01'))}".replace('.', ',') if es else "0,00"
 
         prev_sp = getattr(product, 'prev_value_sp', None)
         product.desconto_sp = None
