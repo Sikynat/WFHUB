@@ -3102,44 +3102,42 @@ def upload_vendas_reais(request):
                 'Total': 'sum'
             })
 
-            # 4. PROCESSAMENTO PARA O BANCO
-            # Busca apenas os clientes presentes na planilha, não todos
-            codigos_na_planilha = df_grouped['Código_Cliente'].astype(str).str.replace('.0', '', regex=False).unique().tolist()
+            # 4. PROCESSAMENTO PARA O BANCO — versão vetorizada (sem iterrows)
+            df_grouped['_cod_str'] = df_grouped['Código_Cliente'].astype(str).str.replace('.0', '', regex=False)
+
+            codigos_na_planilha = df_grouped['_cod_str'].unique().tolist()
             clientes_dict = {
                 str(c.client_code): c.client_name
                 for c in WfClient.objects.filter(client_code__in=codigos_na_planilha).only('client_code', 'client_name')
             }
 
-            novas_vendas = []
-            
-            for _, row in df_grouped.iterrows():
-                # Remove potenciais .0 que o pandas coloca em inteiros
-                cod_cliente_str = str(row['Código_Cliente']).replace('.0', '')
-                
-                if cod_cliente_str == "0":
-                    nome_cliente = "Consumidor Final / Não Identificado"
-                else:
-                    nome_cliente = clientes_dict.get(cod_cliente_str, f"Cod: {cod_cliente_str}")
+            df_grouped['_nome_cliente'] = df_grouped['_cod_str'].apply(
+                lambda cod: "Consumidor Final / Não Identificado" if cod == "0"
+                else clientes_dict.get(cod, f"Cod: {cod}")
+            )
+            df_grouped['_pedido_str'] = df_grouped['Pedido'].astype(str).str.replace('.0', '', regex=False)
+            df_grouped['_prod_cod'] = df_grouped['Produto_Código'].astype(str).str.replace('.0', '', regex=False)
 
-                venda = VendaReal(
-                    Emissao=row['Emissão_dt'].date(),
-                    Codigo_Cliente=int(float(row['Código_Cliente'])),
-                    # Limpa formato float caso o Excel tenha mandado o Pedido como número
-                    Pedido=str(row['Pedido']).replace('.0', ''),
-                    Produto_Codigo=str(row['Produto_Código']).replace('.0', ''),
-                    cliente_nome=nome_cliente,
-                    Produto_Descricao=str(row['Produto_Descrição']),
-                    Quantidade=int(row['Quantidade']),
-                    Unitario=Decimal(str(row['Unitário'])),
-                    Total=Decimal(str(row['Total'])),
-                    empresa=request.empresa,
+            empresa = request.empresa
+            novas_vendas = [
+                VendaReal(
+                    Emissao=row._Emissão_dt.date(),
+                    Codigo_Cliente=int(float(row.Código_Cliente)),
+                    Pedido=row._pedido_str,
+                    Produto_Codigo=row._prod_cod,
+                    cliente_nome=row._nome_cliente,
+                    Produto_Descricao=str(row.Produto_Descrição),
+                    Quantidade=int(row.Quantidade),
+                    Unitario=Decimal(str(row.Unitário)),
+                    Total=Decimal(str(row.Total)),
+                    empresa=empresa,
                 )
-                novas_vendas.append(venda)
+                for row in df_grouped.itertuples(index=False)
+            ]
 
             if novas_vendas:
                 with transaction.atomic():
-                    VendaReal.objects.bulk_create(novas_vendas, batch_size=500, ignore_conflicts=True)
-                
+                    VendaReal.objects.bulk_create(novas_vendas, batch_size=1000, ignore_conflicts=True)
                 messages.success(request, f'Sucesso! {len(novas_vendas)} itens processados. Histórico atualizado para {len(dias_na_planilha)} dias.')
             else:
                 messages.warning(request, 'Nenhum dado válido encontrado na planilha.')
