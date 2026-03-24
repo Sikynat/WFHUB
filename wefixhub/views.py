@@ -4760,10 +4760,13 @@ def perfil_representante(request):
         messages.success(request, 'Perfil atualizado com sucesso.')
         return redirect('perfil_representante')
 
+    membros = empresa.membros.select_related('user').all() if empresa else []
+
     return render(request, 'saas/perfil_representante.html', {
         'perfil': perfil,
         'empresa': empresa,
         'dias_restantes': dias_restantes,
         'status_assinatura': status_assinatura,
         'hoje': hoje,
+        'membros': membros,
     })
