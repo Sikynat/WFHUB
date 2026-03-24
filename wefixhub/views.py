@@ -983,7 +983,7 @@ def dashboard_admin(request):
 
         oportunidades_wishlist = {}
         codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
-        produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
+        produtos_dict = {p.product_code: p for p in por_empresa(Product.objects.filter(product_code__in=codigos_pendentes), request)}
 
         for item in itens_pendentes:
             produto = produtos_dict.get(item.codigo_produto)
@@ -1047,7 +1047,7 @@ def exportar_pedidos_excel(request):
         row_num = 1
         for col_num, column_title in enumerate(columns, 1):
             worksheet.cell(row=row_num, column=col_num, value=column_title)
-        pedidos_recentes = Pedido.objects.all().order_by('-data_criacao')[:10]
+        pedidos_recentes = por_empresa(Pedido.objects.all(), request).order_by('-data_criacao')[:10]
         for pedido in pedidos_recentes:
             row_num += 1
             data_sem_tz = timezone.localtime(pedido.data_criacao).replace(tzinfo=None)
@@ -1887,7 +1887,7 @@ def gerar_pedido_manual(request):
         
         # Filtros de Produtos
         hoje = timezone.localdate()
-        products = Product.objects.filter(date_product=hoje).order_by('product_code')
+        products = por_empresa(Product.objects.filter(date_product=hoje), request).order_by('product_code')
 
         # Captura dos filtros do GET
         codigo = request.GET.get('codigo')
@@ -2735,7 +2735,7 @@ def analise_dados_dashboard(request):
 
     # --- 2. FATURAMENTO REAL ERP (VendaReal) ---
     # Aqui corrigimos o erro dos 915k aplicando o exclude de segurança
-    vendas_erp_qs = VendaReal.objects.exclude(Produto_Codigo__icontains='TOTAL')
+    vendas_erp_qs = por_empresa(VendaReal.objects.exclude(Produto_Codigo__icontains='TOTAL'), request)
     
     if not periodo_geral_solicitado:
         vendas_erp_qs = vendas_erp_qs.filter(Emissao__range=(data_inicio, data_fim))
@@ -2745,14 +2745,14 @@ def analise_dados_dashboard(request):
     # --- 3. Sugestões ERP para Cliente Específico ---
     cliente_id_analise = request.GET.get('cliente')
     sugestoes_erp = []
-    lista_clientes_filtro = WfClient.objects.only('client_id', 'client_name').order_by('client_name')
+    lista_clientes_filtro = por_empresa(WfClient.objects.only('client_id', 'client_name'), request).order_by('client_name')
 
     if cliente_id_analise:
         try:
-            cliente_obj = WfClient.objects.get(pk=cliente_id_analise)
-            sugestoes_erp = VendaReal.objects.filter(
+            cliente_obj = por_empresa(WfClient.objects.all(), request).get(pk=cliente_id_analise)
+            sugestoes_erp = por_empresa(VendaReal.objects.filter(
                 Codigo_Cliente=cliente_obj.client_code
-            ).exclude(Produto_Codigo__icontains='TOTAL').values(
+            ).exclude(Produto_Codigo__icontains='TOTAL'), request).values(
                 'Produto_Codigo', 'Produto_Descricao'
             ).annotate(
                 total_qtd=Sum('Quantidade'),
@@ -2766,6 +2766,11 @@ def analise_dados_dashboard(request):
     base_queryset = ItemPedido.objects.select_related(
         'pedido', 'pedido__cliente', 'produto', 'pedido__cliente__client_state'
     ).exclude(pedido__status='CANCELADO')
+    if request.empresa:
+        base_queryset = base_queryset.filter(
+            Q(pedido__empresa=request.empresa) |
+            Q(pedido__empresa__isnull=True, pedido__cliente__empresa=request.empresa)
+        )
 
     if not periodo_geral_solicitado:
         itens_filtrados = base_queryset.filter(
@@ -3283,7 +3288,7 @@ def exportar_vendas_reais_excel(request):
     filtro_mes = request.GET.get('mes', '').strip()
     filtro_ano = request.GET.get('ano', '').strip()
 
-    vendas_qs = VendaReal.objects.all().order_by('-Emissao')
+    vendas_qs = por_empresa(VendaReal.objects.all(), request).order_by('-Emissao')
 
     # 2. Aplica Filtros Dinâmicos
     if filtro_pedido:
@@ -3489,7 +3494,7 @@ def listar_status_erp(request):
 
 @staff_member_required
 def pedidos_nao_expedidos(request):
-    qs = StatusPedidoERP.objects.filter(expedido=False).order_by('cod_cliente', 'numero_pedido', '-emissao')
+    qs = por_empresa(StatusPedidoERP.objects.filter(expedido=False), request).order_by('cod_cliente', 'numero_pedido', '-emissao')
 
     # Agrupa por cliente → pedido
     clientes = {}
@@ -3539,8 +3544,8 @@ def pedidos_nao_expedidos(request):
 @staff_member_required
 def exportar_status_erp_excel(request):
     # 1. Pega os dados base (respeitando filtros de busca se houver)
-    status_qs = StatusPedidoERP.objects.all().order_by('-emissao', '-id')
-    
+    status_qs = por_empresa(StatusPedidoERP.objects.all(), request).order_by('-emissao', '-id')
+
     numero_pedido = request.GET.get('numero_pedido')
     if numero_pedido:
         status_qs = status_qs.filter(numero_pedido__icontains=numero_pedido)
@@ -3581,7 +3586,7 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     ids_para_atualizar = []
 
     codigos = [item.codigo_produto for item in itens_pendentes]
-    produtos_map = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos)}
+    produtos_map = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos, empresa=cliente.empresa)}
 
     for item in itens_pendentes:
         produto = produtos_map.get(item.codigo_produto)
@@ -3824,9 +3829,9 @@ def exportar_itens_recuperados_excel(request, cliente_id):
             queryset = queryset.filter(notificado=False)
 
     itens_agrupados = {}
-    
+
     for item in queryset:
-        produto = Product.objects.filter(product_code=item.codigo_produto).first()
+        produto = Product.objects.filter(product_code=item.codigo_produto, empresa=cliente.empresa).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             
@@ -3944,7 +3949,7 @@ def reenviar_notificacao_whatsapp(request, cliente_id):
     produtos_recuperados_dict = {} # <-- Dicionário para agrupar o texto
     
     for item in itens_arquivados:
-        produto = Product.objects.filter(product_code=item.codigo_produto).first()
+        produto = Product.objects.filter(product_code=item.codigo_produto, empresa=cliente.empresa).first()
         if produto:
             preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
             if preco_atual and preco_atual > 0:
