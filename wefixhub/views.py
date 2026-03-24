@@ -4722,6 +4722,21 @@ def stripe_webhook(request):
     return HttpResponse(status=200)
 
 
+def acesso_bloqueado(request):
+    empresa = getattr(request, 'empresa', None)
+    return render(request, 'saas/acesso_bloqueado.html', {'empresa': empresa})
+
+
+def toggle_acesso_permanente(request, empresa_id):
+    if not request.user.is_superuser:
+        return redirect('home')
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    empresa.acesso_permanente = not empresa.acesso_permanente
+    empresa.save(update_fields=['acesso_permanente'])
+    messages.success(request, f"Acesso permanente {'ativado' if empresa.acesso_permanente else 'desativado'} para {empresa.nome}.")
+    return redirect('detalhe_empresa', empresa_id=empresa.id)
+
+
 @login_required
 @staff_member_required
 def perfil_representante(request):

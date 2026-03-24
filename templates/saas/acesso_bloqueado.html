@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Acesso Bloqueado{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-center" style="min-height:70vh;">
+    <div class="text-center" style="max-width:480px;">
+        <div style="font-size:4rem;margin-bottom:1rem;">🔒</div>
+        <h3 class="fw-bold mb-2">Acesso suspenso</h3>
+        {% if empresa %}
+            {% if not empresa.ativo %}
+            <p class="text-muted mb-4">A empresa <strong>{{ empresa.nome }}</strong> foi desativada.<br>Entre em contato com o suporte para reativar.</p>
+            {% else %}
+            <p class="text-muted mb-4">A assinatura da empresa <strong>{{ empresa.nome }}</strong> expirou.<br>Renove seu plano para continuar usando o sistema.</p>
+            {% endif %}
+        {% else %}
+        <p class="text-muted mb-4">Sua conta não tem acesso ativo.<br>Entre em contato com o administrador.</p>
+        {% endif %}
+
+        <div class="d-flex gap-2 justify-content-center">
+            {% if empresa and empresa.ativo %}
+            <a href="{% url 'perfil_representante' %}" class="btn text-white" style="background:#6d28d9;">
+                <i class='bx bx-credit-card me-1'></i> Renovar assinatura
+            </a>
+            {% endif %}
+            <a href="{% url 'logout' %}" onclick="event.preventDefault(); document.getElementById('logout-form').submit();"
+               class="btn btn-outline-secondary">
+                <i class='bx bx-log-out me-1'></i> Sair
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

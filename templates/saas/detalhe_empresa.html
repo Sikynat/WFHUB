@@ -17,6 +17,18 @@
             <a href="{% url 'criar_checkout_stripe' empresa.id %}" class="btn btn-outline-success">
                 <i class='bx bx-credit-card me-1'></i> Assinar / Renovar
             </a>
+            <form method="post" action="{% url 'toggle_acesso_permanente' empresa.id %}">
+                {% csrf_token %}
+                {% if empresa.acesso_permanente %}
+                <button type="submit" class="btn btn-warning" title="Clique para remover acesso permanente">
+                    <i class='bx bx-infinite me-1'></i> Permanente
+                </button>
+                {% else %}
+                <button type="submit" class="btn btn-outline-secondary" title="Conceder acesso permanente (sem expiração)">
+                    <i class='bx bx-infinite me-1'></i> Tornar Permanente
+                </button>
+                {% endif %}
+            </form>
             <form method="post" action="{% url 'toggle_empresa_ativo' empresa.id %}">
                 {% csrf_token %}
                 {% if empresa.ativo %}

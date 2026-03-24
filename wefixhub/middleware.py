@@ -1,8 +1,9 @@
+from datetime import date
 from django.contrib.auth import logout
 from django.shortcuts import redirect
 from .models import PerfilUsuario
 
-ROTAS_LIVRES = {'/accounts/login/', '/accounts/logout/'}
+ROTAS_LIVRES = {'/accounts/login/', '/accounts/logout/', '/saas/acesso-bloqueado/'}
 
 
 class EmpresaMiddleware:
@@ -13,6 +14,7 @@ class EmpresaMiddleware:
     - Cliente (WfClient): request.empresa = empresa do cliente
     - Não autenticado: request.empresa = None
     Bloqueia clientes com client_is_active=False.
+    Bloqueia empresas expiradas ou inativas (salvo acesso_permanente).
     """
 
     def __init__(self, get_response):
@@ -22,7 +24,7 @@ class EmpresaMiddleware:
         request.empresa = None
 
         if request.user.is_authenticated and not request.user.is_superuser:
-            # Tenta via PerfilUsuario (admin/staff da empresa)
+            # Tenta via PerfilUsuario (representante da empresa)
             try:
                 request.empresa = request.user.perfil.empresa
             except PerfilUsuario.DoesNotExist:
@@ -40,6 +42,16 @@ class EmpresaMiddleware:
                         return redirect('/accounts/login/?inativo=1')
                 except Exception:
                     pass
+
+            # Bloqueia empresa inativa ou expirada (para staff e clientes)
+            if request.empresa is not None and request.path not in ROTAS_LIVRES:
+                empresa = request.empresa
+                if not empresa.acesso_permanente:
+                    bloqueada = not empresa.ativo
+                    if not bloqueada and empresa.expira_em:
+                        bloqueada = empresa.expira_em < date.today()
+                    if bloqueada:
+                        return redirect('/saas/acesso-bloqueado/')
 
         request.is_impersonando = bool(request.session.get('impersonando_su_id'))
 

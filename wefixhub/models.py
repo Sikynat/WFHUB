@@ -22,6 +22,7 @@ class Empresa(models.Model):
     email_contato = models.EmailField(blank=True, null=True, verbose_name='E-mail de Contato')
     telefone = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefone')
     expira_em = models.DateField(null=True, blank=True, verbose_name='Expira em')
+    acesso_permanente = models.BooleanField(default=False, verbose_name='Acesso permanente')
     stripe_customer_id = models.CharField(max_length=64, blank=True, null=True)
     stripe_subscription_id = models.CharField(max_length=64, blank=True, null=True)
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
