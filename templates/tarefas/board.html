@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}Board de Tarefas{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0 fw-bold">Board de Tarefas</h5>
+    <div class="d-flex gap-2">
+        <a href="{% url 'tarefas_lista' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-list-ul me-1'></i>Lista</a>
+        <a href="{% url 'notificacoes_tarefas' %}" class="btn btn-sm btn-outline-secondary position-relative">
+            <i class='bx bx-bell'></i>
+            {% if notif_tarefas_count > 0 %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6rem;">{{ notif_tarefas_count }}</span>{% endif %}
+        </a>
+        <a href="{% url 'gerenciar_tags_tarefa' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-tag-alt me-1'></i>Tags</a>
+        <a href="{% url 'criar_tarefa' %}" class="btn btn-sm btn-primary"><i class='bx bx-plus me-1'></i>Nova Tarefa</a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<form method="get" class="d-flex flex-wrap gap-2 mb-4 align-items-end">
+    <input type="text" name="q" value="{{ filtro_busca }}" class="form-control form-control-sm" style="width:180px;" placeholder="Buscar tarefa...">
+    <select name="prioridade" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Prioridade</option>
+        <option value="ALTA" {% if filtro_prioridade == 'ALTA' %}selected{% endif %}>Alta</option>
+        <option value="MEDIA" {% if filtro_prioridade == 'MEDIA' %}selected{% endif %}>Média</option>
+        <option value="BAIXA" {% if filtro_prioridade == 'BAIXA' %}selected{% endif %}>Baixa</option>
+    </select>
+    <select name="responsavel" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Responsável</option>
+        {% for m in membros %}
+        <option value="{{ m.user.id }}" {% if filtro_responsavel == m.user.id|stringformat:"s" %}selected{% endif %}>{{ m.user.get_full_name|default:m.user.username }}</option>
+        {% endfor %}
+    </select>
+    <select name="tag" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Tag</option>
+        {% for tag in tags %}
+        <option value="{{ tag.id }}" {% if filtro_tag == tag.id|stringformat:"s" %}selected{% endif %}>{{ tag.nome }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
+    <a href="?minhas=1{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}" class="btn btn-sm {% if filtro_minhas %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class='bx bx-user me-1'></i>Minhas
+    </a>
+    {% if filtro_prioridade or filtro_responsavel or filtro_tag or filtro_busca or filtro_minhas %}
+    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+    {% endif %}
+</form>
+
+<!-- Kanban -->
+<div class="d-flex gap-3 overflow-auto pb-3" style="align-items:flex-start;">
+    {% for coluna in colunas %}
+    <div style="min-width:280px;max-width:300px;flex:0 0 280px;">
+        <div class="d-flex align-items-center justify-content-between mb-2 px-1">
+            <span class="fw-semibold small text-uppercase text-muted">{{ coluna.label }}</span>
+            <span class="badge bg-secondary rounded-pill">{{ coluna.tarefas|length }}</span>
+        </div>
+
+        <div class="d-flex flex-column gap-2">
+            {% for tarefa in coluna.tarefas %}
+            <div class="card border-0 shadow-sm" style="border-left:3px solid {% if tarefa.prioridade == 'ALTA' %}#ef4444{% elif tarefa.prioridade == 'MEDIA' %}#f59e0b{% else %}#22c55e{% endif %} !important;">
+                <div class="card-body p-3">
+                    <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="text-decoration-none text-dark">
+                        <div class="fw-semibold small mb-1">{{ tarefa.titulo }}</div>
+                    </a>
+
+                    {% if tarefa.tags.all %}
+                    <div class="d-flex flex-wrap gap-1 mb-2">
+                        {% for tag in tarefa.tags.all %}
+                        <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.65rem;">{{ tag.nome }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Progresso checklist -->
+                    {% with total=tarefa.checklist.count concluidos=tarefa.checklist.all %}
+                    {% if total > 0 %}
+                    {% with done=tarefa.checklist.all|length %}
+                    <div class="d-flex align-items-center gap-1 mb-2">
+                        <i class='bx bx-check-square text-muted' style="font-size:.75rem;"></i>
+                        <small class="text-muted" style="font-size:.7rem;">{{ done }}/{{ total }}</small>
+                        <div class="progress flex-grow-1" style="height:3px;">
+                            <div class="progress-bar bg-success" style="width:{% widthratio done total 100 %}%"></div>
+                        </div>
+                    </div>
+                    {% endwith %}
+                    {% endif %}
+                    {% endwith %}
+
+                    <div class="d-flex align-items-center justify-content-between mt-1">
+                        <div class="d-flex align-items-center gap-1">
+                            {% if tarefa.responsavel %}
+                            <span class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                                  style="width:22px;height:22px;font-size:.6rem;background:#6366f1;"
+                                  title="{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}">
+                                {{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}
+                            </span>
+                            {% endif %}
+                            {% if tarefa.comentarios.count > 0 %}
+                            <small class="text-muted" style="font-size:.7rem;"><i class='bx bx-comment'></i> {{ tarefa.comentarios.count }}</small>
+                            {% endif %}
+                        </div>
+                        {% if tarefa.prazo %}
+                        <small class="{% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-muted{% endif %}" style="font-size:.7rem;">
+                            <i class='bx bx-calendar'></i> {{ tarefa.prazo|date:"d/m" }}
+                        </small>
+                        {% endif %}
+                    </div>
+
+                    <!-- Mover status -->
+                    <div class="d-flex gap-1 mt-2">
+                        {% if coluna.status != 'A_FAZER' %}
+                        <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="{% if coluna.status == 'EM_ANDAMENTO' %}A_FAZER{% elif coluna.status == 'REVISAO' %}EM_ANDAMENTO{% elif coluna.status == 'CONCLUIDO' %}REVISAO{% endif %}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-outline-secondary" style="font-size:.6rem;padding:1px 6px;" title="Voltar">←</button>
+                        </form>
+                        {% endif %}
+                        {% if coluna.status != 'CONCLUIDO' %}
+                        <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="{% if coluna.status == 'A_FAZER' %}EM_ANDAMENTO{% elif coluna.status == 'EM_ANDAMENTO' %}REVISAO{% elif coluna.status == 'REVISAO' %}CONCLUIDO{% endif %}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-outline-primary" style="font-size:.6rem;padding:1px 6px;" title="Avançar">→</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center text-muted py-4 small" style="border:2px dashed #e5e7eb;border-radius:8px;">Nenhuma tarefa</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -95,8 +95,21 @@ urlpatterns = [
     path('checkout/', views.checkout, name='checkout'),
     path('checkout/<int:pedido_id_rascunho>/', views.checkout, name='checkout_rascunho'),
     path('continuar-pedido/<int:pedido_id>/', views.continuar_pedido, name='continuar_pedido'),
-    path('atualizar-rascunho/', views.atualizar_rascunho, name='atualizar_rascunho')
- 
+    path('atualizar-rascunho/', views.atualizar_rascunho, name='atualizar_rascunho'),
+
+    # Tarefas e Colaboração
+    path('tarefas/', views.tarefas_board, name='tarefas_board'),
+    path('tarefas/lista/', views.tarefas_lista, name='tarefas_lista'),
+    path('tarefas/nova/', views.criar_tarefa, name='criar_tarefa'),
+    path('tarefas/<int:tarefa_id>/', views.detalhe_tarefa, name='detalhe_tarefa'),
+    path('tarefas/<int:tarefa_id>/editar/', views.editar_tarefa, name='editar_tarefa'),
+    path('tarefas/<int:tarefa_id>/status/', views.atualizar_status_tarefa, name='atualizar_status_tarefa'),
+    path('tarefas/<int:tarefa_id>/excluir/', views.excluir_tarefa, name='excluir_tarefa'),
+    path('tarefas/notificacoes/', views.notificacoes_tarefas, name='notificacoes_tarefas'),
+    path('tarefas/tags/', views.gerenciar_tags_tarefa, name='gerenciar_tags_tarefa'),
+    path('tarefas/<int:tarefa_id>/checklist/adicionar/', views.adicionar_checklist_item, name='adicionar_checklist_item'),
+    path('tarefas/checklist/<int:item_id>/toggle/', views.toggle_checklist_item, name='toggle_checklist_item'),
+    path('tarefas/checklist/<int:item_id>/excluir/', views.excluir_checklist_item, name='excluir_checklist_item'),
 ]
 
 

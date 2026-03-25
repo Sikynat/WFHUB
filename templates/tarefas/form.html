@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}{% if tarefa %}Editar Tarefa{% else %}Nova Tarefa{% endif %}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-arrow-back'></i></a>
+    <h5 class="mb-0 fw-bold">{% if tarefa %}Editar Tarefa{% else %}Nova Tarefa{% endif %}</h5>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:680px;">
+    <div class="card-body p-4">
+        {% if messages %}
+            {% for msg in messages %}
+            <div class="alert alert-danger py-2">{{ msg }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Título <span class="text-danger">*</span></label>
+                <input type="text" name="titulo" class="form-control" value="{{ tarefa.titulo|default:'' }}" placeholder="Descreva a tarefa brevemente" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Descrição</label>
+                <textarea name="descricao" class="form-control" rows="4" placeholder="Detalhes, contexto, instruções...">{{ tarefa.descricao|default:'' }}</textarea>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Prioridade</label>
+                    <select name="prioridade" class="form-select">
+                        {% for val, label in prioridade_choices %}
+                        <option value="{{ val }}" {% if tarefa.prioridade == val or not tarefa and val == 'MEDIA' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Status</label>
+                    <select name="status" class="form-select">
+                        {% for val, label in status_choices %}
+                        <option value="{{ val }}" {% if tarefa.status == val or not tarefa and val == 'A_FAZER' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Responsável</label>
+                    <select name="responsavel" class="form-select">
+                        <option value="">— Sem responsável —</option>
+                        {% for m in membros %}
+                        <option value="{{ m.user.id }}" {% if tarefa.responsavel_id == m.user.id %}selected{% endif %}>
+                            {{ m.user.get_full_name|default:m.user.username }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Prazo</label>
+                    <input type="date" name="prazo" class="form-control" value="{{ tarefa.prazo|date:'Y-m-d'|default:'' }}">
+                </div>
+            </div>
+
+            {% if tags %}
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Tags</label>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for tag in tags %}
+                    <label class="d-flex align-items-center gap-1" style="cursor:pointer;">
+                        <input type="checkbox" name="tags" value="{{ tag.id }}"
+                            {% if tarefa and tag in tarefa.tags.all %}checked{% endif %}
+                            class="form-check-input mt-0">
+                        <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};">{{ tag.nome }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class='bx bx-save me-1'></i>{% if tarefa %}Salvar alterações{% else %}Criar tarefa{% endif %}
+                </button>
+                <a href="{% url 'tarefas_board' %}" class="btn btn-outline-secondary">Cancelar</a>
+                {% if tarefa %}
+                <form method="post" action="{% url 'excluir_tarefa' tarefa.id %}" class="ms-auto" onsubmit="return confirm('Excluir esta tarefa?')">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger"><i class='bx bx-trash me-1'></i>Excluir</button>
+                </form>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

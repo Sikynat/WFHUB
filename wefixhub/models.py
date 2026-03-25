@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from decimal import Decimal
+from datetime import date, timedelta
 from django.db.models import Count
 from django.utils import timezone
 
@@ -492,3 +493,133 @@ class HistoricoPreco(models.Model):
 
     def __str__(self):
         return f"{self.product_code} — {self.data_registro.strftime('%d/%m/%Y')}"
+
+
+# ==========================================
+# TAREFAS E COLABORAÇÃO
+# ==========================================
+
+class TagTarefa(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='tags_tarefa')
+    nome = models.CharField(max_length=50)
+    cor = models.CharField(max_length=7, default='#6366f1')
+
+    class Meta:
+        db_table = 'wf_tag_tarefa'
+        unique_together = [('empresa', 'nome')]
+        verbose_name = 'Tag de Tarefa'
+        verbose_name_plural = 'Tags de Tarefas'
+
+    def __str__(self):
+        return self.nome
+
+
+class Tarefa(models.Model):
+    PRIORIDADE_CHOICES = [
+        ('ALTA', 'Alta'),
+        ('MEDIA', 'Média'),
+        ('BAIXA', 'Baixa'),
+    ]
+    STATUS_CHOICES = [
+        ('A_FAZER', 'A Fazer'),
+        ('EM_ANDAMENTO', 'Em Andamento'),
+        ('REVISAO', 'Revisão'),
+        ('CONCLUIDO', 'Concluído'),
+    ]
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='tarefas')
+    titulo = models.CharField(max_length=200)
+    descricao = models.TextField(blank=True, null=True)
+    prioridade = models.CharField(max_length=10, choices=PRIORIDADE_CHOICES, default='MEDIA')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='A_FAZER')
+    criado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='tarefas_criadas')
+    responsavel = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='tarefas_responsavel')
+    prazo = models.DateField(null=True, blank=True)
+    tags = models.ManyToManyField(TagTarefa, blank=True, related_name='tarefas')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'wf_tarefa'
+        ordering = ['-criado_em']
+        verbose_name = 'Tarefa'
+        verbose_name_plural = 'Tarefas'
+
+    def __str__(self):
+        return self.titulo
+
+    @property
+    def atrasada(self):
+        return self.prazo and self.prazo < date.today() and self.status != 'CONCLUIDO'
+
+    @property
+    def prazo_proximo(self):
+        if not self.prazo or self.status == 'CONCLUIDO':
+            return False
+        return self.prazo <= date.today() + timedelta(days=2)
+
+
+class ComentarioTarefa(models.Model):
+    tarefa = models.ForeignKey(Tarefa, on_delete=models.CASCADE, related_name='comentarios')
+    autor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    texto = models.TextField()
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_comentario_tarefa'
+        ordering = ['criado_em']
+        verbose_name = 'Comentário de Tarefa'
+        verbose_name_plural = 'Comentários de Tarefas'
+
+    def __str__(self):
+        return f"Comentário de {self.autor} em {self.tarefa}"
+
+
+class NotificacaoTarefa(models.Model):
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notificacoes_tarefa')
+    tarefa = models.ForeignKey(Tarefa, on_delete=models.CASCADE, related_name='notificacoes')
+    mensagem = models.CharField(max_length=300)
+    lida = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_notificacao_tarefa'
+        ordering = ['-criado_em']
+        verbose_name = 'Notificação de Tarefa'
+        verbose_name_plural = 'Notificações de Tarefas'
+
+    def __str__(self):
+        return self.mensagem
+
+
+class AtividadeTarefa(models.Model):
+    tarefa = models.ForeignKey(Tarefa, on_delete=models.CASCADE, related_name='atividades')
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    descricao = models.CharField(max_length=300)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_atividade_tarefa'
+        ordering = ['-criado_em']
+        verbose_name = 'Atividade de Tarefa'
+        verbose_name_plural = 'Atividades de Tarefas'
+
+    def __str__(self):
+        return self.descricao
+
+
+class ChecklistItem(models.Model):
+    tarefa = models.ForeignKey(Tarefa, on_delete=models.CASCADE, related_name='checklist')
+    texto = models.CharField(max_length=200)
+    concluido = models.BooleanField(default=False)
+    ordem = models.PositiveSmallIntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_checklist_item'
+        ordering = ['ordem', 'criado_em']
+        verbose_name = 'Item de Checklist'
+        verbose_name_plural = 'Itens de Checklist'
+
+    def __str__(self):
+        return self.texto

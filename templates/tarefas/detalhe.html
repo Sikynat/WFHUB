@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% block title %}{{ tarefa.titulo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-arrow-back'></i></a>
+    <h5 class="mb-0 fw-bold">{{ tarefa.titulo }}</h5>
+    <a href="{% url 'editar_tarefa' tarefa.id %}" class="btn btn-sm btn-outline-secondary ms-auto"><i class='bx bx-edit me-1'></i>Editar</a>
+</div>
+
+<div class="row g-4">
+    <!-- Coluna principal -->
+    <div class="col-lg-8">
+
+        <!-- Descrição -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <h6 class="fw-semibold text-muted mb-2">Descrição</h6>
+                {% if tarefa.descricao %}
+                <p class="mb-0" style="white-space:pre-wrap;">{{ tarefa.descricao }}</p>
+                {% else %}
+                <p class="text-muted mb-0 small">Nenhuma descrição.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Checklist -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between py-3">
+                <span class="fw-semibold">Checklist</span>
+                {% if checklist %}
+                <small class="text-muted">
+                    {% with total=checklist|length %}
+                    {% with done=0 %}
+                    {{ checklist|length }} iten{% if checklist|length != 1 %}s{% endif %}
+                    {% endwith %}{% endwith %}
+                </small>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% for item in checklist %}
+                <div class="d-flex align-items-center gap-2 px-3 py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                    <form method="post" action="{% url 'toggle_checklist_item' item.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn p-0 border-0" style="line-height:1;">
+                            <i class='bx {% if item.concluido %}bx-check-square text-success{% else %}bx-square text-muted{% endif %}' style="font-size:1.2rem;"></i>
+                        </button>
+                    </form>
+                    <span class="flex-grow-1 small {% if item.concluido %}text-decoration-line-through text-muted{% endif %}">{{ item.texto }}</span>
+                    <form method="post" action="{% url 'excluir_checklist_item' item.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm p-0 border-0 text-muted" style="font-size:.75rem;" title="Remover"><i class='bx bx-x'></i></button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-3 small">Nenhum item ainda.</div>
+                {% endfor %}
+            </div>
+            <div class="card-footer bg-white p-2">
+                <form method="post" action="{% url 'adicionar_checklist_item' tarefa.id %}" class="d-flex gap-2">
+                    {% csrf_token %}
+                    <input type="text" name="texto" class="form-control form-control-sm" placeholder="Novo item..." required>
+                    <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0">Adicionar</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Comentários -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold py-3">
+                Comentários <span class="badge bg-secondary ms-1">{{ comentarios|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% for c in comentarios %}
+                <div class="d-flex gap-3 p-3 {% if not forloop.last %}border-bottom{% endif %}">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
+                         style="width:36px;height:36px;background:#6366f1;font-size:.8rem;">
+                        {{ c.autor.get_full_name|default:c.autor.username|slice:":1"|upper }}
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-baseline gap-2 mb-1">
+                            <span class="fw-semibold small">{{ c.autor.get_full_name|default:c.autor.username }}</span>
+                            <small class="text-muted">{{ c.criado_em|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        <p class="mb-0 small" style="white-space:pre-wrap;">{{ c.texto }}</p>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-4 small">Nenhum comentário ainda.</div>
+                {% endfor %}
+            </div>
+            <div class="card-footer bg-white p-3">
+                {% if nome_membros %}
+                <small class="text-muted d-block mb-1">Mencionar: {% for n in nome_membros %}<code class="me-1">@{{ n }}</code>{% endfor %}</small>
+                {% endif %}
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <textarea name="texto" class="form-control form-control-sm" rows="2" placeholder="Escreva um comentário... Use @username para mencionar alguém" required></textarea>
+                        <button type="submit" class="btn btn-primary btn-sm align-self-end"><i class='bx bx-send'></i></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna lateral -->
+    <div class="col-lg-4">
+        <!-- Detalhes -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <h6 class="fw-semibold text-muted mb-3">Detalhes</h6>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-1">Status</small>
+                    <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.path }}">
+                        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                            {% for val, label in status_choices %}
+                            <option value="{{ val }}" {% if tarefa.status == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-1">Prioridade</small>
+                    {% if tarefa.prioridade == 'ALTA' %}<span class="badge" style="background:#fef2f2;color:#ef4444;">Alta</span>
+                    {% elif tarefa.prioridade == 'MEDIA' %}<span class="badge" style="background:#fffbeb;color:#f59e0b;">Média</span>
+                    {% else %}<span class="badge" style="background:#f0fdf4;color:#22c55e;">Baixa</span>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-1">Responsável</small>
+                    {% if tarefa.responsavel %}
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" style="width:28px;height:28px;background:#6366f1;font-size:.7rem;">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}</div>
+                        <span class="small">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}</span>
+                    </div>
+                    {% else %}<span class="text-muted small">Não atribuído</span>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-1">Prazo</small>
+                    {% if tarefa.prazo %}
+                    <span class="small {% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-dark{% endif %}">
+                        {{ tarefa.prazo|date:"d/m/Y" }}
+                        {% if tarefa.atrasada %}<span class="badge bg-danger ms-1">Atrasada</span>{% endif %}
+                    </span>
+                    {% else %}<span class="text-muted small">Sem prazo</span>{% endif %}
+                </div>
+
+                {% if tarefa.tags.all %}
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-1">Tags</small>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for tag in tarefa.tags.all %}
+                        <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};">{{ tag.nome }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <hr>
+                <small class="text-muted d-block">Criado por {{ tarefa.criado_por.get_full_name|default:tarefa.criado_por.username|default:"—" }}</small>
+                <small class="text-muted">{{ tarefa.criado_em|date:"d/m/Y H:i" }}</small>
+            </div>
+        </div>
+
+        <!-- Log de atividade -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold py-3">Atividade</div>
+            <div class="card-body p-0">
+                {% for ativ in atividades %}
+                <div class="d-flex gap-2 px-3 py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                         style="width:24px;height:24px;background:#ede9fe;">
+                        <i class='bx bx-time-five' style="font-size:.65rem;color:#6d28d9;"></i>
+                    </div>
+                    <div>
+                        <small class="d-block" style="font-size:.75rem;">{{ ativ.descricao }}</small>
+                        <small class="text-muted" style="font-size:.65rem;">
+                            {{ ativ.usuario.get_full_name|default:ativ.usuario.username|default:"Sistema" }} · {{ ativ.criado_em|date:"d/m H:i" }}
+                        </small>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-3 small">Nenhuma atividade.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

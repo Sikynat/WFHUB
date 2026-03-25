@@ -280,6 +280,20 @@
                     </div>
                     <div><div class="fw-bold">Histórico de Recuperações</div><div class="small text-muted">Auditoria da Wishlist</div></div>
                 </a>
+
+                <a href="{% url 'tarefas_board' %}" class="action-btn shadow-sm w-100" style="position:relative;">
+                    <div class="action-icon" style="background-color: #6366f1; color: white;">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold">Tarefas
+                            {% if notif_tarefas_count > 0 %}
+                            <span class="badge bg-danger ms-1" style="font-size:.65rem;">{{ notif_tarefas_count }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="small text-muted">Board e colaboração</div>
+                    </div>
+                </a>
             </div>
         </div>
 

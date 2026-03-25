@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Lista de Tarefas{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0 fw-bold">Tarefas</h5>
+    <div class="d-flex gap-2">
+        <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-columns me-1'></i>Kanban</a>
+        <a href="{% url 'notificacoes_tarefas' %}" class="btn btn-sm btn-outline-secondary position-relative">
+            <i class='bx bx-bell'></i>
+            {% if notif_tarefas_count > 0 %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6rem;">{{ notif_tarefas_count }}</span>{% endif %}
+        </a>
+        <a href="{% url 'gerenciar_tags_tarefa' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-tag-alt me-1'></i>Tags</a>
+        <a href="{% url 'criar_tarefa' %}" class="btn btn-sm btn-primary"><i class='bx bx-plus me-1'></i>Nova Tarefa</a>
+    </div>
+</div>
+
+<form method="get" class="d-flex flex-wrap gap-2 mb-3 align-items-end">
+    <input type="text" name="q" value="{{ filtro_busca }}" class="form-control form-control-sm" style="width:180px;" placeholder="Buscar...">
+    <select name="status" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Status</option>
+        {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if filtro_status == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="prioridade" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Prioridade</option>
+        {% for val, label in prioridade_choices %}
+        <option value="{{ val }}" {% if filtro_prioridade == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="responsavel" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Responsável</option>
+        {% for m in membros %}
+        <option value="{{ m.user.id }}" {% if filtro_responsavel == m.user.id|stringformat:"s" %}selected{% endif %}>{{ m.user.get_full_name|default:m.user.username }}</option>
+        {% endfor %}
+    </select>
+    <select name="tag" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Tag</option>
+        {% for tag in tags %}
+        <option value="{{ tag.id }}" {% if filtro_tag == tag.id|stringformat:"s" %}selected{% endif %}>{{ tag.nome }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
+    <a href="?minhas=1{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}" class="btn btn-sm {% if filtro_minhas %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class='bx bx-user me-1'></i>Minhas
+    </a>
+    {% if filtro_status or filtro_prioridade or filtro_responsavel or filtro_tag or filtro_busca or filtro_minhas %}
+    <a href="{% url 'tarefas_lista' %}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+    {% endif %}
+</form>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Tarefa</th>
+                    <th class="text-center">Prioridade</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Responsável</th>
+                    <th class="text-center">Prazo</th>
+                    <th class="text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tarefa in tarefas %}
+                <tr>
+                    <td>
+                        <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="fw-semibold text-decoration-none text-dark">{{ tarefa.titulo }}</a>
+                        {% if tarefa.tags.all %}
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            {% for tag in tarefa.tags.all %}
+                            <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.65rem;">{{ tag.nome }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if tarefa.prioridade == 'ALTA' %}<span class="badge" style="background:#fef2f2;color:#ef4444;">Alta</span>
+                        {% elif tarefa.prioridade == 'MEDIA' %}<span class="badge" style="background:#fffbeb;color:#f59e0b;">Média</span>
+                        {% else %}<span class="badge" style="background:#f0fdf4;color:#22c55e;">Baixa</span>{% endif %}
+                    </td>
+                    <td class="text-center">
+                        <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <select name="status" class="form-select form-select-sm" style="width:auto;display:inline-block;" onchange="this.form.submit()">
+                                {% for val, label in status_choices %}
+                                <option value="{{ val }}" {% if tarefa.status == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </td>
+                    <td class="text-center">
+                        {% if tarefa.responsavel %}<small class="text-muted">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}</small>
+                        {% else %}<small class="text-muted">—</small>{% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if tarefa.prazo %}
+                        <small class="{% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-muted{% endif %}">{{ tarefa.prazo|date:"d/m/Y" }}</small>
+                        {% else %}<small class="text-muted">—</small>{% endif %}
+                    </td>
+                    <td class="text-center">
+                        <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="btn btn-sm btn-outline-primary" title="Ver"><i class='bx bx-show'></i></a>
+                        <a href="{% url 'editar_tarefa' tarefa.id %}" class="btn btn-sm btn-outline-secondary" title="Editar"><i class='bx bx-edit'></i></a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-muted py-5">Nenhuma tarefa encontrada.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if tarefas.has_other_pages %}
+<nav class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if tarefas.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ tarefas.previous_page_number }}{% if filtro_status %}&status={{ filtro_status }}{% endif %}{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}">«</a></li>{% endif %}
+        <li class="page-item disabled"><span class="page-link">{{ tarefas.number }}/{{ tarefas.paginator.num_pages }}</span></li>
+        {% if tarefas.has_next %}<li class="page-item"><a class="page-link" href="?page={{ tarefas.next_page_number }}{% if filtro_status %}&status={{ filtro_status }}{% endif %}{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}">»</a></li>{% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Notificações{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-arrow-back'></i></a>
+    <h5 class="mb-0 fw-bold">Notificações</h5>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:640px;">
+    <div class="card-body p-0">
+        {% for notif in page_obj %}
+        <div class="d-flex align-items-start gap-3 p-3 {% if not forloop.last %}border-bottom{% endif %}">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                 style="width:36px;height:36px;background:#ede9fe;">
+                <i class='bx bx-bell' style="color:#6d28d9;"></i>
+            </div>
+            <div class="flex-grow-1">
+                <p class="mb-1 small">{{ notif.mensagem }}</p>
+                <div class="d-flex align-items-center gap-2">
+                    <small class="text-muted">{{ notif.criado_em|date:"d/m/Y H:i" }}</small>
+                    <a href="{% url 'detalhe_tarefa' notif.tarefa.id %}" class="small text-primary">Ver tarefa →</a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-5">
+            <i class='bx bx-bell-off' style="font-size:2rem;"></i>
+            <p class="mt-2 mb-0">Nenhuma notificação.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">«</a></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">»</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

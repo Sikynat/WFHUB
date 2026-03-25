@@ -86,6 +86,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'wefixhub.context_processors.carrinho_count',
+                'wefixhub.context_processors.notif_tarefas_count',
             ],
         },
     },

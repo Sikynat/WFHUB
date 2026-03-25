@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Gerenciar Tags{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-arrow-back'></i></a>
+    <h5 class="mb-0 fw-bold">Tags de Tarefas</h5>
+</div>
+
+<div class="row g-4" style="max-width:640px;">
+    <!-- Criar nova tag -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3">Nova Tag</h6>
+                <form method="post" class="d-flex gap-2 align-items-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="criar">
+                    <div class="flex-grow-1">
+                        <label class="form-label small">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" placeholder="Ex: Comercial, Financeiro..." required>
+                    </div>
+                    <div>
+                        <label class="form-label small">Cor</label>
+                        <input type="color" name="cor" class="form-control form-control-sm form-control-color" value="#6366f1" style="width:48px;">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Criar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tags existentes -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold py-3">Tags cadastradas</div>
+            <div class="card-body p-0">
+                {% for tag in tags %}
+                <div class="d-flex align-items-center justify-content-between p-3 {% if not forloop.last %}border-bottom{% endif %}">
+                    <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.85rem;padding:.4em .8em;">{{ tag.nome }}</span>
+                    <form method="post" onsubmit="return confirm('Excluir a tag \'{{ tag.nome }}\'?')">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="excluir">
+                        <input type="hidden" name="tag_id" value="{{ tag.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class='bx bx-trash'></i></button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-4 small">Nenhuma tag criada ainda.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

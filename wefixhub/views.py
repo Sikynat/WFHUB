@@ -56,10 +56,12 @@ from django.db.models.functions import (
 
 # 5. Aplicações Locais (Models e Forms)
 from .models import (
-    Product, Pedido, ItemPedido, WfClient, Endereco, 
+    Product, Pedido, ItemPedido, WfClient, Endereco,
     ItemPedidoIgnorado, VendaReal, StatusPedidoERP,
     Carrinho, ItemCarrinho, SugestaoCompraERP, HistoricoPreco,
-    Empresa, PerfilUsuario
+    Empresa, PerfilUsuario,
+    Tarefa, TagTarefa, ComentarioTarefa, NotificacaoTarefa,
+    AtividadeTarefa, ChecklistItem,
 )
 from .forms import (
     WfClientForm, EnderecoForm, GerarPedidoForm,
@@ -4856,3 +4858,454 @@ def perfil_representante(request):
         'hoje': hoje,
         'membros': membros,
     })
+
+
+# ==========================================
+
+
+# ==========================================
+# TAREFAS E COLABORAÇÃO
+# ==========================================
+
+def _log_atividade(tarefa, usuario, descricao):
+    AtividadeTarefa.objects.create(tarefa=tarefa, usuario=usuario, descricao=descricao)
+
+
+def _criar_notificacao(tarefa, mensagem, excluir_user=None):
+    membros = tarefa.empresa.membros.exclude(user=excluir_user).select_related('user')
+    notifs = [
+        NotificacaoTarefa(usuario=m.user, tarefa=tarefa, mensagem=mensagem)
+        for m in membros
+    ]
+    if notifs:
+        NotificacaoTarefa.objects.bulk_create(notifs)
+
+
+def _parsear_mencoes(texto, tarefa, autor):
+    """Detecta @username no texto e cria notificação para cada mencionado."""
+    import re
+    usernames = re.findall(r'@(\w+)', texto)
+    if not usernames:
+        return
+    membros_map = {
+        m.user.username: m.user
+        for m in tarefa.empresa.membros.select_related('user')
+    }
+    for username in set(usernames):
+        user = membros_map.get(username)
+        if user and user != autor:
+            NotificacaoTarefa.objects.create(
+                usuario=user,
+                tarefa=tarefa,
+                mensagem=f'{autor.get_full_name() or autor.username} mencionou você em "{tarefa.titulo}"'
+            )
+
+
+def _dados_filtros(request):
+    membros = request.empresa.membros.select_related('user')
+    tags = TagTarefa.objects.filter(empresa=request.empresa)
+    return membros, tags
+
+
+@staff_member_required
+def tarefas_board(request):
+    if not request.empresa:
+        return redirect('home')
+
+    STATUS_ORDER = ['A_FAZER', 'EM_ANDAMENTO', 'REVISAO', 'CONCLUIDO']
+    STATUS_LABELS = {
+        'A_FAZER': 'A Fazer',
+        'EM_ANDAMENTO': 'Em Andamento',
+        'REVISAO': 'Revisão',
+        'CONCLUIDO': 'Concluído',
+    }
+
+    qs = Tarefa.objects.filter(empresa=request.empresa).select_related(
+        'criado_por', 'responsavel'
+    ).prefetch_related('tags', 'checklist', 'comentarios')
+
+    filtro_prioridade = request.GET.get('prioridade', '')
+    filtro_responsavel = request.GET.get('responsavel', '')
+    filtro_tag = request.GET.get('tag', '')
+    filtro_busca = request.GET.get('q', '')
+    filtro_minhas = request.GET.get('minhas', '')
+
+    if filtro_prioridade:
+        qs = qs.filter(prioridade=filtro_prioridade)
+    if filtro_responsavel:
+        qs = qs.filter(responsavel_id=filtro_responsavel)
+    if filtro_tag:
+        qs = qs.filter(tags__id=filtro_tag)
+    if filtro_busca:
+        qs = qs.filter(titulo__icontains=filtro_busca)
+    if filtro_minhas:
+        qs = qs.filter(responsavel=request.user)
+
+    tarefas_list = list(qs)
+    colunas = []
+    for status in STATUS_ORDER:
+        colunas.append({
+            'status': status,
+            'label': STATUS_LABELS[status],
+            'tarefas': [t for t in tarefas_list if t.status == status],
+        })
+
+    membros, tags = _dados_filtros(request)
+    hoje = date.today()
+
+    return render(request, 'tarefas/board.html', {
+        'colunas': colunas,
+        'membros': membros,
+        'tags': tags,
+        'filtro_prioridade': filtro_prioridade,
+        'filtro_responsavel': filtro_responsavel,
+        'filtro_tag': filtro_tag,
+        'filtro_busca': filtro_busca,
+        'filtro_minhas': filtro_minhas,
+        'hoje': hoje,
+    })
+
+
+@staff_member_required
+def tarefas_lista(request):
+    if not request.empresa:
+        return redirect('home')
+
+    qs = Tarefa.objects.filter(empresa=request.empresa).select_related(
+        'criado_por', 'responsavel'
+    ).prefetch_related('tags')
+
+    filtro_status = request.GET.get('status', '')
+    filtro_prioridade = request.GET.get('prioridade', '')
+    filtro_responsavel = request.GET.get('responsavel', '')
+    filtro_tag = request.GET.get('tag', '')
+    filtro_busca = request.GET.get('q', '')
+    filtro_minhas = request.GET.get('minhas', '')
+
+    if filtro_status:
+        qs = qs.filter(status=filtro_status)
+    if filtro_prioridade:
+        qs = qs.filter(prioridade=filtro_prioridade)
+    if filtro_responsavel:
+        qs = qs.filter(responsavel_id=filtro_responsavel)
+    if filtro_tag:
+        qs = qs.filter(tags__id=filtro_tag)
+    if filtro_busca:
+        qs = qs.filter(titulo__icontains=filtro_busca)
+    if filtro_minhas:
+        qs = qs.filter(responsavel=request.user)
+
+    paginator = Paginator(qs, 20)
+    page = request.GET.get('page')
+    try:
+        tarefas_page = paginator.page(page)
+    except PageNotAnInteger:
+        tarefas_page = paginator.page(1)
+    except EmptyPage:
+        tarefas_page = paginator.page(paginator.num_pages)
+
+    membros, tags = _dados_filtros(request)
+    hoje = date.today()
+
+    return render(request, 'tarefas/lista.html', {
+        'tarefas': tarefas_page,
+        'membros': membros,
+        'tags': tags,
+        'filtro_status': filtro_status,
+        'filtro_prioridade': filtro_prioridade,
+        'filtro_responsavel': filtro_responsavel,
+        'filtro_tag': filtro_tag,
+        'filtro_busca': filtro_busca,
+        'filtro_minhas': filtro_minhas,
+        'status_choices': Tarefa.STATUS_CHOICES,
+        'prioridade_choices': Tarefa.PRIORIDADE_CHOICES,
+        'hoje': hoje,
+    })
+
+
+@staff_member_required
+def criar_tarefa(request):
+    if not request.empresa:
+        return redirect('home')
+
+    membros, tags = _dados_filtros(request)
+
+    if request.method == 'POST':
+        titulo = request.POST.get('titulo', '').strip()
+        if not titulo:
+            messages.error(request, 'O título é obrigatório.')
+            return render(request, 'tarefas/form.html', {
+                'membros': membros, 'tags': tags,
+                'prioridade_choices': Tarefa.PRIORIDADE_CHOICES,
+                'status_choices': Tarefa.STATUS_CHOICES,
+            })
+
+        responsavel_id = request.POST.get('responsavel') or None
+        prazo_str = request.POST.get('prazo') or None
+        prazo = None
+        if prazo_str:
+            try:
+                prazo = datetime.strptime(prazo_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        tarefa = Tarefa.objects.create(
+            empresa=request.empresa,
+            titulo=titulo,
+            descricao=request.POST.get('descricao', '').strip() or None,
+            prioridade=request.POST.get('prioridade', 'MEDIA'),
+            status=request.POST.get('status', 'A_FAZER'),
+            criado_por=request.user,
+            responsavel_id=responsavel_id,
+            prazo=prazo,
+        )
+
+        tag_ids = request.POST.getlist('tags')
+        if tag_ids:
+            tarefa.tags.set(TagTarefa.objects.filter(id__in=tag_ids, empresa=request.empresa))
+
+        _log_atividade(tarefa, request.user, 'Tarefa criada')
+        _criar_notificacao(tarefa, f'Nova tarefa: "{tarefa.titulo}"', excluir_user=request.user)
+
+        if responsavel_id and int(responsavel_id) != request.user.id:
+            try:
+                resp_user = User.objects.get(pk=responsavel_id)
+                NotificacaoTarefa.objects.get_or_create(
+                    usuario=resp_user, tarefa=tarefa,
+                    defaults={'mensagem': f'Você foi atribuído à tarefa "{tarefa.titulo}"'}
+                )
+            except User.DoesNotExist:
+                pass
+
+        messages.success(request, 'Tarefa criada!')
+        return redirect('detalhe_tarefa', tarefa_id=tarefa.id)
+
+    return render(request, 'tarefas/form.html', {
+        'membros': membros,
+        'tags': tags,
+        'prioridade_choices': Tarefa.PRIORIDADE_CHOICES,
+        'status_choices': Tarefa.STATUS_CHOICES,
+    })
+
+
+@staff_member_required
+def detalhe_tarefa(request, tarefa_id):
+    if not request.empresa:
+        return redirect('home')
+
+    tarefa = get_object_or_404(Tarefa, id=tarefa_id, empresa=request.empresa)
+    comentarios = tarefa.comentarios.select_related('autor').all()
+    atividades = tarefa.atividades.select_related('usuario').all()[:20]
+    checklist = tarefa.checklist.all()
+    membros, _ = _dados_filtros(request)
+    hoje = date.today()
+
+    nome_membros = [m.user.username for m in membros]
+
+    if request.method == 'POST':
+        texto = request.POST.get('texto', '').strip()
+        if texto:
+            ComentarioTarefa.objects.create(tarefa=tarefa, autor=request.user, texto=texto)
+            _log_atividade(tarefa, request.user, 'Adicionou um comentário')
+            _criar_notificacao(
+                tarefa,
+                f'{request.user.get_full_name() or request.user.username} comentou em "{tarefa.titulo}"',
+                excluir_user=request.user
+            )
+            _parsear_mencoes(texto, tarefa, request.user)
+        return redirect('detalhe_tarefa', tarefa_id=tarefa.id)
+
+    return render(request, 'tarefas/detalhe.html', {
+        'tarefa': tarefa,
+        'comentarios': comentarios,
+        'atividades': atividades,
+        'checklist': checklist,
+        'membros': membros,
+        'nome_membros': nome_membros,
+        'hoje': hoje,
+        'status_choices': Tarefa.STATUS_CHOICES,
+    })
+
+
+@staff_member_required
+def editar_tarefa(request, tarefa_id):
+    if not request.empresa:
+        return redirect('home')
+
+    tarefa = get_object_or_404(Tarefa, id=tarefa_id, empresa=request.empresa)
+    membros, tags = _dados_filtros(request)
+
+    if request.method == 'POST':
+        titulo = request.POST.get('titulo', '').strip()
+        if not titulo:
+            messages.error(request, 'O título é obrigatório.')
+        else:
+            responsavel_id = request.POST.get('responsavel') or None
+            prazo_str = request.POST.get('prazo') or None
+            prazo = None
+            if prazo_str:
+                try:
+                    prazo = datetime.strptime(prazo_str, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+
+            alteracoes = []
+            antigo_responsavel = tarefa.responsavel_id
+            antigo_status = tarefa.status
+            antigo_prazo = tarefa.prazo
+
+            tarefa.titulo = titulo
+            tarefa.descricao = request.POST.get('descricao', '').strip() or None
+            novo_prioridade = request.POST.get('prioridade', tarefa.prioridade)
+            novo_status = request.POST.get('status', tarefa.status)
+
+            if novo_status != antigo_status:
+                alteracoes.append(f'Status alterado para {tarefa.get_status_display()}')
+            if novo_prioridade != tarefa.prioridade:
+                alteracoes.append(f'Prioridade alterada para {novo_prioridade}')
+            if prazo != antigo_prazo:
+                alteracoes.append(f'Prazo alterado para {prazo}')
+
+            tarefa.prioridade = novo_prioridade
+            tarefa.status = novo_status
+            tarefa.responsavel_id = responsavel_id
+            tarefa.prazo = prazo
+            tarefa.save()
+
+            tag_ids = request.POST.getlist('tags')
+            tarefa.tags.set(TagTarefa.objects.filter(id__in=tag_ids, empresa=request.empresa))
+
+            for alt in alteracoes:
+                _log_atividade(tarefa, request.user, alt)
+
+            if responsavel_id and str(responsavel_id) != str(antigo_responsavel):
+                try:
+                    resp_user = User.objects.get(pk=responsavel_id)
+                    if resp_user != request.user:
+                        NotificacaoTarefa.objects.create(
+                            usuario=resp_user, tarefa=tarefa,
+                            mensagem=f'Você foi atribuído à tarefa "{tarefa.titulo}"'
+                        )
+                    _log_atividade(tarefa, request.user, f'Responsável alterado para {resp_user.get_full_name() or resp_user.username}')
+                except User.DoesNotExist:
+                    pass
+
+            messages.success(request, 'Tarefa atualizada.')
+            return redirect('detalhe_tarefa', tarefa_id=tarefa.id)
+
+    return render(request, 'tarefas/form.html', {
+        'tarefa': tarefa,
+        'membros': membros,
+        'tags': tags,
+        'prioridade_choices': Tarefa.PRIORIDADE_CHOICES,
+        'status_choices': Tarefa.STATUS_CHOICES,
+    })
+
+
+@staff_member_required
+@require_POST
+def atualizar_status_tarefa(request, tarefa_id):
+    if not request.empresa:
+        return redirect('home')
+
+    tarefa = get_object_or_404(Tarefa, id=tarefa_id, empresa=request.empresa)
+    novo_status = request.POST.get('status')
+    status_validos = [s[0] for s in Tarefa.STATUS_CHOICES]
+
+    if novo_status in status_validos and novo_status != tarefa.status:
+        tarefa.status = novo_status
+        tarefa.save(update_fields=['status', 'atualizado_em'])
+        _log_atividade(tarefa, request.user, f'Status alterado para {tarefa.get_status_display()}')
+        _criar_notificacao(
+            tarefa,
+            f'"{tarefa.titulo}" movida para {tarefa.get_status_display()}',
+            excluir_user=request.user
+        )
+
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or 'tarefas_board'
+    return redirect(next_url)
+
+
+@staff_member_required
+@require_POST
+def excluir_tarefa(request, tarefa_id):
+    if not request.empresa:
+        return redirect('home')
+
+    tarefa = get_object_or_404(Tarefa, id=tarefa_id, empresa=request.empresa)
+    tarefa.delete()
+    messages.success(request, 'Tarefa excluída.')
+    return redirect('tarefas_board')
+
+
+@staff_member_required
+@require_POST
+def toggle_checklist_item(request, item_id):
+    item = get_object_or_404(ChecklistItem, id=item_id, tarefa__empresa=request.empresa)
+    item.concluido = not item.concluido
+    item.save(update_fields=['concluido'])
+    return redirect('detalhe_tarefa', tarefa_id=item.tarefa_id)
+
+
+@staff_member_required
+@require_POST
+def adicionar_checklist_item(request, tarefa_id):
+    tarefa = get_object_or_404(Tarefa, id=tarefa_id, empresa=request.empresa)
+    texto = request.POST.get('texto', '').strip()
+    if texto:
+        ultimo = tarefa.checklist.order_by('-ordem').first()
+        ordem = (ultimo.ordem + 1) if ultimo else 0
+        ChecklistItem.objects.create(tarefa=tarefa, texto=texto, ordem=ordem)
+    return redirect('detalhe_tarefa', tarefa_id=tarefa.id)
+
+
+@staff_member_required
+@require_POST
+def excluir_checklist_item(request, item_id):
+    item = get_object_or_404(ChecklistItem, id=item_id, tarefa__empresa=request.empresa)
+    tarefa_id = item.tarefa_id
+    item.delete()
+    return redirect('detalhe_tarefa', tarefa_id=tarefa_id)
+
+
+@staff_member_required
+def notificacoes_tarefas(request):
+    if not request.empresa:
+        return redirect('home')
+
+    notifs = NotificacaoTarefa.objects.filter(
+        usuario=request.user
+    ).select_related('tarefa').order_by('-criado_em')
+
+    notifs.filter(lida=False).update(lida=True)
+
+    paginator = Paginator(notifs, 20)
+    page = request.GET.get('page')
+    try:
+        page_obj = paginator.page(page)
+    except (PageNotAnInteger, EmptyPage):
+        page_obj = paginator.page(1)
+
+    return render(request, 'tarefas/notificacoes.html', {'page_obj': page_obj})
+
+
+@staff_member_required
+def gerenciar_tags_tarefa(request):
+    if not request.empresa:
+        return redirect('home')
+
+    tags = TagTarefa.objects.filter(empresa=request.empresa)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'criar':
+            nome = request.POST.get('nome', '').strip()
+            cor = request.POST.get('cor', '#6366f1')
+            if nome:
+                TagTarefa.objects.get_or_create(empresa=request.empresa, nome=nome, defaults={'cor': cor})
+        elif action == 'excluir':
+            tag_id = request.POST.get('tag_id')
+            TagTarefa.objects.filter(id=tag_id, empresa=request.empresa).delete()
+        return redirect('gerenciar_tags_tarefa')
+
+    return render(request, 'tarefas/tags.html', {'tags': tags})
