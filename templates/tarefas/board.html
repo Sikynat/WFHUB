@@ -3,31 +3,67 @@
 
 {% block head_extra %}
 <style>
-.sortable-ghost  { opacity:.35; background:#f3f4f6; }
-.kanban-col-cards { min-height:80px; }
-.tarefa-card { cursor:grab; }
-.tarefa-card:active { cursor:grabbing; }
-.quick-add-area { display:none; }
+    body { background: #f8f9fc; }
+
+    /* Toolbar & filters */
+    .board-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+    .filter-bar { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: .6rem 1rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1.25rem; }
+    .filter-bar .form-control-sm, .filter-bar .form-select-sm { border-radius: 8px; border-color: #e5e7eb; font-size: .8rem; }
+
+    /* Column */
+    .kanban-col { min-width: 272px; max-width: 272px; flex: 0 0 272px; display: flex; flex-direction: column; }
+    .col-header { display: flex; align-items: center; gap: .5rem; padding: .55rem .85rem; border-radius: 10px 10px 0 0; border-bottom: 2px solid; }
+    .col-label { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; flex: 1; }
+    .col-badge { font-size: .68rem; font-weight: 700; padding: .1rem .5rem; border-radius: 999px; background: rgba(0,0,0,.1); }
+
+    .kanban-col-cards { min-height: 80px; display: flex; flex-direction: column; gap: .5rem; padding: .6rem; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px; flex: 1; }
+
+    /* Empty state */
+    .empty-col { border: 2px dashed #e5e7eb; border-radius: 8px; padding: 1.5rem; text-align: center; color: #9ca3af; font-size: .78rem; }
+
+    /* Card */
+    .tarefa-card { background: white; border-radius: 10px; border: 1px solid #edf2f7; box-shadow: 0 1px 4px rgba(0,0,0,.05); cursor: grab; transition: box-shadow .15s, transform .1s; overflow: hidden; }
+    .tarefa-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); transform: translateY(-1px); }
+    .tarefa-card:active { cursor: grabbing; }
+    .sortable-ghost { opacity: .35; background: #f3f4f6; }
+
+    /* Quick add */
+    .quick-add-area { display: none; }
+    .qa-input { border: 1px dashed #d1d5db; border-radius: 8px; font-size: .82rem; padding: .4rem .65rem; width: 100%; outline: none; }
+    .qa-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+    .qa-add-btn { font-size: .78rem; color: #9ca3af; background: none; border: none; padding: .4rem .5rem; cursor: pointer; display: flex; align-items: center; gap: .25rem; }
+    .qa-add-btn:hover { color: #6366f1; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h5 class="mb-0 fw-bold">Board de Tarefas</h5>
+<div class="board-toolbar">
+    <div class="d-flex align-items-center gap-2">
+        <h5 class="mb-0 fw-bold text-dark">Board de Tarefas</h5>
+    </div>
     <div class="d-flex gap-2">
-        <a href="{% url 'tarefas_lista' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-list-ul me-1'></i>Lista</a>
-        <a href="{% url 'notificacoes_tarefas' %}" class="btn btn-sm btn-outline-secondary position-relative">
+        <a href="{% url 'tarefas_lista' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+            <i class='bx bx-list-ul me-1'></i>Lista
+        </a>
+        <a href="{% url 'dashboard_produtividade' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+            <i class='bx bx-bar-chart-alt-2 me-1'></i>Produtividade
+        </a>
+        <a href="{% url 'notificacoes_tarefas' %}" class="btn btn-sm btn-outline-secondary rounded-pill position-relative">
             <i class='bx bx-bell'></i>
             {% if notif_tarefas_count > 0 %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6rem;">{{ notif_tarefas_count }}</span>{% endif %}
         </a>
-        <a href="{% url 'gerenciar_tags_tarefa' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-tag-alt me-1'></i>Tags</a>
-        <a href="{% url 'criar_tarefa' %}" class="btn btn-sm btn-primary"><i class='bx bx-plus me-1'></i>Nova Tarefa</a>
+        <a href="{% url 'gerenciar_tags_tarefa' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+            <i class='bx bx-tag-alt me-1'></i>Tags
+        </a>
+        <a href="{% url 'criar_tarefa' %}" class="btn btn-sm btn-primary rounded-pill">
+            <i class='bx bx-plus me-1'></i>Nova Tarefa
+        </a>
     </div>
 </div>
 
-<!-- Filtros -->
-<form method="get" class="d-flex flex-wrap gap-2 mb-4 align-items-end">
-    <input type="text" name="q" value="{{ filtro_busca }}" class="form-control form-control-sm" style="width:180px;" placeholder="Buscar tarefa...">
+<form method="get" class="filter-bar">
+    <i class='bx bx-search text-muted'></i>
+    <input type="text" name="q" value="{{ filtro_busca }}" class="form-control form-control-sm" style="width:160px;" placeholder="Buscar tarefa...">
     <select name="prioridade" class="form-select form-select-sm" style="width:auto;">
         <option value="">Prioridade</option>
         <option value="ALTA"  {% if filtro_prioridade == 'ALTA'  %}selected{% endif %}>Alta</option>
@@ -46,53 +82,53 @@
         <option value="{{ tag.id }}" {% if filtro_tag == tag.id|stringformat:"s" %}selected{% endif %}>{{ tag.nome }}</option>
         {% endfor %}
     </select>
-    <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
-    <a href="?minhas=1{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}" class="btn btn-sm {% if filtro_minhas %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+    <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill">Filtrar</button>
+    <a href="?minhas=1{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}" class="btn btn-sm rounded-pill {% if filtro_minhas %}btn-primary{% else %}btn-outline-secondary{% endif %}">
         <i class='bx bx-user me-1'></i>Minhas
     </a>
     {% if filtro_prioridade or filtro_responsavel or filtro_tag or filtro_busca or filtro_minhas %}
-    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-danger rounded-pill">
+        <i class='bx bx-x me-1'></i>Limpar
+    </a>
     {% endif %}
 </form>
 
-<!-- Kanban -->
-<div class="d-flex gap-3 overflow-auto pb-3" style="align-items:flex-start;">
+<div class="d-flex gap-3 overflow-auto pb-4" style="align-items:flex-start;">
     {% for coluna in colunas %}
-    <div style="min-width:280px;max-width:300px;flex:0 0 280px;">
+    <div class="kanban-col">
 
-        <div class="d-flex align-items-center justify-content-between mb-2 px-1">
-            <span class="fw-semibold small text-uppercase text-muted">{{ coluna.label }}</span>
-            <span class="badge bg-secondary rounded-pill" id="badge-{{ coluna.status }}">{{ coluna.tarefas|length }}</span>
+        <div class="col-header" style="background:{{ coluna.color }};border-color:{{ coluna.color }};">
+            <span class="col-label" style="color:white;">{{ coluna.label }}</span>
+            <span class="col-badge" style="background:rgba(255,255,255,.25);color:white;" id="badge-{{ coluna.status }}">{{ coluna.tarefas|length }}</span>
         </div>
 
-        <div class="d-flex flex-column gap-2 kanban-col-cards"
+        <div class="kanban-col-cards"
              id="col-{{ coluna.status }}"
-             data-status="{{ coluna.status }}">
+             data-status="{{ coluna.status }}"
+             style="background:#f8f9fc;">
             {% for tarefa in coluna.tarefas %}
-                {% include 'tarefas/_card.html' with col_status=coluna.status %}
+                {% include 'tarefas/_card.html' with col_status=coluna.status col_color=coluna.color %}
             {% empty %}
-            <div class="text-center text-muted py-4 small empty-col" style="border:2px dashed #e5e7eb;border-radius:8px;">Nenhuma tarefa</div>
+            <div class="empty-col">Nenhuma tarefa</div>
             {% endfor %}
         </div>
 
         <!-- Quick Add -->
-        <div class="mt-2">
+        <div class="mt-1">
             <div class="quick-add-area" id="qa-{{ coluna.status }}">
-                <div class="card border-0 shadow-sm p-2">
+                <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:.6rem;">
                     <input type="text"
                            id="qa-input-{{ coluna.status }}"
-                           class="form-control form-control-sm mb-2"
+                           class="qa-input mb-2"
                            placeholder="Título da tarefa..."
                            onkeydown="if(event.key==='Enter'){qaSubmit('{{ coluna.status }}')} if(event.key==='Escape'){qaHide('{{ coluna.status }}')}">
                     <div class="d-flex gap-1">
-                        <button class="btn btn-sm btn-primary flex-grow-1" onclick="qaSubmit('{{ coluna.status }}')">Adicionar</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="qaHide('{{ coluna.status }}')">✕</button>
+                        <button class="btn btn-sm btn-primary flex-grow-1 rounded-pill" style="font-size:.78rem;" onclick="qaSubmit('{{ coluna.status }}')">Adicionar</button>
+                        <button class="btn btn-sm btn-outline-secondary rounded-pill" style="font-size:.78rem;" onclick="qaHide('{{ coluna.status }}')">✕</button>
                     </div>
                 </div>
             </div>
-            <button class="btn btn-sm btn-link text-muted w-100 text-start p-1"
-                    id="qa-btn-{{ coluna.status }}"
-                    onclick="qaShow('{{ coluna.status }}')">
+            <button class="qa-add-btn w-100" id="qa-btn-{{ coluna.status }}" onclick="qaShow('{{ coluna.status }}')">
                 <i class='bx bx-plus'></i> Adicionar tarefa
             </button>
         </div>
@@ -125,7 +161,6 @@ document.querySelectorAll('.kanban-col-cards').forEach(col => {
             updateBadge(oldStatus, -1);
             updateBadge(newStatus, +1);
 
-            // Oculta botões ← → do card movido (ficarão corretos no próximo reload)
             const btns = evt.item.querySelector('.move-btns');
             if (btns) btns.style.display = 'none';
 
@@ -143,8 +178,7 @@ function refreshEmptyCol(col) {
     const hasCards = col.querySelector('.tarefa-card');
     const hasEmpty = col.querySelector('.empty-col');
     if (!hasCards && !hasEmpty) {
-        col.insertAdjacentHTML('beforeend',
-            '<div class="text-center text-muted py-4 small empty-col" style="border:2px dashed #e5e7eb;border-radius:8px;">Nenhuma tarefa</div>');
+        col.insertAdjacentHTML('beforeend', '<div class="empty-col">Nenhuma tarefa</div>');
     }
 }
 
@@ -181,7 +215,7 @@ async function qaSubmit(status) {
         fd.append('status', status);
         fd.append('csrfmiddlewaretoken', CSRF);
 
-        const res = await fetch('/tarefas/rapida/', { method: 'POST', credentials: 'same-origin', body: fd });
+        const res = await fetch('/tarefas/rapida/', { method: 'POST', credentials: 'same-origin', body: fd, headers: {'HX-Request': 'true'} });
         if (!res.ok) throw new Error();
 
         const html = await res.text();

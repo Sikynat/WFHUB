@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+{% block title %}Produtividade{% endblock %}
+
+{% block content %}
+<style>
+    body { background: #f8f9fc; }
+
+    .dash-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
+
+    /* KPI cards */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .kpi-card { background: white; border-radius: 14px; border: 1px solid #edf2f7; padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: .3rem; }
+    .kpi-label { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; }
+    .kpi-value { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .kpi-sub { font-size: .75rem; color: #9ca3af; margin-top: .15rem; }
+    .kpi-bar { height: 4px; border-radius: 999px; background: #e5e7eb; margin-top: .6rem; overflow: hidden; }
+    .kpi-bar-fill { height: 100%; border-radius: 999px; }
+
+    /* Chart cards */
+    .chart-card { background: white; border-radius: 14px; border: 1px solid #edf2f7; padding: 1.25rem 1.5rem; }
+    .chart-title { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #374151; margin-bottom: 1rem; }
+
+    /* Priority pills */
+    .pri-row { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+    .pri-label { font-size: .8rem; color: #6b7280; width: 60px; flex-shrink: 0; }
+    .pri-track { flex: 1; background: #f3f4f6; border-radius: 999px; height: 10px; overflow: hidden; }
+    .pri-fill { height: 100%; border-radius: 999px; }
+    .pri-count { font-size: .78rem; font-weight: 700; color: #374151; width: 28px; text-align: right; flex-shrink: 0; }
+
+    /* Table */
+    .atrasadas-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .atrasadas-table th { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: #9ca3af; padding: .5rem .75rem; border-bottom: 1px solid #f3f4f6; }
+    .atrasadas-table td { padding: .6rem .75rem; border-bottom: 1px solid #f9fafb; vertical-align: middle; color: #374151; }
+    .atrasadas-table tr:last-child td { border-bottom: none; }
+    .dias-badge { font-size: .7rem; font-weight: 700; padding: .15rem .5rem; border-radius: 999px; background: #fef2f2; color: #ef4444; }
+</style>
+
+<div class="dash-toolbar">
+    <div class="d-flex align-items-center gap-2">
+        <h5 class="mb-0 fw-bold text-dark">Produtividade</h5>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+            <i class='bx bx-columns me-1'></i>Board
+        </a>
+        <a href="{% url 'tarefas_lista' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+            <i class='bx bx-list-ul me-1'></i>Lista
+        </a>
+    </div>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-label">Total de tarefas</div>
+        <div class="kpi-value" style="color:#7c3aed;">{{ total }}</div>
+        <div class="kpi-sub">cadastradas na empresa</div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:100%;background:#7c3aed;"></div></div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Concluídas esta semana</div>
+        <div class="kpi-value" style="color:#059669;">{{ concluidas_semana }}</div>
+        <div class="kpi-sub">desde segunda-feira</div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{% if total > 0 %}{% widthratio concluidas_semana total 100 %}{% else %}0{% endif %}%;background:#059669;"></div></div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Em andamento</div>
+        <div class="kpi-value" style="color:#2563eb;">{{ em_andamento }}</div>
+        <div class="kpi-sub">em execução agora</div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{% if total > 0 %}{% widthratio em_andamento total 100 %}{% else %}0{% endif %}%;background:#2563eb;"></div></div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Atrasadas</div>
+        <div class="kpi-value" style="color:{% if atrasadas > 0 %}#ef4444{% else %}#22c55e{% endif %};">{{ atrasadas }}</div>
+        <div class="kpi-sub">prazo vencido e abertas</div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{% if total > 0 %}{% widthratio atrasadas total 100 %}{% else %}0{% endif %}%;background:#ef4444;"></div></div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Taxa de conclusão</div>
+        <div class="kpi-value" style="color:#d97706;">{{ taxa_conclusao }}%</div>
+        <div class="kpi-sub">{{ concluidas_total }} de {{ total }} concluídas</div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{{ taxa_conclusao }}%;background:#d97706;"></div></div>
+    </div>
+</div>
+
+<!-- Row 1: line chart + donut -->
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <div class="chart-card h-100">
+            <div class="chart-title"><i class='bx bx-trending-up me-1'></i>Concluídas por semana (últimas 8 semanas)</div>
+            <canvas id="chartSemanas" height="90"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="chart-card h-100">
+            <div class="chart-title"><i class='bx bx-pie-chart me-1'></i>Por status</div>
+            <canvas id="chartStatus" height="160"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: bar members + priority -->
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <div class="chart-card h-100">
+            <div class="chart-title"><i class='bx bx-group me-1'></i>Tarefas por membro</div>
+            {% if membros_labels != "[]" %}
+            <canvas id="chartMembros" height="{% if membros_labels|length > 4 %}140{% else %}80{% endif %}"></canvas>
+            {% else %}
+            <div class="text-center text-muted py-4 small">Nenhum responsável atribuído ainda.</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="chart-card h-100">
+            <div class="chart-title"><i class='bx bx-flag me-1'></i>Por prioridade</div>
+            {% with pri_total=pri_alta|add:pri_media|add:pri_baixa %}
+            <div class="mt-2">
+                <div class="pri-row">
+                    <span class="pri-label">Alta</span>
+                    <div class="pri-track">
+                        <div class="pri-fill" style="width:{% if pri_total > 0 %}{% widthratio pri_alta pri_total 100 %}{% else %}0{% endif %}%;background:#ef4444;"></div>
+                    </div>
+                    <span class="pri-count">{{ pri_alta }}</span>
+                </div>
+                <div class="pri-row">
+                    <span class="pri-label">Média</span>
+                    <div class="pri-track">
+                        <div class="pri-fill" style="width:{% if pri_total > 0 %}{% widthratio pri_media pri_total 100 %}{% else %}0{% endif %}%;background:#f59e0b;"></div>
+                    </div>
+                    <span class="pri-count">{{ pri_media }}</span>
+                </div>
+                <div class="pri-row">
+                    <span class="pri-label">Baixa</span>
+                    <div class="pri-track">
+                        <div class="pri-fill" style="width:{% if pri_total > 0 %}{% widthratio pri_baixa pri_total 100 %}{% else %}0{% endif %}%;background:#22c55e;"></div>
+                    </div>
+                    <span class="pri-count">{{ pri_baixa }}</span>
+                </div>
+            </div>
+            {% endwith %}
+        </div>
+    </div>
+</div>
+
+<!-- Tarefas atrasadas -->
+{% if tarefas_atrasadas %}
+<div class="chart-card mb-3">
+    <div class="chart-title"><i class='bx bx-error-circle me-1' style="color:#ef4444;"></i>Tarefas atrasadas</div>
+    <table class="atrasadas-table">
+        <thead>
+            <tr>
+                <th>Tarefa</th>
+                <th>Responsável</th>
+                <th>Prazo</th>
+                <th>Atraso</th>
+                <th>Prioridade</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in tarefas_atrasadas %}
+            <tr>
+                <td class="fw-semibold">{{ t.titulo }}</td>
+                <td>
+                    {% if t.responsavel %}
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="width:22px;height:22px;border-radius:50%;background:#6366f1;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:white;">
+                            {{ t.responsavel.get_full_name|default:t.responsavel.username|slice:":1"|upper }}
+                        </span>
+                        <span>{{ t.responsavel.get_full_name|default:t.responsavel.username }}</span>
+                    </div>
+                    {% else %}—{% endif %}
+                </td>
+                <td style="color:#ef4444;font-weight:600;">{{ t.prazo|date:"d/m/Y" }}</td>
+                <td>
+                    <span class="dias-badge">{{ hoje|timeuntil:t.prazo }} atrás</span>
+                </td>
+                <td>
+                    {% if t.prioridade == 'ALTA' %}<span style="font-size:.72rem;font-weight:600;color:#ef4444;">● Alta</span>
+                    {% elif t.prioridade == 'MEDIA' %}<span style="font-size:.72rem;font-weight:600;color:#f59e0b;">● Média</span>
+                    {% else %}<span style="font-size:.72rem;font-weight:600;color:#22c55e;">● Baixa</span>{% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'detalhe_tarefa' t.id %}" style="font-size:.75rem;color:#6366f1;">Ver →</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.color = '#9ca3af';
+
+// ── Linha: concluídas por semana ──────────────────────────
+new Chart(document.getElementById('chartSemanas'), {
+    type: 'line',
+    data: {
+        labels: {{ semanas_labels|safe }},
+        datasets: [{
+            label: 'Concluídas',
+            data: {{ semanas_data|safe }},
+            borderColor: '#7c3aed',
+            backgroundColor: 'rgba(124,58,237,.08)',
+            borderWidth: 2.5,
+            pointBackgroundColor: '#7c3aed',
+            pointRadius: 4,
+            tension: 0.4,
+            fill: true,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+// ── Donut: por status ─────────────────────────────────────
+new Chart(document.getElementById('chartStatus'), {
+    type: 'doughnut',
+    data: {
+        labels: {{ status_labels|safe }},
+        datasets: [{
+            data: {{ status_data|safe }},
+            backgroundColor: ['#7c3aed', '#2563eb', '#d97706', '#059669'],
+            borderWidth: 0,
+            hoverOffset: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        cutout: '68%',
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 12, font: { size: 11 } } }
+        }
+    }
+});
+
+// ── Barras: por membro ────────────────────────────────────
+{% if membros_labels != "[]" %}
+new Chart(document.getElementById('chartMembros'), {
+    type: 'bar',
+    data: {
+        labels: {{ membros_labels|safe }},
+        datasets: [
+            {
+                label: 'Total',
+                data: {{ membros_total|safe }},
+                backgroundColor: 'rgba(99,102,241,.15)',
+                borderColor: '#6366f1',
+                borderWidth: 1.5,
+                borderRadius: 6,
+            },
+            {
+                label: 'Concluídas',
+                data: {{ membros_concluidas|safe }},
+                backgroundColor: 'rgba(5,150,105,.15)',
+                borderColor: '#059669',
+                borderWidth: 1.5,
+                borderRadius: 6,
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'top', labels: { font: { size: 11 }, padding: 10 } } },
+        scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

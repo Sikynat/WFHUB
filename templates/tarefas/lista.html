@@ -2,125 +2,308 @@
 {% block title %}Lista de Tarefas{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h5 class="mb-0 fw-bold">Tarefas</h5>
-    <div class="d-flex gap-2">
-        <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-columns me-1'></i>Kanban</a>
-        <a href="{% url 'notificacoes_tarefas' %}" class="btn btn-sm btn-outline-secondary position-relative">
-            <i class='bx bx-bell'></i>
-            {% if notif_tarefas_count > 0 %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6rem;">{{ notif_tarefas_count }}</span>{% endif %}
-        </a>
-        <a href="{% url 'gerenciar_tags_tarefa' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-tag-alt me-1'></i>Tags</a>
-        <a href="{% url 'criar_tarefa' %}" class="btn btn-sm btn-primary"><i class='bx bx-plus me-1'></i>Nova Tarefa</a>
+<style>
+    body { background: #f8f9fc; }
+
+    .lista-header { padding: 0 0 1rem 0; }
+    .lista-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
+
+    /* Filters */
+    .filter-bar { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: .6rem 1rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1.25rem; }
+    .filter-bar .form-control-sm, .filter-bar .form-select-sm { border-radius: 8px; border-color: #e5e7eb; font-size: .8rem; }
+
+    /* Group header */
+    .group-wrap { margin-bottom: 1.5rem; }
+    .group-header { display: flex; align-items: center; gap: .6rem; padding: .5rem .75rem; border-radius: 8px 8px 0 0; cursor: pointer; user-select: none; border-bottom: 2px solid; }
+    .group-header .group-chevron { transition: transform .2s; }
+    .group-header.collapsed .group-chevron { transform: rotate(-90deg); }
+    .group-count { background: rgba(0,0,0,.1); border-radius: 999px; font-size: .7rem; font-weight: 700; padding: .1rem .5rem; }
+
+    /* Table */
+    .monday-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
+    .monday-table th { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; background: #f9fafb; padding: .6rem .85rem; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+    .monday-table td { padding: .6rem .85rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; font-size: .85rem; }
+    .monday-table tbody tr:not(.quick-add-row):last-child td { border-bottom: none; }
+    .monday-table tr:hover td { background: #fafbff; }
+
+    /* Task name */
+    .task-name { font-weight: 600; color: #1e293b; text-decoration: none; }
+    .task-name:hover { color: #4f46e5; text-decoration: underline; }
+    .tag-pill { font-size: .65rem; font-weight: 600; padding: .15rem .5rem; border-radius: 999px; }
+
+    /* Avatar */
+    .avatar-sm { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white; flex-shrink: 0; }
+
+    /* Status pill */
+    .status-pill { font-size: .72rem; font-weight: 600; padding: .25rem .7rem; border-radius: 999px; white-space: nowrap; cursor: pointer; border: none; }
+
+    /* Timeline bar */
+    .timeline-wrap { width: 100%; min-width: 90px; max-width: 140px; }
+    .timeline-track { background: #e5e7eb; border-radius: 999px; height: 8px; overflow: hidden; }
+    .timeline-fill { height: 100%; border-radius: 999px; transition: width .3s; }
+    .timeline-label { font-size: .65rem; color: #9ca3af; margin-top: 2px; }
+
+    /* Priority stars */
+    .star { font-size: .85rem; cursor: default; }
+    .star.on { color: #f59e0b; }
+    .star.off { color: #d1d5db; }
+
+    /* Quick add row */
+    .quick-add-row td { background: #f9fafb; border-top: 1px solid #e5e7eb !important; }
+    .quick-add-input { border: 1px dashed #d1d5db; border-radius: 6px; font-size: .82rem; padding: .3rem .6rem; background: white; color: #374151; outline: none; width: 100%; }
+    .quick-add-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.1); }
+
+    .btn-action { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e5e7eb; background: white; display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; color: #6b7280; text-decoration: none; cursor: pointer; transition: background .15s, color .15s; }
+    .btn-action:hover { background: #f3f4f6; color: #111827; }
+    .btn-action.danger:hover { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+</style>
+
+<div class="lista-header">
+    <div class="lista-toolbar mb-3">
+        <div class="d-flex align-items-center gap-2">
+            <h5 class="mb-0 fw-bold text-dark">Tarefas</h5>
+            <span class="badge bg-light text-muted border" style="font-size:.72rem;">
+                {{ total_tarefas }} tarefa{{ total_tarefas|pluralize:"s" }}
+            </span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+                <i class='bx bx-columns me-1'></i>Kanban
+            </a>
+            <a href="{% url 'dashboard_produtividade' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+                <i class='bx bx-bar-chart-alt-2 me-1'></i>Produtividade
+            </a>
+            <a href="{% url 'notificacoes_tarefas' %}" class="btn btn-sm btn-outline-secondary rounded-pill position-relative">
+                <i class='bx bx-bell'></i>
+                {% if notif_tarefas_count > 0 %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6rem;">{{ notif_tarefas_count }}</span>{% endif %}
+            </a>
+            <a href="{% url 'gerenciar_tags_tarefa' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+                <i class='bx bx-tag-alt me-1'></i>Tags
+            </a>
+            <a href="{% url 'criar_tarefa' %}" class="btn btn-sm btn-primary rounded-pill">
+                <i class='bx bx-plus me-1'></i>Nova Tarefa
+            </a>
+        </div>
     </div>
+
+    <form method="get" class="filter-bar">
+        <i class='bx bx-search text-muted'></i>
+        <input type="text" name="q" value="{{ filtro_busca }}" class="form-control form-control-sm" style="width:160px;" placeholder="Buscar tarefa...">
+        <select name="status" class="form-select form-select-sm" style="width:auto;">
+            <option value="">Todos os status</option>
+            {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if filtro_status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="prioridade" class="form-select form-select-sm" style="width:auto;">
+            <option value="">Prioridade</option>
+            {% for val, label in prioridade_choices %}
+            <option value="{{ val }}" {% if filtro_prioridade == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="responsavel" class="form-select form-select-sm" style="width:auto;">
+            <option value="">Responsável</option>
+            {% for m in membros %}
+            <option value="{{ m.user.id }}" {% if filtro_responsavel == m.user.id|stringformat:"s" %}selected{% endif %}>{{ m.user.get_full_name|default:m.user.username }}</option>
+            {% endfor %}
+        </select>
+        <select name="tag" class="form-select form-select-sm" style="width:auto;">
+            <option value="">Tag</option>
+            {% for tag in tags %}
+            <option value="{{ tag.id }}" {% if filtro_tag == tag.id|stringformat:"s" %}selected{% endif %}>{{ tag.nome }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill">Filtrar</button>
+        <a href="?minhas=1{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}" class="btn btn-sm rounded-pill {% if filtro_minhas %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            <i class='bx bx-user me-1'></i>Minhas
+        </a>
+        {% if filtro_status or filtro_prioridade or filtro_responsavel or filtro_tag or filtro_busca or filtro_minhas %}
+        <a href="{% url 'tarefas_lista' %}" class="btn btn-sm btn-outline-danger rounded-pill">
+            <i class='bx bx-x me-1'></i>Limpar
+        </a>
+        {% endif %}
+    </form>
 </div>
 
-<form method="get" class="d-flex flex-wrap gap-2 mb-3 align-items-end">
-    <input type="text" name="q" value="{{ filtro_busca }}" class="form-control form-control-sm" style="width:180px;" placeholder="Buscar...">
-    <select name="status" class="form-select form-select-sm" style="width:auto;">
-        <option value="">Status</option>
-        {% for val, label in status_choices %}
-        <option value="{{ val }}" {% if filtro_status == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-    </select>
-    <select name="prioridade" class="form-select form-select-sm" style="width:auto;">
-        <option value="">Prioridade</option>
-        {% for val, label in prioridade_choices %}
-        <option value="{{ val }}" {% if filtro_prioridade == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-    </select>
-    <select name="responsavel" class="form-select form-select-sm" style="width:auto;">
-        <option value="">Responsável</option>
-        {% for m in membros %}
-        <option value="{{ m.user.id }}" {% if filtro_responsavel == m.user.id|stringformat:"s" %}selected{% endif %}>{{ m.user.get_full_name|default:m.user.username }}</option>
-        {% endfor %}
-    </select>
-    <select name="tag" class="form-select form-select-sm" style="width:auto;">
-        <option value="">Tag</option>
-        {% for tag in tags %}
-        <option value="{{ tag.id }}" {% if filtro_tag == tag.id|stringformat:"s" %}selected{% endif %}>{{ tag.nome }}</option>
-        {% endfor %}
-    </select>
-    <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
-    <a href="?minhas=1{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}" class="btn btn-sm {% if filtro_minhas %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-        <i class='bx bx-user me-1'></i>Minhas
-    </a>
-    {% if filtro_status or filtro_prioridade or filtro_responsavel or filtro_tag or filtro_busca or filtro_minhas %}
-    <a href="{% url 'tarefas_lista' %}" class="btn btn-sm btn-outline-secondary">Limpar</a>
-    {% endif %}
-</form>
+{% if total_tarefas == 0 %}
+<div class="text-center py-5 text-muted">
+    <i class='bx bx-task fs-1 d-block mb-2'></i>
+    Nenhuma tarefa encontrada.
+</div>
+{% endif %}
 
-<div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
+{% for grupo in grupos %}{% if grupo.tarefas %}
+<div class="group-wrap">
+    <div class="group-header" style="background:{{ grupo.color }};border-color:{{ grupo.color }};" onclick="toggleGroup('grp-{{ grupo.status }}')" id="hdr-{{ grupo.status }}">
+        <span class="group-chevron" style="color:rgba(255,255,255,.8);font-size:.9rem;">▼</span>
+        <span class="fw-bold" style="color:white;font-size:.85rem;">{{ grupo.label }}</span>
+        <span class="group-count" style="background:rgba(255,255,255,.25);color:white;">{{ grupo.tarefas|length }}</span>
+    </div>
+
+    <div id="grp-{{ grupo.status }}">
+        <table class="monday-table">
+            <thead>
                 <tr>
-                    <th>Tarefa</th>
-                    <th class="text-center">Prioridade</th>
-                    <th class="text-center">Status</th>
-                    <th class="text-center">Responsável</th>
-                    <th class="text-center">Prazo</th>
-                    <th class="text-center">Ações</th>
+                    <th style="width:36%">Tarefa</th>
+                    <th style="width:8%" class="text-center">Responsável</th>
+                    <th style="width:11%" class="text-center">Status</th>
+                    <th style="width:14%">Cronograma</th>
+                    <th style="width:9%" class="text-center">Prazo</th>
+                    <th style="width:9%" class="text-center">Prioridade</th>
+                    <th style="width:8%" class="text-center">Ações</th>
                 </tr>
             </thead>
             <tbody>
-                {% for tarefa in tarefas %}
+                {% for tarefa in grupo.tarefas %}
                 <tr>
+                    <!-- Task name + tags -->
                     <td>
-                        <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="fw-semibold text-decoration-none text-dark">{{ tarefa.titulo }}</a>
-                        {% if tarefa.tags.all %}
-                        <div class="d-flex flex-wrap gap-1 mt-1">
-                            {% for tag in tarefa.tags.all %}
-                            <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.65rem;">{{ tag.nome }}</span>
-                            {% endfor %}
+                        <div class="d-flex gap-2">
+                            <div style="width:3px;min-width:3px;background:{{ grupo.color }};border-radius:2px;align-self:stretch;"></div>
+                            <div>
+                                <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="task-name d-block">{{ tarefa.titulo }}</a>
+                                {% if tarefa.tags.all %}
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                    {% for tag in tarefa.tags.all %}
+                                    <span class="tag-pill" style="background:{{ tag.cor }}18;color:{{ tag.cor }};">{{ tag.nome }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if tarefa.checklist_total > 0 %}
+                                <small class="text-muted d-block mt-1" style="font-size:.68rem;">
+                                    <i class='bx bx-check-square me-1'></i>{{ tarefa.checklist_done }}/{{ tarefa.checklist_total }}
+                                </small>
+                                {% endif %}
+                            </div>
                         </div>
+                    </td>
+
+                    <!-- Assignee -->
+                    <td class="text-center">
+                        {% if tarefa.responsavel %}
+                        {% with name=tarefa.responsavel.get_full_name|default:tarefa.responsavel.username %}
+                        <span class="avatar-sm" style="background:#6366f1;" title="{{ name }}">{{ name|slice:":1"|upper }}</span>
+                        {% endwith %}
+                        {% else %}
+                        <span class="text-muted" style="font-size:.75rem;">—</span>
                         {% endif %}
                     </td>
-                    <td class="text-center">
-                        {% if tarefa.prioridade == 'ALTA' %}<span class="badge" style="background:#fef2f2;color:#ef4444;">Alta</span>
-                        {% elif tarefa.prioridade == 'MEDIA' %}<span class="badge" style="background:#fffbeb;color:#f59e0b;">Média</span>
-                        {% else %}<span class="badge" style="background:#f0fdf4;color:#22c55e;">Baixa</span>{% endif %}
-                    </td>
+
+                    <!-- Status inline dropdown -->
                     <td class="text-center">
                         <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
                             {% csrf_token %}
                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <select name="status" class="form-select form-select-sm" style="width:auto;display:inline-block;" onchange="this.form.submit()">
+                            <select name="status" class="status-pill" onchange="this.form.submit()"
+                                style="background:{{ grupo.bg }};color:{{ grupo.color }};border:1.5px solid {{ grupo.color }};">
                                 {% for val, label in status_choices %}
                                 <option value="{{ val }}" {% if tarefa.status == val %}selected{% endif %}>{{ label }}</option>
                                 {% endfor %}
                             </select>
                         </form>
                     </td>
-                    <td class="text-center">
-                        {% if tarefa.responsavel %}<small class="text-muted">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}</small>
-                        {% else %}<small class="text-muted">—</small>{% endif %}
+
+                    <!-- Timeline bar -->
+                    <td>
+                        {% if tarefa.timeline_pct is not None %}
+                        <div class="timeline-wrap">
+                            <div class="timeline-track">
+                                <div class="timeline-fill"
+                                     style="width:{{ tarefa.timeline_pct }}%;background:{{ tarefa.timeline_color }};"></div>
+                            </div>
+                            <div class="timeline-label" style="color:{{ tarefa.timeline_color }};">
+                                {% if tarefa.status == 'CONCLUIDO' %}Concluída
+                                {% elif tarefa.timeline_pct >= 100 %}Atrasada
+                                {% else %}{{ tarefa.timeline_pct }}% decorrido{% endif %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <span class="text-muted" style="font-size:.75rem;">Sem prazo</span>
+                        {% endif %}
                     </td>
+
+                    <!-- Due date -->
                     <td class="text-center">
                         {% if tarefa.prazo %}
-                        <small class="{% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-muted{% endif %}">{{ tarefa.prazo|date:"d/m/Y" }}</small>
-                        {% else %}<small class="text-muted">—</small>{% endif %}
+                        <span class="fw-semibold" style="font-size:.78rem;
+                            color:{% if tarefa.atrasada %}#ef4444{% elif tarefa.prazo_proximo %}#f59e0b{% else %}#6b7280{% endif %};">
+                            {{ tarefa.prazo|date:"d/m/Y" }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted" style="font-size:.75rem;">—</span>
+                        {% endif %}
                     </td>
+
+                    <!-- Priority stars -->
                     <td class="text-center">
-                        <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="btn btn-sm btn-outline-primary" title="Ver"><i class='bx bx-show'></i></a>
-                        <a href="{% url 'editar_tarefa' tarefa.id %}" class="btn btn-sm btn-outline-secondary" title="Editar"><i class='bx bx-edit'></i></a>
+                        {% if tarefa.prioridade == 'ALTA' %}
+                        <span title="Alta">
+                            <span class="star on">★</span><span class="star on">★</span><span class="star on">★</span>
+                        </span>
+                        {% elif tarefa.prioridade == 'MEDIA' %}
+                        <span title="Média">
+                            <span class="star on">★</span><span class="star on">★</span><span class="star off">★</span>
+                        </span>
+                        {% else %}
+                        <span title="Baixa">
+                            <span class="star on">★</span><span class="star off">★</span><span class="star off">★</span>
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center gap-1">
+                            <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="btn-action" title="Ver"><i class='bx bx-show'></i></a>
+                            <a href="{% url 'editar_tarefa' tarefa.id %}" class="btn-action" title="Editar"><i class='bx bx-edit'></i></a>
+                            <form method="post" action="{% url 'excluir_tarefa' tarefa.id %}" style="display:inline;" onsubmit="return confirm('Excluir esta tarefa?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn-action danger" title="Excluir"><i class='bx bx-trash'></i></button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
-                {% empty %}
-                <tr><td colspan="6" class="text-center text-muted py-5">Nenhuma tarefa encontrada.</td></tr>
                 {% endfor %}
+
+                <!-- Quick add row -->
+                <tr class="quick-add-row" id="qa-row-{{ grupo.status }}" style="display:none;">
+                    <td colspan="7">
+                        <form method="post" action="{% url 'criar_tarefa_rapida' %}" class="d-flex align-items-center gap-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="{{ grupo.status }}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <i class='bx bx-plus text-muted'></i>
+                            <input type="text" name="titulo" class="quick-add-input" placeholder="Nome da tarefa..." required autocomplete="off">
+                            <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3" style="font-size:.78rem;white-space:nowrap;">Adicionar</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" onclick="document.getElementById('qa-row-{{ grupo.status }}').style.display='none'">Cancelar</button>
+                        </form>
+                    </td>
+                </tr>
             </tbody>
         </table>
+
+        <!-- Add item button below table -->
+        <button class="btn btn-sm btn-link text-muted ps-3 mt-1" style="font-size:.8rem;" onclick="showQA('{{ grupo.status }}')">
+            <i class='bx bx-plus me-1'></i> Adicionar item
+        </button>
     </div>
 </div>
+{% endif %}{% endfor %}
 
-{% if tarefas.has_other_pages %}
-<nav class="mt-3 d-flex justify-content-center">
-    <ul class="pagination pagination-sm">
-        {% if tarefas.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ tarefas.previous_page_number }}{% if filtro_status %}&status={{ filtro_status }}{% endif %}{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}">«</a></li>{% endif %}
-        <li class="page-item disabled"><span class="page-link">{{ tarefas.number }}/{{ tarefas.paginator.num_pages }}</span></li>
-        {% if tarefas.has_next %}<li class="page-item"><a class="page-link" href="?page={{ tarefas.next_page_number }}{% if filtro_status %}&status={{ filtro_status }}{% endif %}{% if filtro_busca %}&q={{ filtro_busca }}{% endif %}">»</a></li>{% endif %}
-    </ul>
-</nav>
-{% endif %}
+<script>
+function toggleGroup(id) {
+    const el = document.getElementById(id);
+    const hdr = document.getElementById('hdr-' + id.replace('grp-', ''));
+    const isHidden = el.style.display === 'none';
+    el.style.display = isHidden ? 'block' : 'none';
+    hdr.classList.toggle('collapsed', !isHidden);
+}
+
+function showQA(status) {
+    const row = document.getElementById('qa-row-' + status);
+    row.style.display = 'table-row';
+    row.querySelector('input[name="titulo"]').focus();
+}
+</script>
 {% endblock %}

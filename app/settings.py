@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_htmx',
     'django.contrib.humanize',
-    # 'storages',  # MANTIDO COMENTADO para evitar erro 500 de inicialização S3
+    'storages',
     # Seus aplicativos personalizados
     'wefixhub',
 ]
@@ -167,9 +167,36 @@ STATIC_ROOT = BASE_DIR / 'staticfiles_collect'
 # Armazenamento otimizado do WhiteNoise para produção.
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files (arquivos enviados por usuários)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR / 'media')
+# ==============================================================================
+# MEDIA — Cloudflare R2 em produção, disco local em desenvolvimento
+# ==============================================================================
+R2_ACCESS_KEY_ID     = config('R2_ACCESS_KEY_ID', default=None)
+R2_SECRET_ACCESS_KEY = config('R2_SECRET_ACCESS_KEY', default=None)
+R2_BUCKET_NAME       = config('R2_BUCKET_NAME', default=None)
+R2_ACCOUNT_ID        = config('R2_ACCOUNT_ID', default=None)
+R2_PUBLIC_URL        = config('R2_PUBLIC_URL', default=None)
+
+if R2_ACCESS_KEY_ID and not DEBUG:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    AWS_ACCESS_KEY_ID      = R2_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY  = R2_SECRET_ACCESS_KEY
+    AWS_STORAGE_BUCKET_NAME = R2_BUCKET_NAME
+    AWS_S3_ENDPOINT_URL    = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    AWS_S3_REGION_NAME     = 'auto'
+    AWS_DEFAULT_ACL        = None
+    AWS_S3_FILE_OVERWRITE  = False
+    AWS_QUERYSTRING_AUTH   = False
+    MEDIA_URL = R2_PUBLIC_URL + '/'
+else:
+    MEDIA_URL  = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
 # settings.py
@@ -188,26 +215,6 @@ LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
-# --- Configurações AWS S3 (Mídia) ---
-# MANTIDO COMENTADO para evitar erro 500 na inicialização
-# AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
-# AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
-# AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
-
-# if AWS_ACCESS_KEY_ID:
-#     AWS_S3_REGION_NAME = 'us-east-1' 
-#     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-#     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
-
-#     # DEFAULT_FILE_STORAGE = 'storages.backends.s3.S3Storage'
-    
-#     AWS_DEFAULT_ACL = 'public-read'
-#     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-#     AWS_S3_FILE_OVERWRITE = False
-#     AWS_LOCATION = 'media'
-# else:
-#     MEDIA_URL = '/media/'
-#     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # ==============================================================================
 # STRIPE

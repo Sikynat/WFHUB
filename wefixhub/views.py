@@ -4956,17 +4956,114 @@ def _dados_filtros(request):
 
 
 @staff_member_required
-def tarefas_board(request):
+def dashboard_produtividade(request):
     if not request.empresa:
         return redirect('home')
 
-    STATUS_ORDER = ['A_FAZER', 'EM_ANDAMENTO', 'REVISAO', 'CONCLUIDO']
-    STATUS_LABELS = {
-        'A_FAZER': 'A Fazer',
-        'EM_ANDAMENTO': 'Em Andamento',
-        'REVISAO': 'Revisão',
-        'CONCLUIDO': 'Concluído',
-    }
+    hoje = date.today()
+
+    qs_all = Tarefa.objects.filter(empresa=request.empresa)
+
+    # ── KPIs ──────────────────────────────────────────────────
+    total = qs_all.count()
+    concluidas_total = qs_all.filter(status='CONCLUIDO').count()
+    taxa_conclusao = int(concluidas_total / total * 100) if total > 0 else 0
+
+    inicio_semana = hoje - timedelta(days=hoje.weekday())
+    concluidas_semana = qs_all.filter(
+        status='CONCLUIDO',
+        atualizado_em__date__gte=inicio_semana
+    ).count()
+
+    # Atrasadas: não concluídas com prazo passado
+    atrasadas = qs_all.exclude(status='CONCLUIDO').filter(prazo__lt=hoje).count()
+
+    em_andamento = qs_all.filter(status='EM_ANDAMENTO').count()
+
+    # ── Concluídas por semana (últimas 8 semanas) ──────────────
+    semanas_labels = []
+    semanas_data = []
+    for i in range(7, -1, -1):
+        seg = hoje - timedelta(weeks=i, days=hoje.weekday())
+        dom = seg + timedelta(days=6)
+        count = qs_all.filter(
+            status='CONCLUIDO',
+            atualizado_em__date__range=[seg, dom]
+        ).count()
+        semanas_labels.append(seg.strftime('%d/%m'))
+        semanas_data.append(count)
+
+    # ── Por membro ────────────────────────────────────────────
+    por_membro = (
+        qs_all.filter(responsavel__isnull=False)
+        .values('responsavel__id', 'responsavel__first_name',
+                'responsavel__last_name', 'responsavel__username')
+        .annotate(
+            total=Count('id'),
+            concluidas=Count('id', filter=Q(status='CONCLUIDO')),
+            atrasadas_m=Count('id', filter=Q(prazo__lt=hoje) & ~Q(status='CONCLUIDO')),
+        )
+        .order_by('-total')[:8]
+    )
+
+    membros_labels, membros_total, membros_concluidas = [], [], []
+    for m in por_membro:
+        nome = (f"{m['responsavel__first_name']} {m['responsavel__last_name']}".strip()
+                or m['responsavel__username'])
+        membros_labels.append(nome)
+        membros_total.append(m['total'])
+        membros_concluidas.append(m['concluidas'])
+
+    # ── Por status (donut) ────────────────────────────────────
+    status_counts = {s: qs_all.filter(status=s).count() for s, _ in Tarefa.STATUS_CHOICES}
+    status_labels = ['A Fazer', 'Em Andamento', 'Revisão', 'Concluído']
+    status_data_chart = [
+        status_counts.get('A_FAZER', 0),
+        status_counts.get('EM_ANDAMENTO', 0),
+        status_counts.get('REVISAO', 0),
+        status_counts.get('CONCLUIDO', 0),
+    ]
+
+    # ── Por prioridade ────────────────────────────────────────
+    pri_counts = {p: qs_all.filter(prioridade=p).count() for p, _ in Tarefa.PRIORIDADE_CHOICES}
+
+    # ── Tarefas recentes atrasadas ────────────────────────────
+    tarefas_atrasadas = (
+        qs_all.exclude(status='CONCLUIDO')
+        .filter(prazo__lt=hoje)
+        .select_related('responsavel')
+        .order_by('prazo')[:10]
+    )
+
+    return render(request, 'tarefas/dashboard.html', {
+        # KPIs
+        'total': total,
+        'concluidas_total': concluidas_total,
+        'taxa_conclusao': taxa_conclusao,
+        'concluidas_semana': concluidas_semana,
+        'atrasadas': atrasadas,
+        'em_andamento': em_andamento,
+        # Charts
+        'semanas_labels': json.dumps(semanas_labels),
+        'semanas_data': json.dumps(semanas_data),
+        'membros_labels': json.dumps(membros_labels),
+        'membros_total': json.dumps(membros_total),
+        'membros_concluidas': json.dumps(membros_concluidas),
+        'status_labels': json.dumps(status_labels),
+        'status_data': json.dumps(status_data_chart),
+        'pri_alta': pri_counts.get('ALTA', 0),
+        'pri_media': pri_counts.get('MEDIA', 0),
+        'pri_baixa': pri_counts.get('BAIXA', 0),
+        # Lista
+        'tarefas_atrasadas': tarefas_atrasadas,
+        'hoje': hoje,
+    })
+
+
+@staff_member_required
+def tarefas_board(request):
+    if not request.empresa:
+        return redirect('home')
 
     qs = Tarefa.objects.filter(empresa=request.empresa).select_related(
         'criado_por', 'responsavel'
@@ -4993,17 +5090,45 @@ def tarefas_board(request):
     if filtro_minhas:
         qs = qs.filter(responsavel=request.user)
 
+    STATUS_CONFIG = [
+        {'status': 'A_FAZER',      'label': 'A Fazer',      'color': '#7c3aed', 'bg': '#ffffff'},
+        {'status': 'EM_ANDAMENTO', 'label': 'Em Andamento', 'color': '#059669', 'bg': '#ffffff'},
+        {'status': 'REVISAO',      'label': 'Revisão',      'color': '#d97706', 'bg': '#ffffff'},
+        {'status': 'CONCLUIDO',    'label': 'Concluído',    'color': '#dc4f2a', 'bg': '#ffffff'},
+    ]
+
+    hoje = date.today()
     tarefas_list = list(qs)
+    for t in tarefas_list:
+        if t.prazo:
+            start = t.criado_em.date()
+            total = (t.prazo - start).days
+            if total <= 0:
+                t.timeline_pct = None
+                t.timeline_color = '#6366f1'
+            else:
+                elapsed = (hoje - start).days
+                t.timeline_pct = max(0, min(100, int(elapsed / total * 100)))
+                if t.status == 'CONCLUIDO':
+                    t.timeline_color = '#22c55e'
+                elif hoje > t.prazo:
+                    t.timeline_color = '#ef4444'
+                elif hoje == t.prazo or t.timeline_pct >= 75:
+                    t.timeline_color = '#f59e0b'
+                else:
+                    t.timeline_color = '#6366f1'
+        else:
+            t.timeline_pct = None
+            t.timeline_color = '#6366f1'
+
     colunas = []
-    for status in STATUS_ORDER:
+    for cfg in STATUS_CONFIG:
         colunas.append({
-            'status': status,
-            'label': STATUS_LABELS[status],
-            'tarefas': [t for t in tarefas_list if t.status == status],
+            **cfg,
+            'tarefas': [t for t in tarefas_list if t.status == cfg['status']],
         })
 
     membros, tags = _dados_filtros(request)
-    hoje = date.today()
 
     return render(request, 'tarefas/board.html', {
         'colunas': colunas,
@@ -5025,14 +5150,18 @@ def tarefas_lista(request):
 
     qs = Tarefa.objects.filter(empresa=request.empresa).select_related(
         'criado_por', 'responsavel'
-    ).prefetch_related('tags')
+    ).prefetch_related('tags').annotate(
+        checklist_total=Count('checklist', distinct=True),
+        checklist_done=Count('checklist', filter=Q(checklist__concluido=True), distinct=True),
+        comentarios_total=Count('comentarios', distinct=True),
+    ).order_by('criado_em')
 
-    filtro_status = request.GET.get('status', '')
+    filtro_status     = request.GET.get('status', '')
     filtro_prioridade = request.GET.get('prioridade', '')
     filtro_responsavel = request.GET.get('responsavel', '')
-    filtro_tag = request.GET.get('tag', '')
-    filtro_busca = request.GET.get('q', '')
-    filtro_minhas = request.GET.get('minhas', '')
+    filtro_tag        = request.GET.get('tag', '')
+    filtro_busca      = request.GET.get('q', '')
+    filtro_minhas     = request.GET.get('minhas', '')
 
     if filtro_status:
         qs = qs.filter(status=filtro_status)
@@ -5047,20 +5176,52 @@ def tarefas_lista(request):
     if filtro_minhas:
         qs = qs.filter(responsavel=request.user)
 
-    paginator = Paginator(qs, 20)
-    page = request.GET.get('page')
-    try:
-        tarefas_page = paginator.page(page)
-    except PageNotAnInteger:
-        tarefas_page = paginator.page(1)
-    except EmptyPage:
-        tarefas_page = paginator.page(paginator.num_pages)
-
-    membros, tags = _dados_filtros(request)
     hoje = date.today()
 
+    # Calcula % do tempo decorrido entre criação e prazo para barra de cronograma
+    tarefas_list = list(qs)
+    for t in tarefas_list:
+        if t.prazo:
+            start = t.criado_em.date()
+            total = (t.prazo - start).days
+            if total <= 0:
+                # Prazo igual ou anterior à criação — dado inválido, omite barra
+                t.timeline_pct = None
+                t.timeline_color = '#6366f1'
+            else:
+                elapsed = (hoje - start).days
+                t.timeline_pct = max(0, min(100, int(elapsed / total * 100)))
+                if t.status == 'CONCLUIDO':
+                    t.timeline_color = '#22c55e'        # verde — concluída
+                elif hoje > t.prazo:
+                    t.timeline_color = '#ef4444'        # vermelho — atrasada (prazo passou)
+                elif hoje == t.prazo or t.timeline_pct >= 75:
+                    t.timeline_color = '#f59e0b'        # laranja — prazo hoje ou chegando
+                else:
+                    t.timeline_color = '#6366f1'        # azul — ok
+        else:
+            t.timeline_pct = None
+            t.timeline_color = '#6366f1'
+
+    STATUS_CONFIG = [
+        {'status': 'A_FAZER',      'label': 'A Fazer',      'color': '#7c3aed', 'bg': '#ffffff'},
+        {'status': 'EM_ANDAMENTO', 'label': 'Em Andamento', 'color': '#059669', 'bg': '#ffffff'},
+        {'status': 'REVISAO',      'label': 'Revisão',      'color': '#d97706', 'bg': '#ffffff'},
+        {'status': 'CONCLUIDO',    'label': 'Concluído',    'color': '#dc4f2a', 'bg': '#ffffff'},
+    ]
+
+    grupos = []
+    for cfg in STATUS_CONFIG:
+        s = cfg['status']
+        if filtro_status and filtro_status != s:
+            continue
+        grupos.append({**cfg, 'tarefas': [t for t in tarefas_list if t.status == s]})
+
+    membros, tags = _dados_filtros(request)
+
     return render(request, 'tarefas/lista.html', {
-        'tarefas': tarefas_page,
+        'grupos': grupos,
+        'total_tarefas': len(tarefas_list),
         'membros': membros,
         'tags': tags,
         'filtro_status': filtro_status,
@@ -5287,6 +5448,9 @@ def excluir_tarefa(request, tarefa_id):
     tarefa = get_object_or_404(Tarefa, id=tarefa_id, empresa=request.empresa)
     tarefa.delete()
     messages.success(request, 'Tarefa excluída.')
+    next_url = request.POST.get('next') or request.GET.get('next', '')
+    if next_url and next_url.startswith('/'):
+        return redirect(next_url)
     return redirect('tarefas_board')
 
 
@@ -5390,8 +5554,17 @@ def criar_tarefa_rapida(request):
     tarefa.checklist_total = 0
     tarefa.checklist_done = 0
     tarefa.comentarios_total = 0
+    tarefa.timeline_pct = None
+    tarefa.timeline_color = '#6366f1'
 
-    return render(request, 'tarefas/_card.html', {'tarefa': tarefa, 'col_status': status})
+    # HTMX requests (Kanban board) get the card fragment; plain POSTs redirect back
+    if request.headers.get('HX-Request'):
+        return render(request, 'tarefas/_card.html', {'tarefa': tarefa, 'col_status': status})
+
+    next_url = request.POST.get('next', '')
+    if next_url and next_url.startswith('/'):
+        return redirect(next_url)
+    return redirect('tarefas_lista')
 
 
 # ==========================================

@@ -99,6 +99,7 @@ urlpatterns = [
 
     # Tarefas e Colaboração
     path('tarefas/', views.tarefas_board, name='tarefas_board'),
+    path('tarefas/produtividade/', views.dashboard_produtividade, name='dashboard_produtividade'),
     path('tarefas/lista/', views.tarefas_lista, name='tarefas_lista'),
     path('tarefas/nova/', views.criar_tarefa, name='criar_tarefa'),
     path('tarefas/<int:tarefa_id>/', views.detalhe_tarefa, name='detalhe_tarefa'),

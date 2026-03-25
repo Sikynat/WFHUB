@@ -1,67 +1,85 @@
 {% with cur_status=col_status|default:tarefa.status %}
-<div class="card border-0 shadow-sm tarefa-card"
+<div class="tarefa-card"
      id="card-{{ tarefa.id }}"
      data-tarefa-id="{{ tarefa.id }}"
-     style="border-left:3px solid {% if tarefa.prioridade == 'ALTA' %}#ef4444{% elif tarefa.prioridade == 'MEDIA' %}#f59e0b{% else %}#22c55e{% endif %} !important; cursor:grab;">
-    <div class="card-body p-3">
+     style="border-left: 4px solid {% if tarefa.prioridade == 'ALTA' %}#ef4444{% elif tarefa.prioridade == 'MEDIA' %}#f59e0b{% else %}#22c55e{% endif %};">
 
-        <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="text-decoration-none text-dark">
-            <div class="fw-semibold small mb-1">{{ tarefa.titulo }}</div>
+    <div style="padding:.75rem .85rem;">
+
+        <!-- Title -->
+        <a href="{% url 'detalhe_tarefa' tarefa.id %}" style="text-decoration:none;color:#1e293b;font-weight:600;font-size:.85rem;line-height:1.35;display:block;margin-bottom:.4rem;">
+            {{ tarefa.titulo }}
         </a>
 
+        <!-- Tags -->
         {% if tarefa.tags.all %}
-        <div class="d-flex flex-wrap gap-1 mb-2">
+        <div style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.5rem;">
             {% for tag in tarefa.tags.all %}
-            <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.65rem;">{{ tag.nome }}</span>
+            <span style="font-size:.62rem;font-weight:600;padding:.1rem .45rem;border-radius:999px;background:{{ tag.cor }}18;color:{{ tag.cor }};">{{ tag.nome }}</span>
             {% endfor %}
         </div>
         {% endif %}
 
+        <!-- Checklist mini-bar -->
         {% if tarefa.checklist_total %}
-        <div class="d-flex align-items-center gap-1 mb-2">
-            <i class='bx bx-check-square text-muted' style="font-size:.75rem;"></i>
-            <small class="text-muted" style="font-size:.7rem;">{{ tarefa.checklist_done }}/{{ tarefa.checklist_total }}</small>
-            <div class="progress flex-grow-1" style="height:3px;">
-                <div class="progress-bar bg-success" style="width:{% widthratio tarefa.checklist_done tarefa.checklist_total 100 %}%"></div>
+        <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem;">
+            <span style="font-size:.68rem;color:#9ca3af;white-space:nowrap;">{% widthratio tarefa.checklist_done tarefa.checklist_total 100 %}%</span>
+            <div style="flex:1;background:#e5e7eb;border-radius:999px;height:4px;overflow:hidden;">
+                <div style="width:{% widthratio tarefa.checklist_done tarefa.checklist_total 100 %}%;height:100%;background:#22c55e;border-radius:999px;"></div>
+            </div>
+            <span style="font-size:.68rem;color:#9ca3af;white-space:nowrap;">{{ tarefa.checklist_done }}/{{ tarefa.checklist_total }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Timeline mini-bar -->
+        {% if tarefa.timeline_pct is not None %}
+        <div style="margin-bottom:.5rem;">
+            <div style="background:#e5e7eb;border-radius:999px;height:4px;overflow:hidden;">
+                <div style="width:{{ tarefa.timeline_pct }}%;height:100%;background:{{ tarefa.timeline_color }};border-radius:999px;"></div>
             </div>
         </div>
         {% endif %}
 
-        <div class="d-flex align-items-center justify-content-between mt-1">
-            <div class="d-flex align-items-center gap-1">
+        <!-- Footer: avatar + meta -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.4rem;">
+            <div style="display:flex;align-items:center;gap:.4rem;">
                 {% if tarefa.responsavel %}
-                <span class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                      style="width:22px;height:22px;font-size:.6rem;background:#6366f1;"
+                <span style="width:22px;height:22px;border-radius:50%;background:#6366f1;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:white;flex-shrink:0;"
                       title="{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}">
                     {{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}
                 </span>
                 {% endif %}
                 {% if tarefa.comentarios_total %}
-                <small class="text-muted" style="font-size:.7rem;"><i class='bx bx-comment'></i> {{ tarefa.comentarios_total }}</small>
+                <span style="font-size:.68rem;color:#9ca3af;display:flex;align-items:center;gap:.2rem;">
+                    <i class='bx bx-comment'></i>{{ tarefa.comentarios_total }}
+                </span>
                 {% endif %}
             </div>
+
             {% if tarefa.prazo %}
-            <small class="{% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-muted{% endif %}" style="font-size:.7rem;">
-                <i class='bx bx-calendar'></i> {{ tarefa.prazo|date:"d/m" }}
-            </small>
+            <span style="font-size:.68rem;font-weight:600;display:flex;align-items:center;gap:.2rem;
+                color:{% if tarefa.atrasada %}#ef4444{% elif tarefa.prazo_proximo %}#f59e0b{% else %}#9ca3af{% endif %};">
+                <i class='bx bx-calendar'></i>{{ tarefa.prazo|date:"d/m" }}
+            </span>
             {% endif %}
         </div>
 
-        <div class="d-flex gap-1 mt-2 move-btns">
+        <!-- Move buttons -->
+        <div style="display:flex;gap:.3rem;margin-top:.55rem;" class="move-btns">
             {% if cur_status != 'A_FAZER' %}
-            <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+            <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="status" value="{% if cur_status == 'EM_ANDAMENTO' %}A_FAZER{% elif cur_status == 'REVISAO' %}EM_ANDAMENTO{% else %}REVISAO{% endif %}">
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button type="submit" class="btn btn-outline-secondary" style="font-size:.6rem;padding:1px 6px;" title="Voltar">←</button>
+                <button type="submit" style="font-size:.65rem;padding:.15rem .5rem;border-radius:6px;border:1px solid #e5e7eb;background:white;color:#6b7280;cursor:pointer;" title="Voltar">←</button>
             </form>
             {% endif %}
             {% if cur_status != 'CONCLUIDO' %}
-            <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+            <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="status" value="{% if cur_status == 'A_FAZER' %}EM_ANDAMENTO{% elif cur_status == 'EM_ANDAMENTO' %}REVISAO{% else %}CONCLUIDO{% endif %}">
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button type="submit" class="btn btn-outline-primary" style="font-size:.6rem;padding:1px 6px;" title="Avançar">→</button>
+                <button type="submit" style="font-size:.65rem;padding:.15rem .5rem;border-radius:6px;border:1px solid #6366f1;background:#eff6ff;color:#6366f1;cursor:pointer;" title="Avançar">→</button>
             </form>
             {% endif %}
         </div>
