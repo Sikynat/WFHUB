@@ -473,6 +473,48 @@ def atualizar_carrinho(request):
     return redirect('carrinho')
 
 
+@login_required
+def atualizar_item_qtd(request):
+    """Atualiza a quantidade de um item via JSON (sem redirect). Usado pelo carrinho Alpine."""
+    if request.method == 'POST':
+        import json as _json
+        try:
+            data = _json.loads(request.body)
+            product_id = data.get('product_id')
+            quantidade = int(data.get('quantidade', 0))
+            carrinho_obj = Carrinho.objects.filter(cliente=request.user.wfclient).first()
+            if carrinho_obj:
+                if quantidade > 0:
+                    ItemCarrinho.objects.filter(
+                        carrinho=carrinho_obj,
+                        produto__product_id=product_id
+                    ).update(quantidade=quantidade)
+                else:
+                    ItemCarrinho.objects.filter(
+                        carrinho=carrinho_obj,
+                        produto__product_id=product_id
+                    ).delete()
+            return JsonResponse({'ok': True})
+        except Exception as e:
+            return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+    return JsonResponse({'ok': False}, status=405)
+
+
+@login_required
+def remover_item_ajax(request, product_id):
+    """Remove um item do carrinho via POST/JSON (sem redirect). Usado pelo carrinho Alpine."""
+    if request.method == 'POST':
+        try:
+            ItemCarrinho.objects.filter(
+                carrinho__cliente=request.user.wfclient,
+                produto__product_id=product_id
+            ).delete()
+            return JsonResponse({'ok': True})
+        except Exception as e:
+            return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+    return JsonResponse({'ok': False}, status=405)
+
+
 # Inicio Checkout
 
 

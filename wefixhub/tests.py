@@ -34,6 +34,7 @@ from .models import (
     Endereco, Pedido, Product,
     Tarefa, ChecklistItem, NotificacaoTarefa,
     NotificacaoPedido, LogAuditoria, AnexoTarefa,
+    Carrinho, ItemCarrinho,
 )
 
 
@@ -61,14 +62,14 @@ def make_staff(username, empresa, password='senha123'):
     return user
 
 
-def make_cliente(username, empresa, uf, code=1, password='senha123'):
+def make_cliente(username, empresa, uf, code=1, password='senha123', cnpj=None):
     user = User.objects.create_user(username=username, password=password, is_staff=False)
     client = WfClient.objects.create(
         user=user,
         empresa=empresa,
         client_code=code,
         client_name=username,
-        client_cnpj='00000000000000',
+        client_cnpj=cnpj or f'{code:014d}',
         client_adress='Rua Teste',
         client_city='Cidade',
         client_state=uf,
@@ -528,7 +529,8 @@ class FotoPerfilMembroTest(WFTestCase):
 
     def test_upload_foto_salva_no_perfil(self):
         resp = self.c.post(reverse('upload_foto_perfil'), {'foto': _make_image()})
-        self.assertRedirects(resp, reverse('editar_perfil'))
+        # Membros (is_staff) são redirecionados para perfil_representante
+        self.assertRedirects(resp, reverse('perfil_representante'))
         self.perfil.refresh_from_db()
         self.assertTrue(self.perfil.foto_perfil.name)
 
@@ -730,3 +732,102 @@ class AvatarTagTest(WFTestCase):
         html = str(avatar(user, size=32))
         self.assertIn('<img', html)
         self.assertIn('perfis/teste.jpg', html)
+
+
+# ===========================================================================
+# 12. CARRINHO AJAX — atualizar_item_qtd e remover_item_ajax
+# ===========================================================================
+
+def make_product(code='PROD1', empresa=None):
+    return Product.objects.create(
+        product_code=code,
+        product_description='Produto Teste',
+        product_value_sp='10.00',
+        product_value_es='10.00',
+        empresa=empresa,
+    )
+
+
+class CarrinhoAjaxTest(WFTestCase):
+    """Testa as views Ajax do carrinho (sem reload de página)."""
+
+    def setUp(self):
+        self.empresa = make_empresa('cart-empresa')
+        self.uf = make_uf('SP')
+        self.user, self.wfclient = make_cliente('cart_user', self.empresa, self.uf, code=999)
+        self.produto = make_product('CART01', self.empresa)
+        self.carrinho = Carrinho.objects.create(cliente=self.wfclient)
+        self.item = ItemCarrinho.objects.create(carrinho=self.carrinho, produto=self.produto, quantidade=2)
+        self.client.force_login(self.user)
+
+    def test_atualizar_qtd_salva_no_banco(self):
+        import json
+        resp = self.client.post(
+            reverse('atualizar_item_qtd'),
+            data=json.dumps({'product_id': self.produto.product_id, 'quantidade': 5}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantidade, 5)
+
+    def test_atualizar_qtd_retorna_json_ok(self):
+        import json
+        resp = self.client.post(
+            reverse('atualizar_item_qtd'),
+            data=json.dumps({'product_id': self.produto.product_id, 'quantidade': 3}),
+            content_type='application/json',
+        )
+        data = resp.json()
+        self.assertTrue(data['ok'])
+
+    def test_atualizar_qtd_zero_remove_item(self):
+        import json
+        self.client.post(
+            reverse('atualizar_item_qtd'),
+            data=json.dumps({'product_id': self.produto.product_id, 'quantidade': 0}),
+            content_type='application/json',
+        )
+        self.assertFalse(ItemCarrinho.objects.filter(id=self.item.id).exists())
+
+    def test_remover_item_ajax_deleta_item(self):
+        resp = self.client.post(
+            reverse('remover_item_ajax', args=[self.produto.product_id]),
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(ItemCarrinho.objects.filter(id=self.item.id).exists())
+
+    def test_remover_item_ajax_retorna_json_ok(self):
+        resp = self.client.post(
+            reverse('remover_item_ajax', args=[self.produto.product_id]),
+        )
+        self.assertTrue(resp.json()['ok'])
+
+    def test_atualizar_qtd_requer_login(self):
+        import json
+        self.client.logout()
+        resp = self.client.post(
+            reverse('atualizar_item_qtd'),
+            data=json.dumps({'product_id': self.produto.product_id, 'quantidade': 3}),
+            content_type='application/json',
+        )
+        self.assertNotEqual(resp.status_code, 200)
+
+    def test_remover_item_ajax_requer_login(self):
+        self.client.logout()
+        resp = self.client.post(reverse('remover_item_ajax', args=[self.produto.product_id]))
+        self.assertNotEqual(resp.status_code, 200)
+
+    def test_nao_afeta_carrinho_de_outro_cliente(self):
+        """Cliente B não consegue modificar o carrinho do cliente A."""
+        import json
+        _, outro_client = make_cliente('outro_cart', self.empresa, self.uf, code=998)
+        outro_user = User.objects.get(wfclient=outro_client)
+        self.client.force_login(outro_user)
+        self.client.post(
+            reverse('atualizar_item_qtd'),
+            data=json.dumps({'product_id': self.produto.product_id, 'quantidade': 99}),
+            content_type='application/json',
+        )
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantidade, 2)  # não alterado

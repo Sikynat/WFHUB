@@ -1,151 +1,334 @@
 {% extends 'base.html' %}
-{% block title %}Seu Carrinho de Compras{% endblock %}
+{% block title %}Carrinho de Compras{% endblock %}
 
 {% block content %}
-    <h1>Seu Carrinho de Compras</h1>
-    <hr>
-    
+<style>
+    body { background: #f8f9fc; }
+
+    .cart-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #edf2f7;
+        box-shadow: 0 4px 12px rgba(0,0,0,.04);
+        overflow: hidden;
+    }
+
+    .cart-header {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .cart-row {
+        display: grid;
+        grid-template-columns: 90px 1fr 120px 130px 120px 48px;
+        align-items: center;
+        gap: 1rem;
+        padding: .85rem 1.5rem;
+        border-bottom: 1px solid #f9fafb;
+        transition: background .1s;
+    }
+    .cart-row:last-child { border-bottom: none; }
+    .cart-row:hover { background: #fafafa; }
+
+    @media (max-width: 768px) {
+        .cart-row { grid-template-columns: 1fr; gap: .4rem; padding: 1rem; }
+        .cart-col-label { font-size:.68rem; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; }
+    }
+
+    .qty-control {
+        display: flex;
+        align-items: center;
+        gap: .35rem;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: .25rem .4rem;
+        width: fit-content;
+    }
+    .qty-btn {
+        width: 26px; height: 26px;
+        border-radius: 7px;
+        border: none;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,.1);
+        cursor: pointer;
+        font-size: .9rem;
+        font-weight: 700;
+        color: #374151;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .1s;
+    }
+    .qty-btn:hover { background: #f3f4f6; }
+    .qty-btn:active { background: #e5e7eb; }
+    .qty-val {
+        min-width: 32px;
+        text-align: center;
+        font-size: .88rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .remove-btn {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        border: none;
+        background: #fef2f2;
+        color: #ef4444;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .1s;
+    }
+    .remove-btn:hover { background: #fee2e2; }
+
+    .save-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #f59e0b;
+        display: inline-block;
+        margin-left: .4rem;
+        animation: pulse 1s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .cart-footer {
+        padding: 1.25rem 1.5rem;
+        background: #fafafa;
+        border-top: 2px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .btn-finalizar {
+        padding: .65rem 1.75rem;
+        background: #6366f1;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: .9rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background .15s;
+        display: flex; align-items: center; gap: .5rem;
+    }
+    .btn-finalizar:hover { background: #4f46e5; }
+    .btn-finalizar:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    .col-label {
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: #9ca3af;
+        padding: .6rem 1.5rem;
+        display: grid;
+        grid-template-columns: 90px 1fr 120px 130px 120px 48px;
+        gap: 1rem;
+        border-bottom: 1px solid #f3f4f6;
+    }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark">Carrinho de Compras</h4>
+        <p class="text-muted small mb-0" x-data>
+            {% if itens_carrinho %}{{ itens_carrinho|length }} iten{{ itens_carrinho|length|pluralize:"s" }}{% endif %}
+        </p>
+    </div>
     {% if itens_carrinho %}
-        <form action="{% url 'atualizar_carrinho' %}" method="post" id="carrinho-form">
-            {% csrf_token %}
-            
-            <div class="table-responsive">
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Descrição</th>
-                            <th>Valor Unitário</th>
-                            <th>Quantidade</th>
-                            <th>Valor Total</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in itens_carrinho %}
-                            <tr>
-                                <td>{{ item.produto.product_code }}</td>
-                                <td>{{ item.produto.product_description }}</td>
-                                <td class="valor-unitario" data-value="{{ item.preco_unitario|stringformat:'.2f' }}">R$ {{ item.preco_unitario|floatformat:2 }}</td>
-                                <td>
-                                    <input
-                                        type="number"
-                                        name="quantidade_{{ item.produto.product_id }}"
-                                        value="{{ item.quantidade }}"
-                                        min="1"
-                                        class="form-control quantidade-input"
-                                        style="width: 80px;">
-                                </td>
-                                <td class="subtotal">R$ {{ item.subtotal|floatformat:2 }}</td>
-                                <td>
-                                    <a href="{% url 'remover_item' item.produto.product_id %}" class="btn btn-danger btn-sm">Remover</a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="4" class="text-end"><strong>Total Geral:</strong></td>
-                            <td id="grand-total-container"><strong id="grand-total">R$ {{ total_carrinho|floatformat:2 }}</strong></td>
-                            <td>
-                                <button type="submit" class="btn btn-success">Atualizar</button>
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </form>
-
-        <a href="{% url 'limpar_carrinho' %}" class="btn btn-warning">Limpar Carrinho</a>
-        <a href="{% url 'home' %}" class="btn btn-secondary">Continuar Comprando</a>
-        
-        <button type="button" id="finalizar-pedido-btn" class="btn btn-success">Finalizar Pedido</button>
-        
-    {% else %}
-        <p class="alert alert-info">Seu carrinho de compras está vazio.</p>
-        <a href="{% url 'home' %}" class="btn btn-primary">Voltar para a Loja</a>
+    <a href="{% url 'limpar_carrinho' %}" class="btn btn-sm btn-outline-danger rounded-pill"
+       data-confirm="Limpar todo o carrinho?">
+        <i class="bi bi-trash me-1"></i> Limpar carrinho
+    </a>
     {% endif %}
+</div>
 
-    <script>
-     document.addEventListener('DOMContentLoaded', function() {
-        const quantidadeInputs = document.querySelectorAll('.quantidade-input');
-        const grandTotalElement = document.getElementById('grand-total');
-        const finalizarBtn = document.getElementById('finalizar-pedido-btn');
-        
-        function updateTotals(inputElement) {
-            const row = inputElement.closest('tr');
-            const valorUnitario = parseFloat(row.querySelector('.valor-unitario').dataset.value);
-            const quantidade = parseFloat(inputElement.value);
+{% if itens_carrinho %}
 
-            if (!isNaN(valorUnitario) && !isNaN(quantidade)) {
-                const total = valorUnitario * quantidade;
-                row.querySelector('.subtotal').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
-            }
-            updateGrandTotal();
-        }
+<div x-data="carrinhoApp()" class="cart-card">
 
-        function updateGrandTotal() {
-            let totalGeral = 0;
-            quantidadeInputs.forEach(input => {
-                const row = input.closest('tr');
-                const subtotalText = row.querySelector('.subtotal').innerText;
-                // Limpeza segura da string R$ 1.234,56 -> 1234.56
-                const subtotal = parseFloat(subtotalText.replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
-                if (!isNaN(subtotal)) {
-                    totalGeral += subtotal;
-                }
-            });
-            grandTotalElement.innerText = `R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
-        }
+    <!-- Cabeçalho colunas (desktop) -->
+    <div class="col-label d-none d-md-grid">
+        <span>Código</span>
+        <span>Descrição</span>
+        <span>Unitário</span>
+        <span>Quantidade</span>
+        <span>Subtotal</span>
+        <span></span>
+    </div>
 
-        quantidadeInputs.forEach(input => {
-            input.addEventListener('input', function() {
-                updateTotals(this);
-            });
-        });
-        
-        if (finalizarBtn) {
-            finalizarBtn.addEventListener('click', function(event) {
-                event.preventDefault();
+    <!-- Linhas dos itens -->
+    <template x-for="item in items" :key="item.id">
+        <div class="cart-row" :style="item.removing ? 'opacity:.4;pointer-events:none;' : ''">
+            <!-- Código -->
+            <div>
+                <span class="cart-col-label d-md-none">Código</span>
+                <span style="font-weight:700;color:#6366f1;font-size:.85rem;" x-text="item.code"></span>
+            </div>
+            <!-- Descrição -->
+            <div>
+                <span class="cart-col-label d-md-none">Descrição</span>
+                <span style="font-size:.85rem;color:#1e293b;" x-text="item.desc"></span>
+            </div>
+            <!-- Unitário -->
+            <div>
+                <span class="cart-col-label d-md-none">Unitário</span>
+                <span style="font-size:.85rem;color:#6b7280;" x-text="formatBR(item.unit)"></span>
+            </div>
+            <!-- Quantidade -->
+            <div>
+                <span class="cart-col-label d-md-none">Quantidade</span>
+                <div class="qty-control">
+                    <button class="qty-btn" @click="changeQty(item, -1)" :disabled="item.qty <= 1">−</button>
+                    <span class="qty-val" x-text="item.qty"></span>
+                    <button class="qty-btn" @click="changeQty(item, 1)">+</button>
+                    <span class="save-dot" x-show="item.saving" x-cloak title="Salvando..."></span>
+                </div>
+            </div>
+            <!-- Subtotal -->
+            <div>
+                <span class="cart-col-label d-md-none">Subtotal</span>
+                <span style="font-size:.88rem;font-weight:700;color:#059669;" x-text="formatBR(item.unit * item.qty)"></span>
+            </div>
+            <!-- Remover -->
+            <div>
+                <button class="remove-btn" @click="removeItem(item)" title="Remover item" :disabled="item.removing">
+                    <i class="bi bi-trash" style="font-size:.8rem;"></i>
+                </button>
+            </div>
+        </div>
+    </template>
 
-                const cartData = {};
-                let hasValidItems = false;
-                quantidadeInputs.forEach(input => {
-                    const productId = input.name.split('_')[1];
-                    const quantidade = parseInt(input.value, 10);
-                    
-                    if (!isNaN(quantidade) && quantidade > 0) {
-                        cartData[productId] = quantidade;
-                        hasValidItems = true;
-                    }
+    <!-- Carrinho vazio (após remover todos) -->
+    <div x-show="items.length === 0" x-cloak class="text-center py-5 text-muted">
+        <i class="bi bi-cart-x" style="font-size:2.5rem;"></i>
+        <p class="mt-2 mb-3 small">Seu carrinho está vazio.</p>
+        <a href="{% url 'home' %}" class="btn btn-sm btn-primary rounded-pill px-4">Ir para a loja</a>
+    </div>
+
+    <!-- Rodapé -->
+    <div class="cart-footer" x-show="items.length > 0">
+        <div>
+            <span style="font-size:.82rem;color:#6b7280;font-weight:600;">Total do carrinho</span>
+            <div style="font-size:1.5rem;font-weight:800;color:#059669;" x-text="formatBR(total)"></div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'home' %}" class="btn btn-light border rounded-pill" style="font-size:.85rem;">
+                <i class="bi bi-arrow-left me-1"></i> Continuar comprando
+            </a>
+            <button class="btn-finalizar" @click="finalize()">
+                <i class="bi bi-check2-circle"></i> Finalizar Pedido
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function carrinhoApp() {
+    return {
+        items: [
+            {% for item in itens_carrinho %}
+            {
+                id: {{ item.produto.product_id }},
+                code: '{{ item.produto.product_code|escapejs }}',
+                desc: '{{ item.produto.product_description|escapejs }}',
+                unit: {{ item.preco_unitario|stringformat:'.2f' }},
+                qty: {{ item.quantidade }},
+                saving: false,
+                removing: false,
+            },
+            {% endfor %}
+        ],
+        saveTimers: {},
+
+        get total() {
+            return this.items.reduce((s, i) => s + i.unit * i.qty, 0);
+        },
+
+        formatBR(val) {
+            return 'R$ ' + val.toFixed(2).replace('.', ',');
+        },
+
+        changeQty(item, delta) {
+            const nova = item.qty + delta;
+            if (nova < 1) return;
+            item.qty = nova;
+            this.scheduleAutoSave(item);
+        },
+
+        scheduleAutoSave(item) {
+            clearTimeout(this.saveTimers[item.id]);
+            item.saving = true;
+            this.saveTimers[item.id] = setTimeout(() => this.saveItem(item), 650);
+        },
+
+        async saveItem(item) {
+            try {
+                await fetch('{% url "atualizar_item_qtd" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}',
+                    },
+                    body: JSON.stringify({ product_id: item.id, quantidade: item.qty }),
                 });
+            } catch(e) {
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { msg: 'Erro ao salvar quantidade.', type: 'error' } }));
+            }
+            item.saving = false;
+        },
 
-                if (!hasValidItems) {
-                    window.dispatchEvent(new CustomEvent('show-toast', { detail: { msg: 'Seu carrinho está vazio ou contém apenas itens com quantidade zero.', type: 'error' } }));
-                    return;
-                }
-                
-                // Dispara o formulário fantasma passando o JSON (como o seu sistema antigo já fazia perfeitamente)
-                const tempForm = document.createElement('form');
-                tempForm.action = "{% url 'gerar_pedido' %}";
-                tempForm.method = "POST";
-                
-                const csrfInput = document.createElement('input');
-                csrfInput.type = "hidden";
-                csrfInput.name = "csrfmiddlewaretoken";
-                csrfInput.value = document.querySelector('[name="csrfmiddlewaretoken"]').value;
-                tempForm.appendChild(csrfInput);
+        async removeItem(item) {
+            item.removing = true;
+            try {
+                await fetch(`{% url "remover_item_ajax" 0 %}`.replace('/0/', `/${item.id}/`), {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                });
+                this.items = this.items.filter(i => i.id !== item.id);
+            } catch(e) {
+                item.removing = false;
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { msg: 'Erro ao remover item.', type: 'error' } }));
+            }
+        },
 
-                const cartDataInput = document.createElement('input');
-                cartDataInput.type = "hidden";
-                cartDataInput.name = "cart_data";
-                cartDataInput.value = JSON.stringify(cartData);
-                tempForm.appendChild(cartDataInput);
-
-                document.body.appendChild(tempForm);
-                tempForm.submit();
-            });
+        finalize() {
+            if (this.items.length === 0) {
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { msg: 'Carrinho vazio.', type: 'error' } }));
+                return;
+            }
+            const cartData = {};
+            this.items.forEach(i => { cartData[i.id] = i.qty; });
+            const form = document.createElement('form');
+            form.action = '{% url "gerar_pedido" %}';
+            form.method = 'POST';
+            const csrf = document.createElement('input');
+            csrf.type = 'hidden'; csrf.name = 'csrfmiddlewaretoken';
+            csrf.value = '{{ csrf_token }}';
+            form.appendChild(csrf);
+            const data = document.createElement('input');
+            data.type = 'hidden'; data.name = 'cart_data';
+            data.value = JSON.stringify(cartData);
+            form.appendChild(data);
+            document.body.appendChild(form);
+            form.submit();
         }
-    });
-    </script>
+    };
+}
+</script>
+
+{% else %}
+
+<div class="cart-card text-center py-5">
+    <i class="bi bi-cart-x text-muted" style="font-size:3rem;"></i>
+    <h5 class="mt-3 text-muted fw-normal">Seu carrinho está vazio</h5>
+    <a href="{% url 'home' %}" class="btn btn-primary rounded-pill px-4 mt-3">Ir para a loja</a>
+</div>
+
+{% endif %}
 {% endblock %}
