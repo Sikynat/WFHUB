@@ -1,6 +1,16 @@
 {% extends 'base.html' %}
 {% block title %}Board de Tarefas{% endblock %}
 
+{% block head_extra %}
+<style>
+.sortable-ghost  { opacity:.35; background:#f3f4f6; }
+.kanban-col-cards { min-height:80px; }
+.tarefa-card { cursor:grab; }
+.tarefa-card:active { cursor:grabbing; }
+.quick-add-area { display:none; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
     <h5 class="mb-0 fw-bold">Board de Tarefas</h5>
@@ -20,7 +30,7 @@
     <input type="text" name="q" value="{{ filtro_busca }}" class="form-control form-control-sm" style="width:180px;" placeholder="Buscar tarefa...">
     <select name="prioridade" class="form-select form-select-sm" style="width:auto;">
         <option value="">Prioridade</option>
-        <option value="ALTA" {% if filtro_prioridade == 'ALTA' %}selected{% endif %}>Alta</option>
+        <option value="ALTA"  {% if filtro_prioridade == 'ALTA'  %}selected{% endif %}>Alta</option>
         <option value="MEDIA" {% if filtro_prioridade == 'MEDIA' %}selected{% endif %}>Média</option>
         <option value="BAIXA" {% if filtro_prioridade == 'BAIXA' %}selected{% endif %}>Baixa</option>
     </select>
@@ -49,88 +59,143 @@
 <div class="d-flex gap-3 overflow-auto pb-3" style="align-items:flex-start;">
     {% for coluna in colunas %}
     <div style="min-width:280px;max-width:300px;flex:0 0 280px;">
+
         <div class="d-flex align-items-center justify-content-between mb-2 px-1">
             <span class="fw-semibold small text-uppercase text-muted">{{ coluna.label }}</span>
-            <span class="badge bg-secondary rounded-pill">{{ coluna.tarefas|length }}</span>
+            <span class="badge bg-secondary rounded-pill" id="badge-{{ coluna.status }}">{{ coluna.tarefas|length }}</span>
         </div>
 
-        <div class="d-flex flex-column gap-2">
+        <div class="d-flex flex-column gap-2 kanban-col-cards"
+             id="col-{{ coluna.status }}"
+             data-status="{{ coluna.status }}">
             {% for tarefa in coluna.tarefas %}
-            <div class="card border-0 shadow-sm" style="border-left:3px solid {% if tarefa.prioridade == 'ALTA' %}#ef4444{% elif tarefa.prioridade == 'MEDIA' %}#f59e0b{% else %}#22c55e{% endif %} !important;">
-                <div class="card-body p-3">
-                    <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="text-decoration-none text-dark">
-                        <div class="fw-semibold small mb-1">{{ tarefa.titulo }}</div>
-                    </a>
+                {% include 'tarefas/_card.html' with col_status=coluna.status %}
+            {% empty %}
+            <div class="text-center text-muted py-4 small empty-col" style="border:2px dashed #e5e7eb;border-radius:8px;">Nenhuma tarefa</div>
+            {% endfor %}
+        </div>
 
-                    {% if tarefa.tags.all %}
-                    <div class="d-flex flex-wrap gap-1 mb-2">
-                        {% for tag in tarefa.tags.all %}
-                        <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.65rem;">{{ tag.nome }}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-
-                    <!-- Progresso checklist -->
-                    {% with total=tarefa.checklist.count concluidos=tarefa.checklist.all %}
-                    {% if total > 0 %}
-                    {% with done=tarefa.checklist.all|length %}
-                    <div class="d-flex align-items-center gap-1 mb-2">
-                        <i class='bx bx-check-square text-muted' style="font-size:.75rem;"></i>
-                        <small class="text-muted" style="font-size:.7rem;">{{ done }}/{{ total }}</small>
-                        <div class="progress flex-grow-1" style="height:3px;">
-                            <div class="progress-bar bg-success" style="width:{% widthratio done total 100 %}%"></div>
-                        </div>
-                    </div>
-                    {% endwith %}
-                    {% endif %}
-                    {% endwith %}
-
-                    <div class="d-flex align-items-center justify-content-between mt-1">
-                        <div class="d-flex align-items-center gap-1">
-                            {% if tarefa.responsavel %}
-                            <span class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                                  style="width:22px;height:22px;font-size:.6rem;background:#6366f1;"
-                                  title="{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}">
-                                {{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}
-                            </span>
-                            {% endif %}
-                            {% if tarefa.comentarios.count > 0 %}
-                            <small class="text-muted" style="font-size:.7rem;"><i class='bx bx-comment'></i> {{ tarefa.comentarios.count }}</small>
-                            {% endif %}
-                        </div>
-                        {% if tarefa.prazo %}
-                        <small class="{% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-muted{% endif %}" style="font-size:.7rem;">
-                            <i class='bx bx-calendar'></i> {{ tarefa.prazo|date:"d/m" }}
-                        </small>
-                        {% endif %}
-                    </div>
-
-                    <!-- Mover status -->
-                    <div class="d-flex gap-1 mt-2">
-                        {% if coluna.status != 'A_FAZER' %}
-                        <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="status" value="{% if coluna.status == 'EM_ANDAMENTO' %}A_FAZER{% elif coluna.status == 'REVISAO' %}EM_ANDAMENTO{% elif coluna.status == 'CONCLUIDO' %}REVISAO{% endif %}">
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <button type="submit" class="btn btn-outline-secondary" style="font-size:.6rem;padding:1px 6px;" title="Voltar">←</button>
-                        </form>
-                        {% endif %}
-                        {% if coluna.status != 'CONCLUIDO' %}
-                        <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="status" value="{% if coluna.status == 'A_FAZER' %}EM_ANDAMENTO{% elif coluna.status == 'EM_ANDAMENTO' %}REVISAO{% elif coluna.status == 'REVISAO' %}CONCLUIDO{% endif %}">
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <button type="submit" class="btn btn-outline-primary" style="font-size:.6rem;padding:1px 6px;" title="Avançar">→</button>
-                        </form>
-                        {% endif %}
+        <!-- Quick Add -->
+        <div class="mt-2">
+            <div class="quick-add-area" id="qa-{{ coluna.status }}">
+                <div class="card border-0 shadow-sm p-2">
+                    <input type="text"
+                           id="qa-input-{{ coluna.status }}"
+                           class="form-control form-control-sm mb-2"
+                           placeholder="Título da tarefa..."
+                           onkeydown="if(event.key==='Enter'){qaSubmit('{{ coluna.status }}')} if(event.key==='Escape'){qaHide('{{ coluna.status }}')}">
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-primary flex-grow-1" onclick="qaSubmit('{{ coluna.status }}')">Adicionar</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="qaHide('{{ coluna.status }}')">✕</button>
                     </div>
                 </div>
             </div>
-            {% empty %}
-            <div class="text-center text-muted py-4 small" style="border:2px dashed #e5e7eb;border-radius:8px;">Nenhuma tarefa</div>
-            {% endfor %}
+            <button class="btn btn-sm btn-link text-muted w-100 text-start p-1"
+                    id="qa-btn-{{ coluna.status }}"
+                    onclick="qaShow('{{ coluna.status }}')">
+                <i class='bx bx-plus'></i> Adicionar tarefa
+            </button>
         </div>
+
     </div>
     {% endfor %}
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+<script>
+const CSRF = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+
+// ── Drag & Drop ────────────────────────────────────────────
+document.querySelectorAll('.kanban-col-cards').forEach(col => {
+    new Sortable(col, {
+        group: 'tarefas',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        onStart(evt) {
+            evt.to.querySelectorAll('.empty-col').forEach(el => el.remove());
+        },
+        onEnd(evt) {
+            const tarefaId  = evt.item.dataset.tarefaId;
+            const newStatus = evt.to.dataset.status;
+            const oldStatus = evt.from.dataset.status;
+
+            refreshEmptyCol(evt.from);
+            if (newStatus === oldStatus) return;
+
+            updateBadge(oldStatus, -1);
+            updateBadge(newStatus, +1);
+
+            // Oculta botões ← → do card movido (ficarão corretos no próximo reload)
+            const btns = evt.item.querySelector('.move-btns');
+            if (btns) btns.style.display = 'none';
+
+            fetch(`/tarefas/${tarefaId}/status/`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `status=${encodeURIComponent(newStatus)}&next=`,
+            });
+        }
+    });
+});
+
+function refreshEmptyCol(col) {
+    const hasCards = col.querySelector('.tarefa-card');
+    const hasEmpty = col.querySelector('.empty-col');
+    if (!hasCards && !hasEmpty) {
+        col.insertAdjacentHTML('beforeend',
+            '<div class="text-center text-muted py-4 small empty-col" style="border:2px dashed #e5e7eb;border-radius:8px;">Nenhuma tarefa</div>');
+    }
+}
+
+function updateBadge(status, delta) {
+    const badge = document.getElementById(`badge-${status}`);
+    if (badge) badge.textContent = Math.max(0, parseInt(badge.textContent || '0') + delta);
+}
+
+// ── Quick Add ──────────────────────────────────────────────
+function qaShow(status) {
+    document.getElementById(`qa-${status}`).style.display = 'block';
+    document.getElementById(`qa-btn-${status}`).style.display = 'none';
+    document.getElementById(`qa-input-${status}`).focus();
+}
+
+function qaHide(status) {
+    document.getElementById(`qa-${status}`).style.display = 'none';
+    document.getElementById(`qa-btn-${status}`).style.display = '';
+    document.getElementById(`qa-input-${status}`).value = '';
+}
+
+async function qaSubmit(status) {
+    const input = document.getElementById(`qa-input-${status}`);
+    const titulo = input.value.trim();
+    if (!titulo) { input.focus(); return; }
+
+    const addBtn = document.querySelector(`#qa-${status} .btn-primary`);
+    addBtn.disabled = true;
+    addBtn.textContent = '…';
+
+    try {
+        const fd = new FormData();
+        fd.append('titulo', titulo);
+        fd.append('status', status);
+        fd.append('csrfmiddlewaretoken', CSRF);
+
+        const res = await fetch('/tarefas/rapida/', { method: 'POST', credentials: 'same-origin', body: fd });
+        if (!res.ok) throw new Error();
+
+        const html = await res.text();
+        const col = document.getElementById(`col-${status}`);
+        col.querySelectorAll('.empty-col').forEach(el => el.remove());
+        col.insertAdjacentHTML('beforeend', html);
+        updateBadge(status, +1);
+        qaHide(status);
+    } catch {
+        alert('Erro ao criar tarefa. Tente novamente.');
+    } finally {
+        addBtn.disabled = false;
+        addBtn.textContent = 'Adicionar';
+    }
+}
+</script>
 {% endblock %}

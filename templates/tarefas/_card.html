@@ -1,0 +1,71 @@
+{% with cur_status=col_status|default:tarefa.status %}
+<div class="card border-0 shadow-sm tarefa-card"
+     id="card-{{ tarefa.id }}"
+     data-tarefa-id="{{ tarefa.id }}"
+     style="border-left:3px solid {% if tarefa.prioridade == 'ALTA' %}#ef4444{% elif tarefa.prioridade == 'MEDIA' %}#f59e0b{% else %}#22c55e{% endif %} !important; cursor:grab;">
+    <div class="card-body p-3">
+
+        <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="text-decoration-none text-dark">
+            <div class="fw-semibold small mb-1">{{ tarefa.titulo }}</div>
+        </a>
+
+        {% if tarefa.tags.all %}
+        <div class="d-flex flex-wrap gap-1 mb-2">
+            {% for tag in tarefa.tags.all %}
+            <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.65rem;">{{ tag.nome }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if tarefa.checklist_total %}
+        <div class="d-flex align-items-center gap-1 mb-2">
+            <i class='bx bx-check-square text-muted' style="font-size:.75rem;"></i>
+            <small class="text-muted" style="font-size:.7rem;">{{ tarefa.checklist_done }}/{{ tarefa.checklist_total }}</small>
+            <div class="progress flex-grow-1" style="height:3px;">
+                <div class="progress-bar bg-success" style="width:{% widthratio tarefa.checklist_done tarefa.checklist_total 100 %}%"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="d-flex align-items-center justify-content-between mt-1">
+            <div class="d-flex align-items-center gap-1">
+                {% if tarefa.responsavel %}
+                <span class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                      style="width:22px;height:22px;font-size:.6rem;background:#6366f1;"
+                      title="{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}">
+                    {{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}
+                </span>
+                {% endif %}
+                {% if tarefa.comentarios_total %}
+                <small class="text-muted" style="font-size:.7rem;"><i class='bx bx-comment'></i> {{ tarefa.comentarios_total }}</small>
+                {% endif %}
+            </div>
+            {% if tarefa.prazo %}
+            <small class="{% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-muted{% endif %}" style="font-size:.7rem;">
+                <i class='bx bx-calendar'></i> {{ tarefa.prazo|date:"d/m" }}
+            </small>
+            {% endif %}
+        </div>
+
+        <div class="d-flex gap-1 mt-2 move-btns">
+            {% if cur_status != 'A_FAZER' %}
+            <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="{% if cur_status == 'EM_ANDAMENTO' %}A_FAZER{% elif cur_status == 'REVISAO' %}EM_ANDAMENTO{% else %}REVISAO{% endif %}">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-outline-secondary" style="font-size:.6rem;padding:1px 6px;" title="Voltar">←</button>
+            </form>
+            {% endif %}
+            {% if cur_status != 'CONCLUIDO' %}
+            <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="{% if cur_status == 'A_FAZER' %}EM_ANDAMENTO{% elif cur_status == 'EM_ANDAMENTO' %}REVISAO{% else %}CONCLUIDO{% endif %}">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-outline-primary" style="font-size:.6rem;padding:1px 6px;" title="Avançar">→</button>
+            </form>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endwith %}

@@ -4926,7 +4926,11 @@ def tarefas_board(request):
 
     qs = Tarefa.objects.filter(empresa=request.empresa).select_related(
         'criado_por', 'responsavel'
-    ).prefetch_related('tags', 'checklist', 'comentarios')
+    ).prefetch_related('tags').annotate(
+        checklist_total=Count('checklist', distinct=True),
+        checklist_done=Count('checklist', filter=Q(checklist__concluido=True), distinct=True),
+        comentarios_total=Count('comentarios', distinct=True),
+    )
 
     filtro_prioridade = request.GET.get('prioridade', '')
     filtro_responsavel = request.GET.get('responsavel', '')
@@ -5313,6 +5317,37 @@ def gerenciar_tags_tarefa(request):
         return redirect('gerenciar_tags_tarefa')
 
     return render(request, 'tarefas/tags.html', {'tags': tags})
+
+
+@staff_member_required
+def criar_tarefa_rapida(request):
+    if request.method != 'POST' or not request.empresa:
+        from django.http import HttpResponseBadRequest
+        return HttpResponseBadRequest()
+
+    titulo = request.POST.get('titulo', '').strip()
+    status = request.POST.get('status', 'A_FAZER')
+    valid = [s[0] for s in Tarefa.STATUS_CHOICES]
+    if status not in valid:
+        status = 'A_FAZER'
+    if not titulo:
+        from django.http import HttpResponseBadRequest
+        return HttpResponseBadRequest()
+
+    tarefa = Tarefa.objects.create(
+        empresa=request.empresa,
+        titulo=titulo,
+        status=status,
+        prioridade='MEDIA',
+        criado_por=request.user,
+    )
+    _log_atividade(tarefa, request.user, 'Tarefa criada')
+
+    tarefa.checklist_total = 0
+    tarefa.checklist_done = 0
+    tarefa.comentarios_total = 0
+
+    return render(request, 'tarefas/_card.html', {'tarefa': tarefa, 'col_status': status})
 
 
 # ==========================================
