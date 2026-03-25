@@ -1393,6 +1393,8 @@ def upload_foto_perfil(request):
                 if cliente.foto_perfil:
                     cliente.foto_perfil.delete(save=False)
                 cliente.foto_perfil.save(foto.name, foto, save=True)
+    if hasattr(request.user, 'perfil'):
+        return redirect('perfil_representante')
     return redirect('editar_perfil')
 
 
