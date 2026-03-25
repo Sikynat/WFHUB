@@ -658,3 +658,69 @@ class ComentarioPedido(models.Model):
 
     def __str__(self):
         return f'Comentário de {self.autor} em Pedido #{self.pedido_id}'
+
+
+class AnexoTarefa(models.Model):
+    tarefa = models.ForeignKey(Tarefa, on_delete=models.CASCADE, related_name='anexos')
+    arquivo = models.FileField(upload_to='tarefas/anexos/')
+    nome = models.CharField(max_length=255)
+    enviado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_anexo_tarefa'
+        ordering = ['-criado_em']
+        verbose_name = 'Anexo de Tarefa'
+        verbose_name_plural = 'Anexos de Tarefas'
+
+    def __str__(self):
+        return self.nome
+
+    @property
+    def extensao(self):
+        return self.nome.rsplit('.', 1)[-1].lower() if '.' in self.nome else ''
+
+    @property
+    def icone(self):
+        ext = self.extensao
+        if ext == 'pdf':
+            return 'bx-file-pdf'
+        if ext in ('xls', 'xlsx'):
+            return 'bx-spreadsheet'
+        if ext in ('doc', 'docx'):
+            return 'bx-file-doc'
+        if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
+            return 'bx-image'
+        return 'bx-file'
+
+
+class LogAuditoria(models.Model):
+    ACAO_CHOICES = [
+        ('PEDIDO_CRIADO',     'Pedido criado'),
+        ('PEDIDO_FINALIZADO', 'Pedido finalizado'),
+        ('TAREFA_CRIADA',     'Tarefa criada'),
+        ('TAREFA_EDITADA',    'Tarefa editada'),
+        ('TAREFA_EXCLUIDA',   'Tarefa excluída'),
+        ('ANEXO_UPLOAD',      'Anexo enviado'),
+        ('ANEXO_EXCLUIDO',    'Anexo excluído'),
+        ('ORCAMENTO_UPLOAD',  'Orçamento enviado'),
+        ('STATUS_ALTERADO',   'Status alterado'),
+    ]
+
+    empresa = models.ForeignKey('Empresa', on_delete=models.SET_NULL, null=True, blank=True)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    acao = models.CharField(max_length=30, choices=ACAO_CHOICES)
+    modelo = models.CharField(max_length=50, blank=True)
+    objeto_id = models.PositiveIntegerField(null=True, blank=True)
+    descricao = models.TextField()
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_log_auditoria'
+        ordering = ['-criado_em']
+        verbose_name = 'Log de Auditoria'
+        verbose_name_plural = 'Logs de Auditoria'
+
+    def __str__(self):
+        return f'{self.acao} por {self.usuario} em {self.criado_em:%d/%m/%Y %H:%M}'

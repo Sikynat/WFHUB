@@ -65,6 +65,39 @@
             </div>
         </div>
 
+        <!-- Anexos -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between py-3">
+                <span class="fw-semibold">Anexos <span class="badge bg-secondary ms-1">{{ anexos|length }}</span></span>
+            </div>
+            <div class="card-body p-0">
+                {% for anexo in anexos %}
+                <div class="d-flex align-items-center gap-3 px-3 py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                    <i class='bx {{ anexo.icone }} fs-5 text-muted flex-shrink-0'></i>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <a href="{{ anexo.arquivo.url }}" target="_blank" class="text-decoration-none text-dark fw-semibold small d-block text-truncate">{{ anexo.nome }}</a>
+                        <small class="text-muted" style="font-size:.7rem;">
+                            {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username }} · {{ anexo.criado_em|date:"d/m/Y H:i" }}
+                        </small>
+                    </div>
+                    <form method="post" action="{% url 'excluir_anexo_tarefa' anexo.id %}" onsubmit="return confirm('Remover este arquivo?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm p-0 border-0 text-muted" title="Remover"><i class='bx bx-trash'></i></button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-3 small">Nenhum anexo ainda.</div>
+                {% endfor %}
+            </div>
+            <div class="card-footer bg-white p-2">
+                <form method="post" action="{% url 'upload_anexo_tarefa' tarefa.id %}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+                    {% csrf_token %}
+                    <input type="file" name="arquivo" class="form-control form-control-sm" required>
+                    <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0">Enviar</button>
+                </form>
+            </div>
+        </div>
+
         <!-- Comentários -->
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold py-3">

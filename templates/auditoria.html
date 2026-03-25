@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Logs de Auditoria{% endblock %}
+
+{% block content %}
+<style>
+    body { background: #f8f9fc; }
+    .filter-bar { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: .6rem 1rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1.25rem; }
+    .log-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; font-size: .82rem; }
+    .log-table th { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: #9ca3af; background: #f9fafb; padding: .65rem 1rem; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+    .log-table td { padding: .6rem 1rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; color: #374151; }
+    .log-table tr:last-child td { border-bottom: none; }
+    .log-table tr:hover td { background: #fafbff; }
+    .acao-badge { font-size: .68rem; font-weight: 700; padding: .2rem .55rem; border-radius: 999px; white-space: nowrap; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <h5 class="mb-0 fw-bold text-dark"><i class='bx bx-shield-alt me-2 text-primary'></i>Logs de Auditoria</h5>
+</div>
+
+<form method="get" class="filter-bar">
+    <i class='bx bx-filter text-muted'></i>
+    <select name="acao" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Todas as ações</option>
+        {% for val, label in acao_choices %}
+        <option value="{{ val }}" {% if filtro_acao == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="usuario" class="form-select form-select-sm" style="width:auto;">
+        <option value="">Todos os usuários</option>
+        {% for m in membros %}
+        <option value="{{ m.user.id }}" {% if filtro_usuario == m.user.id|stringformat:"s" %}selected{% endif %}>
+            {{ m.user.get_full_name|default:m.user.username }}
+        </option>
+        {% endfor %}
+    </select>
+    <input type="date" name="data" value="{{ filtro_data }}" class="form-control form-control-sm" style="width:auto;">
+    <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill">Filtrar</button>
+    {% if filtro_acao or filtro_usuario or filtro_data %}
+    <a href="{% url 'logs_auditoria' %}" class="btn btn-sm btn-outline-danger rounded-pill"><i class='bx bx-x me-1'></i>Limpar</a>
+    {% endif %}
+</form>
+
+<table class="log-table">
+    <thead>
+        <tr>
+            <th style="width:14%">Data/Hora</th>
+            <th style="width:15%">Usuário</th>
+            <th style="width:16%">Ação</th>
+            <th>Descrição</th>
+            <th style="width:10%">IP</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for log in page_obj %}
+        <tr>
+            <td class="text-muted" style="font-size:.75rem;white-space:nowrap;">{{ log.criado_em|date:"d/m/Y H:i" }}</td>
+            <td>
+                {% if log.usuario %}
+                <div class="d-flex align-items-center gap-2">
+                    <span style="width:22px;height:22px;border-radius:50%;background:#6366f1;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:white;flex-shrink:0;">
+                        {{ log.usuario.get_full_name|default:log.usuario.username|slice:":1"|upper }}
+                    </span>
+                    <span class="small">{{ log.usuario.get_full_name|default:log.usuario.username }}</span>
+                </div>
+                {% else %}<span class="text-muted small">Sistema</span>{% endif %}
+            </td>
+            <td>
+                <span class="acao-badge"
+                    style="
+                    {% if 'CRIADO' in log.acao or 'UPLOAD' in log.acao %}background:#eff6ff;color:#2563eb;
+                    {% elif 'EXCLUIDO' in log.acao or 'EXCLUÍDA' in log.acao %}background:#fef2f2;color:#ef4444;
+                    {% elif 'FINALIZADO' in log.acao %}background:#f0fdf4;color:#16a34a;
+                    {% elif 'EDITADA' in log.acao or 'ALTERADO' in log.acao %}background:#fffbeb;color:#d97706;
+                    {% else %}background:#f3f4f6;color:#6b7280;{% endif %}">
+                    {{ log.get_acao_display }}
+                </span>
+            </td>
+            <td>{{ log.descricao }}</td>
+            <td class="text-muted" style="font-size:.72rem;">{{ log.ip|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" class="text-center text-muted py-5">Nenhum log encontrado.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if filtro_acao %}&acao={{ filtro_acao }}{% endif %}{% if filtro_usuario %}&usuario={{ filtro_usuario }}{% endif %}{% if filtro_data %}&data={{ filtro_data }}{% endif %}">«</a></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if filtro_acao %}&acao={{ filtro_acao }}{% endif %}{% if filtro_usuario %}&usuario={{ filtro_usuario }}{% endif %}{% if filtro_data %}&data={{ filtro_data }}{% endif %}">»</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

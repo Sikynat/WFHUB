@@ -64,6 +64,8 @@ from .models import (
     AtividadeTarefa, ChecklistItem,
     NotificacaoPedido,
     ComentarioPedido,
+    AnexoTarefa,
+    LogAuditoria,
 )
 from .forms import (
     WfClientForm, EnderecoForm, GerarPedidoForm,
@@ -599,6 +601,7 @@ def checkout(request, pedido_id_rascunho=None):
                     carrinho_bd.itens.all().delete()
 
         _notificar_novo_pedido(pedido_final)
+        registrar_log(request, 'PEDIDO_CRIADO', f'Pedido #{pedido_final.id} criado via checkout', 'Pedido', pedido_final.id)
         return redirect('pedido_concluido', pedido_id=pedido_final.id)
 
 
@@ -2755,8 +2758,7 @@ def marcar_pedido_finalizado(request, pedido_id):
         # Altera o status para 'FINALIZADO'
         pedido.status = 'FINALIZADO'
         pedido.save()
-        
-        # Envia uma mensagem de sucesso para o usuário
+        registrar_log(request, 'PEDIDO_FINALIZADO', f'Pedido #{pedido.id} marcado como FINALIZADO', 'Pedido', pedido.id)
         messages.success(request, f'O Pedido #{pedido.id} foi marcado como FINALIZADO.')
     
     # Redireciona o usuário de volta para a página de detalhes de onde ele veio
@@ -4919,6 +4921,23 @@ def _log_atividade(tarefa, usuario, descricao):
     AtividadeTarefa.objects.create(tarefa=tarefa, usuario=usuario, descricao=descricao)
 
 
+def registrar_log(request, acao, descricao, modelo='', objeto_id=None):
+    try:
+        ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+        ip = ip.split(',')[0].strip() or None
+        LogAuditoria.objects.create(
+            empresa=getattr(request, 'empresa', None),
+            usuario=request.user if request.user.is_authenticated else None,
+            acao=acao,
+            modelo=modelo,
+            objeto_id=objeto_id,
+            descricao=descricao,
+            ip=ip,
+        )
+    except Exception:
+        pass
+
+
 def _criar_notificacao(tarefa, mensagem, excluir_user=None):
     membros = tarefa.empresa.membros.exclude(user=excluir_user).select_related('user')
     notifs = [
@@ -5328,15 +5347,91 @@ def detalhe_tarefa(request, tarefa_id):
             _parsear_mencoes(texto, tarefa, request.user)
         return redirect('detalhe_tarefa', tarefa_id=tarefa.id)
 
+    anexos = tarefa.anexos.select_related('enviado_por').all()
+
     return render(request, 'tarefas/detalhe.html', {
         'tarefa': tarefa,
         'comentarios': comentarios,
         'atividades': atividades,
         'checklist': checklist,
+        'anexos': anexos,
         'membros': membros,
         'nome_membros': nome_membros,
         'hoje': hoje,
         'status_choices': Tarefa.STATUS_CHOICES,
+    })
+
+
+@staff_member_required
+@require_POST
+def upload_anexo_tarefa(request, tarefa_id):
+    tarefa = get_object_or_404(Tarefa, id=tarefa_id, empresa=request.empresa)
+    arquivo = request.FILES.get('arquivo')
+    if not arquivo:
+        messages.error(request, 'Nenhum arquivo selecionado.')
+        return redirect('detalhe_tarefa', tarefa_id=tarefa_id)
+
+    nome = arquivo.name
+    AnexoTarefa.objects.create(tarefa=tarefa, arquivo=arquivo, nome=nome, enviado_por=request.user)
+    _log_atividade(tarefa, request.user, f'Anexou o arquivo "{nome}"')
+    registrar_log(request, 'ANEXO_UPLOAD', f'Arquivo "{nome}" anexado à tarefa "{tarefa.titulo}"',
+                  'Tarefa', tarefa.id)
+    messages.success(request, f'Arquivo "{nome}" enviado com sucesso.')
+    return redirect('detalhe_tarefa', tarefa_id=tarefa_id)
+
+
+@staff_member_required
+@require_POST
+def excluir_anexo_tarefa(request, anexo_id):
+    anexo = get_object_or_404(AnexoTarefa, id=anexo_id, tarefa__empresa=request.empresa)
+    tarefa_id = anexo.tarefa_id
+    nome = anexo.nome
+    anexo.arquivo.delete(save=False)
+    anexo.delete()
+    _log_atividade(anexo.tarefa, request.user, f'Removeu o arquivo "{nome}"')
+    registrar_log(request, 'ANEXO_EXCLUIDO', f'Arquivo "{nome}" removido da tarefa',
+                  'Tarefa', tarefa_id)
+    messages.success(request, f'Arquivo "{nome}" removido.')
+    return redirect('detalhe_tarefa', tarefa_id=tarefa_id)
+
+
+@staff_member_required
+def logs_auditoria(request):
+    if not request.empresa:
+        return redirect('home')
+
+    qs = LogAuditoria.objects.filter(empresa=request.empresa).select_related('usuario')
+
+    filtro_acao    = request.GET.get('acao', '')
+    filtro_usuario = request.GET.get('usuario', '')
+    filtro_data    = request.GET.get('data', '')
+
+    if filtro_acao:
+        qs = qs.filter(acao=filtro_acao)
+    if filtro_usuario:
+        qs = qs.filter(usuario_id=filtro_usuario)
+    if filtro_data:
+        try:
+            from datetime import datetime as dt
+            d = dt.strptime(filtro_data, '%Y-%m-%d').date()
+            qs = qs.filter(criado_em__date=d)
+        except ValueError:
+            pass
+
+    # Paginação simples
+    from django.core.paginator import Paginator
+    paginator = Paginator(qs, 50)
+    page = paginator.get_page(request.GET.get('page', 1))
+
+    membros, _ = _dados_filtros(request)
+
+    return render(request, 'auditoria.html', {
+        'page_obj': page,
+        'acao_choices': LogAuditoria.ACAO_CHOICES,
+        'membros': membros,
+        'filtro_acao': filtro_acao,
+        'filtro_usuario': filtro_usuario,
+        'filtro_data': filtro_data,
     })
 
 

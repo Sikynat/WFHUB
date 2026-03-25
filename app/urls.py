@@ -114,6 +114,9 @@ urlpatterns = [
     path('notificacoes/pedidos/', views.notificacoes_pedidos, name='notificacoes_pedidos'),
     path('tarefas/rapida/', views.criar_tarefa_rapida, name='criar_tarefa_rapida'),
     path('pedidos/<int:pedido_id>/comentar/', views.comentar_pedido, name='comentar_pedido'),
+    path('tarefas/<int:tarefa_id>/anexo/', views.upload_anexo_tarefa, name='upload_anexo_tarefa'),
+    path('tarefas/anexo/<int:anexo_id>/excluir/', views.excluir_anexo_tarefa, name='excluir_anexo_tarefa'),
+    path('auditoria/', views.logs_auditoria, name='logs_auditoria'),
 ]
 
 
