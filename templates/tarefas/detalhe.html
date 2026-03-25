@@ -2,227 +2,318 @@
 {% block title %}{{ tarefa.titulo }}{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center gap-2 mb-4">
-    <a href="{% url 'tarefas_board' %}" class="btn btn-sm btn-outline-secondary"><i class='bx bx-arrow-back'></i></a>
-    <h5 class="mb-0 fw-bold">{{ tarefa.titulo }}</h5>
-    <a href="{% url 'editar_tarefa' tarefa.id %}" class="btn btn-sm btn-outline-secondary ms-auto"><i class='bx bx-edit me-1'></i>Editar</a>
+<style>
+    body { background: #f8f9fc; }
+
+    /* Header */
+    .task-header { display: flex; align-items: center; gap: .75rem; padding: 1rem 0 1.25rem; border-bottom: 1px solid #e5e7eb; margin-bottom: 1.5rem; }
+    .task-title { font-size: 1.25rem; font-weight: 800; color: #1e293b; flex: 1; }
+
+    /* Section */
+    .section { background: white; border-radius: 12px; border: 1px solid #edf2f7; margin-bottom: 1rem; overflow: hidden; }
+    .section-header { display: flex; align-items: center; gap: .5rem; padding: .85rem 1.1rem; border-bottom: 1px solid #f3f4f6; }
+    .section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #374151; flex: 1; }
+    .section-badge { font-size: .68rem; font-weight: 700; padding: .15rem .5rem; border-radius: 999px; background: #f3f4f6; color: #6b7280; }
+
+    /* Checklist */
+    .check-item { display: flex; align-items: center; gap: .65rem; padding: .55rem 1.1rem; border-bottom: 1px solid #f9fafb; }
+    .check-item:last-child { border-bottom: none; }
+    .check-btn { background: none; border: none; padding: 0; cursor: pointer; line-height: 1; color: #9ca3af; font-size: 1.1rem; flex-shrink: 0; }
+    .check-btn:hover { color: #6366f1; }
+    .check-text { flex: 1; font-size: .85rem; color: #374151; }
+    .check-text.done { text-decoration: line-through; color: #9ca3af; }
+
+    /* Anexos */
+    .anexo-item { display: flex; align-items: center; gap: .75rem; padding: .6rem 1.1rem; border-bottom: 1px solid #f9fafb; }
+    .anexo-item:last-child { border-bottom: none; }
+    .anexo-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; background: #f3f4f6; color: #6b7280; }
+
+    /* Upload zone */
+    .upload-zone { border: 2px dashed #e5e7eb; border-radius: 10px; padding: .85rem 1.1rem; margin: .75rem 1.1rem; display: flex; align-items: center; gap: .75rem; cursor: pointer; transition: border-color .15s; }
+    .upload-zone:hover { border-color: #6366f1; }
+    .upload-zone input[type=file] { display: none; }
+    .upload-label { font-size: .8rem; color: #9ca3af; flex: 1; cursor: pointer; }
+    .upload-label span { color: #6366f1; font-weight: 600; }
+
+    /* Comentários */
+    .comment-item { display: flex; gap: .75rem; padding: .85rem 1.1rem; border-bottom: 1px solid #f9fafb; }
+    .comment-item:last-child { border-bottom: none; }
+    .comment-avatar { width: 32px; height: 32px; border-radius: 50%; background: #6366f1; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: white; flex-shrink: 0; }
+    .comment-body { flex: 1; }
+    .comment-meta { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .25rem; }
+    .comment-author { font-size: .8rem; font-weight: 700; color: #1e293b; }
+    .comment-time { font-size: .7rem; color: #9ca3af; }
+    .comment-text { font-size: .82rem; color: #374151; white-space: pre-wrap; margin: 0; }
+
+    /* Sidebar */
+    .sidebar-card { background: white; border-radius: 12px; border: 1px solid #edf2f7; padding: 1.1rem; margin-bottom: 1rem; }
+    .sidebar-label { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: #9ca3af; margin-bottom: .35rem; }
+    .sidebar-value { font-size: .85rem; color: #1e293b; font-weight: 500; }
+
+    .status-select { width: 100%; border: 1.5px solid #e5e7eb; border-radius: 8px; padding: .35rem .6rem; font-size: .82rem; font-weight: 600; cursor: pointer; outline: none; }
+    .status-select:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.1); }
+
+    .pri-pill { font-size: .72rem; font-weight: 700; padding: .25rem .65rem; border-radius: 999px; }
+
+    /* Atividade timeline */
+    .timeline-item { display: flex; gap: .65rem; padding: .55rem 1.1rem; position: relative; }
+    .timeline-dot { width: 22px; height: 22px; border-radius: 50%; background: #ede9fe; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .timeline-dot i { font-size: .6rem; color: #6d28d9; }
+    .timeline-content { flex: 1; }
+    .timeline-desc { font-size: .78rem; color: #374151; margin: 0; }
+    .timeline-meta { font-size: .68rem; color: #9ca3af; }
+
+    .btn-action { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e5e7eb; background: white; display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; color: #6b7280; cursor: pointer; transition: all .15s; }
+    .btn-action:hover { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+</style>
+
+<!-- Header -->
+<div class="task-header">
+    <a href="{% url 'tarefas_board' %}" class="btn-action" style="flex-shrink:0;" title="Voltar">
+        <i class='bx bx-arrow-back'></i>
+    </a>
+    <div>
+        <div class="task-title">{{ tarefa.titulo }}</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.1rem;">
+            Criado por <strong>{{ tarefa.criado_por.get_full_name|default:tarefa.criado_por.username|default:"—" }}</strong>
+            em {{ tarefa.criado_em|date:"d/m/Y \à\s H:i" }}
+        </div>
+    </div>
+    <a href="{% url 'editar_tarefa' tarefa.id %}" class="btn btn-sm btn-outline-secondary rounded-pill ms-auto">
+        <i class='bx bx-edit me-1'></i>Editar
+    </a>
 </div>
 
-<div class="row g-4">
+<div class="row g-3">
     <!-- Coluna principal -->
     <div class="col-lg-8">
 
         <!-- Descrição -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-body">
-                <h6 class="fw-semibold text-muted mb-2">Descrição</h6>
-                {% if tarefa.descricao %}
-                <p class="mb-0" style="white-space:pre-wrap;">{{ tarefa.descricao }}</p>
-                {% else %}
-                <p class="text-muted mb-0 small">Nenhuma descrição.</p>
-                {% endif %}
+        <div class="section">
+            <div class="section-header">
+                <i class='bx bx-align-left' style="color:#6366f1;"></i>
+                <span class="section-title">Descrição</span>
+            </div>
+            <div style="padding:.85rem 1.1rem;font-size:.85rem;color:{% if tarefa.descricao %}#374151{% else %}#9ca3af{% endif %};">
+                {% if tarefa.descricao %}<p style="white-space:pre-wrap;margin:0;">{{ tarefa.descricao }}</p>
+                {% else %}Nenhuma descrição adicionada.{% endif %}
             </div>
         </div>
 
         <!-- Checklist -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white d-flex align-items-center justify-content-between py-3">
-                <span class="fw-semibold">Checklist</span>
-                {% if checklist %}
-                <small class="text-muted">
-                    {% with total=checklist|length %}
-                    {% with done=0 %}
-                    {{ checklist|length }} iten{% if checklist|length != 1 %}s{% endif %}
-                    {% endwith %}{% endwith %}
-                </small>
-                {% endif %}
+        <div class="section">
+            <div class="section-header">
+                <i class='bx bx-check-square' style="color:#059669;"></i>
+                <span class="section-title">Checklist</span>
+                {% if checklist %}<span class="section-badge">{{ checklist|length }} iten{% if checklist|length != 1 %}s{% endif %}</span>{% endif %}
             </div>
-            <div class="card-body p-0">
-                {% for item in checklist %}
-                <div class="d-flex align-items-center gap-2 px-3 py-2 {% if not forloop.last %}border-bottom{% endif %}">
-                    <form method="post" action="{% url 'toggle_checklist_item' item.id %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn p-0 border-0" style="line-height:1;">
-                            <i class='bx {% if item.concluido %}bx-check-square text-success{% else %}bx-square text-muted{% endif %}' style="font-size:1.2rem;"></i>
-                        </button>
-                    </form>
-                    <span class="flex-grow-1 small {% if item.concluido %}text-decoration-line-through text-muted{% endif %}">{{ item.texto }}</span>
-                    <form method="post" action="{% url 'excluir_checklist_item' item.id %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm p-0 border-0 text-muted" style="font-size:.75rem;" title="Remover"><i class='bx bx-x'></i></button>
-                    </form>
-                </div>
-                {% empty %}
-                <div class="text-center text-muted py-3 small">Nenhum item ainda.</div>
-                {% endfor %}
+            {% for item in checklist %}
+            <div class="check-item">
+                <form method="post" action="{% url 'toggle_checklist_item' item.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="check-btn">
+                        <i class='bx {% if item.concluido %}bxs-check-square{% else %}bx-square{% endif %}' style="color:{% if item.concluido %}#059669{% else %}#d1d5db{% endif %};"></i>
+                    </button>
+                </form>
+                <span class="check-text {% if item.concluido %}done{% endif %}">{{ item.texto }}</span>
+                <form method="post" action="{% url 'excluir_checklist_item' item.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-action" title="Remover"><i class='bx bx-x'></i></button>
+                </form>
             </div>
-            <div class="card-footer bg-white p-2">
+            {% empty %}
+            <div style="text-align:center;color:#9ca3af;padding:1.25rem;font-size:.8rem;">Nenhum item ainda.</div>
+            {% endfor %}
+            <div style="padding:.65rem 1.1rem;border-top:1px solid #f3f4f6;">
                 <form method="post" action="{% url 'adicionar_checklist_item' tarefa.id %}" class="d-flex gap-2">
                     {% csrf_token %}
-                    <input type="text" name="texto" class="form-control form-control-sm" placeholder="Novo item..." required>
-                    <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0">Adicionar</button>
+                    <input type="text" name="texto" class="form-control form-control-sm" placeholder="Adicionar item..." required style="border-radius:8px;font-size:.82rem;">
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3" style="font-size:.78rem;white-space:nowrap;">+ Adicionar</button>
                 </form>
             </div>
         </div>
 
         <!-- Anexos -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white d-flex align-items-center justify-content-between py-3">
-                <span class="fw-semibold">Anexos <span class="badge bg-secondary ms-1">{{ anexos|length }}</span></span>
+        <div class="section">
+            <div class="section-header">
+                <i class='bx bx-paperclip' style="color:#d97706;"></i>
+                <span class="section-title">Anexos</span>
+                <span class="section-badge">{{ anexos|length }}</span>
             </div>
-            <div class="card-body p-0">
-                {% for anexo in anexos %}
-                <div class="d-flex align-items-center gap-3 px-3 py-2 {% if not forloop.last %}border-bottom{% endif %}">
-                    <i class='bx {{ anexo.icone }} fs-5 text-muted flex-shrink-0'></i>
-                    <div class="flex-grow-1 overflow-hidden">
-                        <a href="{{ anexo.arquivo.url }}" target="_blank" class="text-decoration-none text-dark fw-semibold small d-block text-truncate">{{ anexo.nome }}</a>
-                        <small class="text-muted" style="font-size:.7rem;">
-                            {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username }} · {{ anexo.criado_em|date:"d/m/Y H:i" }}
-                        </small>
-                    </div>
-                    <form method="post" action="{% url 'excluir_anexo_tarefa' anexo.id %}" onsubmit="return confirm('Remover este arquivo?');">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm p-0 border-0 text-muted" title="Remover"><i class='bx bx-trash'></i></button>
-                    </form>
+            {% for anexo in anexos %}
+            <div class="anexo-item">
+                <div class="anexo-icon">
+                    <i class='bx {{ anexo.icone }}'></i>
                 </div>
-                {% empty %}
-                <div class="text-center text-muted py-3 small">Nenhum anexo ainda.</div>
-                {% endfor %}
-            </div>
-            <div class="card-footer bg-white p-2">
-                <form method="post" action="{% url 'upload_anexo_tarefa' tarefa.id %}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+                <div style="flex:1;overflow:hidden;">
+                    <a href="{{ anexo.arquivo.url }}" target="_blank" style="font-size:.82rem;font-weight:600;color:#1e293b;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        {{ anexo.nome }}
+                    </a>
+                    <span style="font-size:.68rem;color:#9ca3af;">
+                        {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username }} · {{ anexo.criado_em|date:"d/m/Y H:i" }}
+                    </span>
+                </div>
+                <form method="post" action="{% url 'excluir_anexo_tarefa' anexo.id %}" onsubmit="return confirm('Remover este arquivo?');">
                     {% csrf_token %}
-                    <input type="file" name="arquivo" class="form-control form-control-sm" required>
-                    <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0">Enviar</button>
+                    <button type="submit" class="btn-action" title="Remover"><i class='bx bx-trash'></i></button>
+                </form>
+            </div>
+            {% empty %}
+            <div style="text-align:center;color:#9ca3af;padding:1.25rem;font-size:.8rem;">Nenhum anexo ainda.</div>
+            {% endfor %}
+
+            <form method="post" action="{% url 'upload_anexo_tarefa' tarefa.id %}" enctype="multipart/form-data" id="upload-form">
+                {% csrf_token %}
+                <div class="upload-zone" onclick="document.getElementById('file-input').click();">
+                    <i class='bx bx-cloud-upload' style="font-size:1.4rem;color:#9ca3af;flex-shrink:0;"></i>
+                    <label class="upload-label" id="upload-label">
+                        <span>Clique para selecionar</span> ou arraste um arquivo aqui
+                    </label>
+                    <input type="file" name="arquivo" id="file-input" required onchange="updateLabel(this)">
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3" style="font-size:.78rem;white-space:nowrap;flex-shrink:0;">Enviar</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Comentários -->
+        <div class="section">
+            <div class="section-header">
+                <i class='bx bx-comment-dots' style="color:#7c3aed;"></i>
+                <span class="section-title">Comentários</span>
+                <span class="section-badge">{{ comentarios|length }}</span>
+            </div>
+            {% for c in comentarios %}
+            <div class="comment-item">
+                <div class="comment-avatar">{{ c.autor.get_full_name|default:c.autor.username|slice:":1"|upper }}</div>
+                <div class="comment-body">
+                    <div class="comment-meta">
+                        <span class="comment-author">{{ c.autor.get_full_name|default:c.autor.username }}</span>
+                        <span class="comment-time">{{ c.criado_em|date:"d/m/Y H:i" }}</span>
+                    </div>
+                    <p class="comment-text">{{ c.texto }}</p>
+                </div>
+            </div>
+            {% empty %}
+            <div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.8rem;">Nenhum comentário ainda.</div>
+            {% endfor %}
+            <div style="padding:.85rem 1.1rem;border-top:1px solid #f3f4f6;">
+                {% if nome_membros %}
+                <div style="font-size:.72rem;color:#9ca3af;margin-bottom:.5rem;">
+                    Mencionar: {% for n in nome_membros %}<code style="background:#f3f4f6;padding:.1rem .3rem;border-radius:4px;margin-right:.25rem;color:#6366f1;">@{{ n }}</code>{% endfor %}
+                </div>
+                {% endif %}
+                <form method="post" class="d-flex gap-2 align-items-end">
+                    {% csrf_token %}
+                    <textarea name="texto" class="form-control form-control-sm flex-grow-1" rows="2"
+                              placeholder="Escreva um comentário..." required
+                              style="border-radius:10px;font-size:.82rem;resize:none;"></textarea>
+                    <button type="submit" class="btn btn-primary btn-sm rounded-pill px-3" style="white-space:nowrap;">
+                        <i class='bx bx-send me-1'></i>Enviar
+                    </button>
                 </form>
             </div>
         </div>
 
-        <!-- Comentários -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold py-3">
-                Comentários <span class="badge bg-secondary ms-1">{{ comentarios|length }}</span>
-            </div>
-            <div class="card-body p-0">
-                {% for c in comentarios %}
-                <div class="d-flex gap-3 p-3 {% if not forloop.last %}border-bottom{% endif %}">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
-                         style="width:36px;height:36px;background:#6366f1;font-size:.8rem;">
-                        {{ c.autor.get_full_name|default:c.autor.username|slice:":1"|upper }}
-                    </div>
-                    <div class="flex-grow-1">
-                        <div class="d-flex align-items-baseline gap-2 mb-1">
-                            <span class="fw-semibold small">{{ c.autor.get_full_name|default:c.autor.username }}</span>
-                            <small class="text-muted">{{ c.criado_em|date:"d/m/Y H:i" }}</small>
-                        </div>
-                        <p class="mb-0 small" style="white-space:pre-wrap;">{{ c.texto }}</p>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="text-center text-muted py-4 small">Nenhum comentário ainda.</div>
-                {% endfor %}
-            </div>
-            <div class="card-footer bg-white p-3">
-                {% if nome_membros %}
-                <small class="text-muted d-block mb-1">Mencionar: {% for n in nome_membros %}<code class="me-1">@{{ n }}</code>{% endfor %}</small>
-                {% endif %}
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="d-flex gap-2">
-                        <textarea name="texto" class="form-control form-control-sm" rows="2" placeholder="Escreva um comentário... Use @username para mencionar alguém" required></textarea>
-                        <button type="submit" class="btn btn-primary btn-sm align-self-end"><i class='bx bx-send'></i></button>
-                    </div>
-                </form>
-            </div>
-        </div>
     </div>
 
     <!-- Coluna lateral -->
     <div class="col-lg-4">
+
         <!-- Detalhes -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-body">
-                <h6 class="fw-semibold text-muted mb-3">Detalhes</h6>
+        <div class="sidebar-card">
+            <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#374151;margin-bottom:1rem;">Detalhes</div>
 
-                <div class="mb-3">
-                    <small class="text-muted d-block mb-1">Status</small>
-                    <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.path }}">
-                        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                            {% for val, label in status_choices %}
-                            <option value="{{ val }}" {% if tarefa.status == val %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                    </form>
-                </div>
-
-                <div class="mb-3">
-                    <small class="text-muted d-block mb-1">Prioridade</small>
-                    {% if tarefa.prioridade == 'ALTA' %}<span class="badge" style="background:#fef2f2;color:#ef4444;">Alta</span>
-                    {% elif tarefa.prioridade == 'MEDIA' %}<span class="badge" style="background:#fffbeb;color:#f59e0b;">Média</span>
-                    {% else %}<span class="badge" style="background:#f0fdf4;color:#22c55e;">Baixa</span>{% endif %}
-                </div>
-
-                <div class="mb-3">
-                    <small class="text-muted d-block mb-1">Responsável</small>
-                    {% if tarefa.responsavel %}
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" style="width:28px;height:28px;background:#6366f1;font-size:.7rem;">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}</div>
-                        <span class="small">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}</span>
-                    </div>
-                    {% else %}<span class="text-muted small">Não atribuído</span>{% endif %}
-                </div>
-
-                <div class="mb-3">
-                    <small class="text-muted d-block mb-1">Prazo</small>
-                    {% if tarefa.prazo %}
-                    <span class="small {% if tarefa.atrasada %}text-danger fw-bold{% elif tarefa.prazo_proximo %}text-warning fw-bold{% else %}text-dark{% endif %}">
-                        {{ tarefa.prazo|date:"d/m/Y" }}
-                        {% if tarefa.atrasada %}<span class="badge bg-danger ms-1">Atrasada</span>{% endif %}
-                    </span>
-                    {% else %}<span class="text-muted small">Sem prazo</span>{% endif %}
-                </div>
-
-                {% if tarefa.tags.all %}
-                <div class="mb-3">
-                    <small class="text-muted d-block mb-1">Tags</small>
-                    <div class="d-flex flex-wrap gap-1">
-                        {% for tag in tarefa.tags.all %}
-                        <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};">{{ tag.nome }}</span>
+            <div class="mb-3">
+                <div class="sidebar-label">Status</div>
+                <form method="post" action="{% url 'atualizar_status_tarefa' tarefa.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <select name="status" class="status-select" onchange="this.form.submit()"
+                        style="color:{% if tarefa.status == 'A_FAZER' %}#475569{% elif tarefa.status == 'EM_ANDAMENTO' %}#2563eb{% elif tarefa.status == 'REVISAO' %}#d97706{% else %}#059669{% endif %};">
+                        {% for val, label in status_choices %}
+                        <option value="{{ val }}" {% if tarefa.status == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
-                    </div>
-                </div>
+                    </select>
+                </form>
+            </div>
+
+            <div class="mb-3">
+                <div class="sidebar-label">Prioridade</div>
+                {% if tarefa.prioridade == 'ALTA' %}
+                <span class="pri-pill" style="background:#fef2f2;color:#ef4444;">● Alta</span>
+                {% elif tarefa.prioridade == 'MEDIA' %}
+                <span class="pri-pill" style="background:#fffbeb;color:#d97706;">● Média</span>
+                {% else %}
+                <span class="pri-pill" style="background:#f0fdf4;color:#059669;">● Baixa</span>
                 {% endif %}
-
-                <hr>
-                <small class="text-muted d-block">Criado por {{ tarefa.criado_por.get_full_name|default:tarefa.criado_por.username|default:"—" }}</small>
-                <small class="text-muted">{{ tarefa.criado_em|date:"d/m/Y H:i" }}</small>
             </div>
-        </div>
 
-        <!-- Log de atividade -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold py-3">Atividade</div>
-            <div class="card-body p-0">
-                {% for ativ in atividades %}
-                <div class="d-flex gap-2 px-3 py-2 {% if not forloop.last %}border-bottom{% endif %}">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                         style="width:24px;height:24px;background:#ede9fe;">
-                        <i class='bx bx-time-five' style="font-size:.65rem;color:#6d28d9;"></i>
-                    </div>
-                    <div>
-                        <small class="d-block" style="font-size:.75rem;">{{ ativ.descricao }}</small>
-                        <small class="text-muted" style="font-size:.65rem;">
-                            {{ ativ.usuario.get_full_name|default:ativ.usuario.username|default:"Sistema" }} · {{ ativ.criado_em|date:"d/m H:i" }}
-                        </small>
-                    </div>
+            <div class="mb-3">
+                <div class="sidebar-label">Responsável</div>
+                {% if tarefa.responsavel %}
+                <div class="d-flex align-items-center gap-2">
+                    <span style="width:26px;height:26px;border-radius:50%;background:#6366f1;display:inline-flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:white;flex-shrink:0;">
+                        {{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}
+                    </span>
+                    <span class="sidebar-value">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}</span>
                 </div>
-                {% empty %}
-                <div class="text-center text-muted py-3 small">Nenhuma atividade.</div>
-                {% endfor %}
+                {% else %}<span style="font-size:.82rem;color:#9ca3af;">Não atribuído</span>{% endif %}
+            </div>
+
+            <div class="mb-3">
+                <div class="sidebar-label">Prazo</div>
+                {% if tarefa.prazo %}
+                <span class="sidebar-value {% if tarefa.atrasada %}text-danger{% elif tarefa.prazo_proximo %}text-warning{% endif %}" style="font-weight:700;">
+                    {{ tarefa.prazo|date:"d/m/Y" }}
+                    {% if tarefa.atrasada %}<span style="font-size:.68rem;background:#fef2f2;color:#ef4444;padding:.1rem .4rem;border-radius:999px;margin-left:.3rem;font-weight:700;">Atrasada</span>{% endif %}
+                </span>
+                {% else %}<span style="font-size:.82rem;color:#9ca3af;">Sem prazo</span>{% endif %}
+            </div>
+
+            {% if tarefa.tags.all %}
+            <div class="mb-3">
+                <div class="sidebar-label">Tags</div>
+                <div class="d-flex flex-wrap gap-1">
+                    {% for tag in tarefa.tags.all %}
+                    <span style="font-size:.68rem;font-weight:600;padding:.15rem .5rem;border-radius:999px;background:{{ tag.cor }}18;color:{{ tag.cor }};">{{ tag.nome }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div style="border-top:1px solid #f3f4f6;padding-top:.75rem;margin-top:.5rem;">
+                <div style="font-size:.72rem;color:#9ca3af;">Criado por <strong style="color:#374151;">{{ tarefa.criado_por.get_full_name|default:tarefa.criado_por.username|default:"—" }}</strong></div>
+                <div style="font-size:.72rem;color:#9ca3af;">{{ tarefa.criado_em|date:"d/m/Y H:i" }}</div>
             </div>
         </div>
+
+        <!-- Atividade -->
+        <div class="sidebar-card" style="padding:0;overflow:hidden;">
+            <div style="padding:.85rem 1.1rem;border-bottom:1px solid #f3f4f6;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#374151;">
+                Atividade
+            </div>
+            {% for ativ in atividades %}
+            <div class="timeline-item {% if not forloop.last %}border-bottom{% endif %}" style="border-color:#f9fafb;">
+                <div class="timeline-dot"><i class='bx bx-time-five'></i></div>
+                <div class="timeline-content">
+                    <p class="timeline-desc">{{ ativ.descricao }}</p>
+                    <span class="timeline-meta">{{ ativ.usuario.get_full_name|default:ativ.usuario.username|default:"Sistema" }} · {{ ativ.criado_em|date:"d/m H:i" }}</span>
+                </div>
+            </div>
+            {% empty %}
+            <div style="text-align:center;color:#9ca3af;padding:1.25rem;font-size:.8rem;">Nenhuma atividade.</div>
+            {% endfor %}
+        </div>
+
     </div>
 </div>
+
+<script>
+function updateLabel(input) {
+    const label = document.getElementById('upload-label');
+    if (input.files && input.files[0]) {
+        label.innerHTML = '<strong style="color:#1e293b;">' + input.files[0].name + '</strong>';
+    }
+}
+</script>
 {% endblock %}
