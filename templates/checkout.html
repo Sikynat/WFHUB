@@ -194,7 +194,11 @@
         <div class="col-lg-5">
             <div class="summary-sticky">
                 <div class="checkout-card">
-                    <div class="section-title"><i class="bi bi-receipt me-1"></i>Resumo do pedido</div>
+                    <div class="section-title d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-receipt me-1"></i>Resumo do pedido</span>
+                        <span style="background:#f3f4f6;border-radius:999px;padding:2px 8px;font-size:.7rem;font-weight:700;color:#6b7280;">{{ carrinho_detalhes|length }} iten{{ carrinho_detalhes|length|pluralize:"s" }}</span>
+                    </div>
+                    <div style="max-height:340px;overflow-y:auto;margin-bottom:.5rem;">
                     <table class="items-table">
                         <thead>
                             <tr>
@@ -219,6 +223,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
 
                     <div style="border-top:2px solid #f3f4f6;margin-top:.75rem;padding-top:.75rem;display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-size:.82rem;color:#6b7280;font-weight:600;">Total do pedido</span>
