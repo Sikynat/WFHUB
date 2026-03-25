@@ -154,7 +154,7 @@
                         {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username }} · {{ anexo.criado_em|date:"d/m/Y H:i" }}
                     </span>
                 </div>
-                <form method="post" action="{% url 'excluir_anexo_tarefa' anexo.id %}" onsubmit="return confirm('Remover este arquivo?');">
+                <form method="post" action="{% url 'excluir_anexo_tarefa' anexo.id %}" data-confirm="Remover este arquivo?">
                     {% csrf_token %}
                     <button type="submit" class="btn-action" title="Remover"><i class='bx bx-trash'></i></button>
                 </form>
@@ -163,15 +163,27 @@
             <div style="text-align:center;color:#9ca3af;padding:1.25rem;font-size:.8rem;">Nenhum anexo ainda.</div>
             {% endfor %}
 
-            <form method="post" action="{% url 'upload_anexo_tarefa' tarefa.id %}" enctype="multipart/form-data" id="upload-form">
+            <form method="post" action="{% url 'upload_anexo_tarefa' tarefa.id %}" enctype="multipart/form-data"
+                  x-data="uploadZone()"
+                  @submit.prevent="submitForm($el)"
+                  @dragover.prevent="dragging = true"
+                  @dragleave.prevent="dragging = false"
+                  @drop.prevent="onDrop($event)">
                 {% csrf_token %}
-                <div class="upload-zone" onclick="document.getElementById('file-input').click();">
-                    <i class='bx bx-cloud-upload' style="font-size:1.4rem;color:#9ca3af;flex-shrink:0;"></i>
-                    <label class="upload-label" id="upload-label">
-                        <span>Clique para selecionar</span> ou arraste um arquivo aqui
-                    </label>
-                    <input type="file" name="arquivo" id="file-input" required onchange="updateLabel(this)">
-                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3" style="font-size:.78rem;white-space:nowrap;flex-shrink:0;">Enviar</button>
+                <div class="upload-zone" :class="dragging ? 'dragging' : ''" @click="$refs.fileInput.click()"
+                     :style="dragging ? 'border-color:#6366f1;background:#f5f3ff;' : ''">
+                    <i class='bx bx-cloud-upload' style="font-size:1.4rem;flex-shrink:0;" :style="dragging ? 'color:#6366f1;' : 'color:#9ca3af;'"></i>
+                    <span style="font-size:.82rem;color:#6b7280;flex:1;">
+                        <template x-if="!fileName">
+                            <span><strong style="color:#6366f1;">Clique para selecionar</strong> ou arraste um arquivo aqui</span>
+                        </template>
+                        <template x-if="fileName">
+                            <span><strong style="color:#1e293b;" x-text="fileName"></strong></span>
+                        </template>
+                    </span>
+                    <input type="file" name="arquivo" x-ref="fileInput" style="display:none;" @change="onFileChange($event)">
+                    <button type="submit" x-show="fileName" class="btn btn-sm btn-primary rounded-pill px-3"
+                            style="font-size:.78rem;white-space:nowrap;flex-shrink:0;">Enviar</button>
                 </div>
             </form>
         </div>
@@ -308,11 +320,30 @@
 </div>
 
 <script>
-function updateLabel(input) {
-    const label = document.getElementById('upload-label');
-    if (input.files && input.files[0]) {
-        label.innerHTML = '<strong style="color:#1e293b;">' + input.files[0].name + '</strong>';
-    }
+function uploadZone() {
+    return {
+        fileName: '',
+        dragging: false,
+        onFileChange(e) {
+            this.fileName = e.target.files[0]?.name || '';
+        },
+        onDrop(e) {
+            this.dragging = false;
+            const file = e.dataTransfer.files[0];
+            if (!file) return;
+            this.fileName = file.name;
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            this.$refs.fileInput.files = dt.files;
+        },
+        submitForm(form) {
+            if (!this.$refs.fileInput.files.length) {
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { msg: 'Selecione um arquivo primeiro.', type: 'error' } }));
+                return;
+            }
+            form.submit();
+        }
+    };
 }
 </script>
 {% endblock %}

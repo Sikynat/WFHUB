@@ -161,7 +161,7 @@
                     {% endif %}
 
                     {% if pedido.status != 'FINALIZADO' %}
-                    <form action="{% url 'marcar_pedido_finalizado' pedido.id %}" method="post" class="d-inline" onsubmit="return confirm('Tem certeza que deseja finalizar este pedido?');">
+                    <form action="{% url 'marcar_pedido_finalizado' pedido.id %}" method="post" class="d-inline" data-confirm="Tem certeza que deseja finalizar este pedido?">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-danger rounded-pill shadow-sm fw-bold px-4">
                             <i class="bi bi-check2-all me-1"></i> Finalizar Pedido

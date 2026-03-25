@@ -126,7 +126,7 @@
                         <form method="post" action="{% url 'toggle_empresa_ativo' row.empresa.id %}">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm {% if row.empresa.ativo %}btn-success{% else %}btn-outline-danger{% endif %}"
-                                onclick="return confirm('{% if row.empresa.ativo %}Desativar{% else %}Reativar{% endif %} {{ row.empresa.nome }}?')">
+                                data-confirm="{% if row.empresa.ativo %}Desativar{% else %}Reativar{% endif %} {{ row.empresa.nome }}?">
                                 {% if row.empresa.ativo %}Ativa{% else %}Inativa{% endif %}
                             </button>
                         </form>

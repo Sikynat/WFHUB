@@ -19,6 +19,8 @@
       <link rel="stylesheet" href="{% static 'wefixhub/css/style-base.css' %}">
       <link rel="stylesheet" href="{% static 'wefixhub/css/footer-style.css' %}">
       <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+      <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+      <style>[x-cloak]{display:none!important}</style>
 </head>
 <body>
  
@@ -264,7 +266,112 @@
 
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
 
+    <!-- ── Alpine: Modal de Confirmação ───────────────────────────────── -->
+    <div x-data="confirmModal()" x-cloak
+         x-on:need-confirm.window="open($event.detail)"
+         x-show="visible"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @keydown.escape.window="cancel()"
+         style="position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;">
+        <div style="background:white;border-radius:16px;padding:1.75rem;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.18);" @click.stop
+             x-transition:enter="transition ease-out duration-150"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100">
+            <div style="display:flex;align-items:flex-start;gap:.85rem;margin-bottom:1.25rem;">
+                <div style="width:40px;height:40px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class='bx bx-error' style="color:#ef4444;font-size:1.3rem;"></i>
+                </div>
+                <div>
+                    <div style="font-weight:700;font-size:.95rem;color:#111827;margin-bottom:.25rem;">Confirmar ação</div>
+                    <div x-text="message" style="font-size:.83rem;color:#6b7280;line-height:1.4;"></div>
+                </div>
+            </div>
+            <div style="display:flex;gap:.6rem;justify-content:flex-end;">
+                <button @click="cancel()" style="padding:.45rem 1.1rem;border-radius:999px;border:1px solid #e5e7eb;background:white;font-size:.83rem;cursor:pointer;font-weight:500;color:#374151;">Cancelar</button>
+                <button @click="confirm()" style="padding:.45rem 1.25rem;border-radius:999px;border:none;background:#ef4444;color:white;font-size:.83rem;cursor:pointer;font-weight:700;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Alpine: Sistema de Toasts ───────────────────────────────────── -->
+    <div x-data="toastSystem()"
+         x-on:show-toast.window="add($event.detail)"
+         style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none;">
+        <template x-for="t in toasts" :key="t.id">
+            <div x-show="t.visible"
+                 x-transition:enter="transition ease-out duration-250"
+                 x-transition:enter-start="opacity-0 translate-x-6"
+                 x-transition:enter-end="opacity-100 translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 :style="`pointer-events:auto;background:${t.type==='error'?'#fef2f2':t.type==='success'?'#f0fdf4':'#f8fafc'};border:1px solid ${t.type==='error'?'#fecaca':t.type==='success'?'#bbf7d0':'#e2e8f0'};border-radius:12px;padding:.7rem 1rem;display:flex;align-items:center;gap:.6rem;min-width:240px;max-width:340px;box-shadow:0 4px 16px rgba(0,0,0,.1);`">
+                <i :class="`bx ${t.type==='error'?'bx-error-circle':t.type==='success'?'bx-check-circle':'bx-info-circle'}`"
+                   :style="`font-size:1.1rem;color:${t.type==='error'?'#ef4444':t.type==='success'?'#22c55e':'#6366f1'}`"></i>
+                <span x-text="t.msg" style="font-size:.82rem;color:#374151;flex:1;line-height:1.4;"></span>
+                <button @click="remove(t.id)" style="background:none;border:none;cursor:pointer;color:#9ca3af;padding:0;font-size:.9rem;line-height:1;">✕</button>
+            </div>
+        </template>
+    </div>
+
     <script>
+        // ── Alpine: Confirm Modal ──────────────────────────────────────────
+        function confirmModal() {
+            return {
+                visible: false, message: '', pendingTarget: null,
+                open({ msg, target }) { this.message = msg; this.pendingTarget = target; this.visible = true; },
+                confirm() {
+                    this.visible = false;
+                    if (this.pendingTarget) {
+                        const el = this.pendingTarget;
+                        el.removeAttribute('data-confirm');
+                        if (el.tagName === 'FORM') el.submit();
+                        else if (el.tagName === 'BUTTON') el.closest('form')?.submit();
+                    }
+                    this.pendingTarget = null;
+                },
+                cancel() { this.visible = false; this.pendingTarget = null; }
+            };
+        }
+
+        // ── Alpine: Toast System ───────────────────────────────────────────
+        function toastSystem() {
+            return {
+                toasts: [], nextId: 0,
+                add({ msg, type = 'info' }) {
+                    const id = this.nextId++;
+                    this.toasts.push({ id, msg, type, visible: true });
+                    setTimeout(() => this.remove(id), 4500);
+                },
+                remove(id) {
+                    const t = this.toasts.find(t => t.id === id);
+                    if (t) t.visible = false;
+                    setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 300);
+                }
+            };
+        }
+
+        // ── Interceptor: data-confirm em forms e botões ────────────────────
+        document.addEventListener('submit', function(e) {
+            const msg = e.target.dataset.confirm;
+            if (msg) {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('need-confirm', { detail: { msg, target: e.target } }));
+            }
+        }, true);
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('button[data-confirm]');
+            if (btn) {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('need-confirm', { detail: { msg: btn.dataset.confirm, target: btn } }));
+            }
+        }, true);
+
         // --- Accordion do menu ---
         function toggleGroup(groupId) {
             const group = document.getElementById(groupId);

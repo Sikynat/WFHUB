@@ -38,7 +38,7 @@
                 {% for tag in tags %}
                 <div class="d-flex align-items-center justify-content-between p-3 {% if not forloop.last %}border-bottom{% endif %}">
                     <span class="badge rounded-pill" style="background:{{ tag.cor }}20;color:{{ tag.cor }};font-size:.85rem;padding:.4em .8em;">{{ tag.nome }}</span>
-                    <form method="post" onsubmit="return confirm('Excluir a tag \'{{ tag.nome }}\'?')">
+                    <form method="post" data-confirm="Excluir a tag '{{ tag.nome }}'?">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="excluir">
                         <input type="hidden" name="tag_id" value="{{ tag.id }}">

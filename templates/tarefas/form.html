@@ -87,7 +87,7 @@
                 </button>
                 <a href="{% url 'tarefas_board' %}" class="btn btn-outline-secondary">Cancelar</a>
                 {% if tarefa %}
-                <form method="post" action="{% url 'excluir_tarefa' tarefa.id %}" class="ms-auto" onsubmit="return confirm('Excluir esta tarefa?')">
+                <form method="post" action="{% url 'excluir_tarefa' tarefa.id %}" class="ms-auto" data-confirm="Excluir esta tarefa?">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-outline-danger"><i class='bx bx-trash me-1'></i>Excluir</button>
                 </form>

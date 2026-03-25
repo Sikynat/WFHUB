@@ -32,7 +32,7 @@
             <form method="post" action="{% url 'toggle_empresa_ativo' empresa.id %}">
                 {% csrf_token %}
                 {% if empresa.ativo %}
-                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Desativar esta empresa?')">
+                    <button type="submit" class="btn btn-outline-danger" data-confirm="Desativar esta empresa?">
                         <i class='bx bx-block me-1'></i> Desativar
                     </button>
                 {% else %}
@@ -203,7 +203,7 @@
                                         </form>
                                         <form method="post" action="{% url 'remover_membro_empresa' empresa.id membro.id %}">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remover {{ membro.user.username }}?')">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Remover {{ membro.user.username }}?">
                                                 <i class='bx bx-trash'></i>
                                             </button>
                                         </form>

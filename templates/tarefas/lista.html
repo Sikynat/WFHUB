@@ -255,7 +255,7 @@
                         <div class="d-flex justify-content-center gap-1">
                             <a href="{% url 'detalhe_tarefa' tarefa.id %}" class="btn-action" title="Ver"><i class='bx bx-show'></i></a>
                             <a href="{% url 'editar_tarefa' tarefa.id %}" class="btn-action" title="Editar"><i class='bx bx-edit'></i></a>
-                            <form method="post" action="{% url 'excluir_tarefa' tarefa.id %}" style="display:inline;" onsubmit="return confirm('Excluir esta tarefa?');">
+                            <form method="post" action="{% url 'excluir_tarefa' tarefa.id %}" style="display:inline;" data-confirm="Excluir esta tarefa?">
                                 {% csrf_token %}
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                 <button type="submit" class="btn-action danger" title="Excluir"><i class='bx bx-trash'></i></button>
