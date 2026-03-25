@@ -46,6 +46,7 @@ class PerfilUsuario(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='perfil')
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='membros')
     papel = models.CharField(max_length=10, choices=PAPEL_CHOICES, default='ADMIN', verbose_name='Papel')
+    foto_perfil = models.ImageField(upload_to='perfis/', blank=True, null=True)
 
     class Meta:
         db_table = 'wf_perfil_usuario'

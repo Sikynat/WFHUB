@@ -1379,20 +1379,32 @@ def atualizar_status_pedido(request, pedido_id):
 @login_required
 def upload_foto_perfil(request):
     if request.method == 'POST':
-        try:
-            cliente = request.user.wfclient
-        except WfClient.DoesNotExist:
-            return redirect('home')
         foto = request.FILES.get('foto')
         if foto:
-            if cliente.foto_perfil:
-                cliente.foto_perfil.delete(save=False)
-            cliente.foto_perfil.save(foto.name, foto, save=True)
+            # Membro (PerfilUsuario)
+            if hasattr(request.user, 'perfil'):
+                perfil = request.user.perfil
+                if perfil.foto_perfil:
+                    perfil.foto_perfil.delete(save=False)
+                perfil.foto_perfil.save(foto.name, foto, save=True)
+            # Cliente (WfClient)
+            elif hasattr(request.user, 'wfclient'):
+                cliente = request.user.wfclient
+                if cliente.foto_perfil:
+                    cliente.foto_perfil.delete(save=False)
+                cliente.foto_perfil.save(foto.name, foto, save=True)
     return redirect('editar_perfil')
 
 
 @login_required
 def editar_perfil(request):
+    # Membros (is_staff) não têm WfClient — exibe só o card de foto
+    if hasattr(request.user, 'perfil'):
+        return render(request, 'editar_perfil.html', {
+            'titulo': 'Meu Perfil',
+            'perfil_membro': request.user.perfil,
+        })
+
     try:
         cliente = request.user.wfclient
     except WfClient.DoesNotExist:
@@ -1409,7 +1421,7 @@ def editar_perfil(request):
         form = EnderecoForm()
 
     enderecos = Endereco.objects.filter(cliente=cliente)
-    
+
     contexto = {
         'form': form,
         'enderecos': enderecos,
