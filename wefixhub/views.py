@@ -635,7 +635,7 @@ def checkout(request, pedido_id_rascunho=None):
             'data_envio': pedido_para_finalizar.data_envio_solicitada,
             'frete_option': pedido_para_finalizar.frete_option,
             'nota_fiscal': pedido_para_finalizar.nota_fiscal,
-            'observacao': pedido_para_finalizar.observacao,
+            'observacao': pedido_para_finalizar.observacao or cliente_logado.observacao_preferencia or '',
         }
     else:
         carrinho_da_sessao = request.session.get('carrinho', {})
@@ -688,6 +688,10 @@ def checkout(request, pedido_id_rascunho=None):
         preco_exibido = 'sp'
 
     enderecos = Endereco.objects.filter(cliente=cliente_logado) if cliente_logado else Endereco.objects.none()
+
+    # Preenche observação padrão se ainda não definida
+    if not initial_data.get('observacao') and cliente_logado and cliente_logado.observacao_preferencia:
+        initial_data['observacao'] = cliente_logado.observacao_preferencia
 
     contexto = {
         'titulo': 'Confirmação de Compra',
