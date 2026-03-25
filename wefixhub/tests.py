@@ -10,15 +10,30 @@ Cobertura:
   6. ChecklistTest           — toggle e exclusão de itens de checklist
 """
 
-from django.test import TestCase, Client
+import io
+from unittest.mock import MagicMock
+
+from django.test import TestCase, Client, override_settings
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+
+# Evita erro de manifest do WhiteNoise em todos os testes
+_STORAGES_TEST = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+}
+
+
+@override_settings(STORAGES=_STORAGES_TEST, MEDIA_ROOT='/tmp/wfhub_test/')
+class WFTestCase(TestCase):
+    """Base para todos os testes — desativa WhiteNoise manifest e R2."""
 
 from .models import (
     Empresa, PerfilUsuario, WfClient, wefixhub_uf,
     Endereco, Pedido, Product,
     Tarefa, ChecklistItem, NotificacaoTarefa,
-    NotificacaoPedido,
+    NotificacaoPedido, LogAuditoria, AnexoTarefa,
 )
 
 
@@ -101,7 +116,7 @@ def make_pedido(cliente, empresa, endereco, status='PENDENTE'):
 # 1. MIDDLEWARE — request.empresa
 # ===========================================================================
 
-class EmpresaMiddlewareTest(TestCase):
+class EmpresaMiddlewareTest(WFTestCase):
     def setUp(self):
         self.uf = make_uf('SP')
         self.empresa = make_empresa('emp-middleware')
@@ -133,7 +148,7 @@ class EmpresaMiddlewareTest(TestCase):
 # 2. ISOLAMENTO POR EMPRESA
 # ===========================================================================
 
-class EmpresaIsolacaoTest(TestCase):
+class EmpresaIsolacaoTest(WFTestCase):
     def setUp(self):
         self.uf = make_uf('SP')
         self.empresa_a = make_empresa('emp-a', 'Empresa A')
@@ -156,7 +171,12 @@ class EmpresaIsolacaoTest(TestCase):
         self.c.login(username='staff_a', password='senha123')
         response = self.c.get(reverse('tarefas_lista'))
         self.assertEqual(response.status_code, 200)
-        titulos = [t.titulo for t in response.context['tarefas']]
+        # tarefas_lista retorna 'grupos' com tarefas agrupadas por status
+        titulos = [
+            t.titulo
+            for grupo in response.context['grupos']
+            for t in grupo['tarefas']
+        ]
         self.assertIn('Tarefa da A', titulos)
         self.assertNotIn('Tarefa da B', titulos)
 
@@ -211,7 +231,7 @@ class EmpresaIsolacaoTest(TestCase):
 # 3. PERMISSÕES DE ACESSO
 # ===========================================================================
 
-class PermissaoAcessoTest(TestCase):
+class PermissaoAcessoTest(WFTestCase):
     def setUp(self):
         self.uf = make_uf('SP')
         self.empresa = make_empresa('emp-perm')
@@ -249,7 +269,7 @@ class PermissaoAcessoTest(TestCase):
 # 4. NOTIFICAÇÕES DE PEDIDOS
 # ===========================================================================
 
-class NotificacaoPedidoTest(TestCase):
+class NotificacaoPedidoTest(WFTestCase):
     def setUp(self):
         self.uf = make_uf('SP')
         self.empresa = make_empresa('emp-notif')
@@ -357,7 +377,7 @@ class NotificacaoPedidoTest(TestCase):
 # 5. TAREFAS
 # ===========================================================================
 
-class TarefaTest(TestCase):
+class TarefaTest(WFTestCase):
     def setUp(self):
         self.uf = make_uf('SP')
         self.empresa = make_empresa('emp-tarefa')
@@ -437,7 +457,7 @@ class TarefaTest(TestCase):
 # 6. CHECKLIST
 # ===========================================================================
 
-class ChecklistTest(TestCase):
+class ChecklistTest(WFTestCase):
     def setUp(self):
         self.uf = make_uf('SP')
         self.empresa = make_empresa('emp-check')
@@ -470,3 +490,243 @@ class ChecklistTest(TestCase):
         item = ChecklistItem.objects.create(tarefa=self.tarefa, texto='Remover', concluido=False)
         self.c.post(reverse('excluir_checklist_item', args=[item.id]))
         self.assertFalse(ChecklistItem.objects.filter(id=item.id).exists())
+
+
+# ===========================================================================
+# 7. FOTO DE PERFIL
+# ===========================================================================
+
+def _make_image(name='foto.jpg'):
+    """JPEG 1×1 pixel mínimo."""
+    content = (
+        b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00'
+        b'\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t'
+        b'\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a'
+        b'\x1f\x1e\x1d\x1a\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\x1e\xbf'
+        b'\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00'
+        b'\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b'
+        b'\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xf5\x0a\xff\xd9'
+    )
+    return SimpleUploadedFile(name, content, content_type='image/jpeg')
+
+
+@override_settings(
+    MEDIA_ROOT='/tmp/wfhub_test/',
+    STORAGES={
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+    }
+)
+class FotoPerfilMembroTest(WFTestCase):
+    def setUp(self):
+        self.empresa = make_empresa('emp-foto-membro')
+        self.user = make_staff('staff_foto', self.empresa)
+        self.perfil = self.user.perfil
+        self.c = Client()
+        self.c.login(username='staff_foto', password='senha123')
+
+    def test_upload_foto_salva_no_perfil(self):
+        resp = self.c.post(reverse('upload_foto_perfil'), {'foto': _make_image()})
+        self.assertRedirects(resp, reverse('editar_perfil'))
+        self.perfil.refresh_from_db()
+        self.assertTrue(self.perfil.foto_perfil.name)
+
+    def test_upload_substitui_foto_anterior(self):
+        self.c.post(reverse('upload_foto_perfil'), {'foto': _make_image('a.jpg')})
+        self.perfil.refresh_from_db()
+        nome1 = self.perfil.foto_perfil.name
+        self.c.post(reverse('upload_foto_perfil'), {'foto': _make_image('b.jpg')})
+        self.perfil.refresh_from_db()
+        self.assertNotEqual(self.perfil.foto_perfil.name, nome1)
+
+    def test_sem_arquivo_nao_altera_perfil(self):
+        self.c.post(reverse('upload_foto_perfil'), {})
+        self.perfil.refresh_from_db()
+        self.assertFalse(self.perfil.foto_perfil)
+
+    def test_editar_perfil_renderiza_com_perfil_membro(self):
+        resp = self.c.get(reverse('editar_perfil'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('perfil_membro', resp.context)
+
+
+@override_settings(
+    MEDIA_ROOT='/tmp/wfhub_test/',
+    STORAGES={
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+    }
+)
+class FotoPerfilClienteTest(WFTestCase):
+    def setUp(self):
+        self.empresa = make_empresa('emp-foto-cli')
+        self.uf = make_uf('SP')
+        self.user, self.wfclient = make_cliente('cli_foto', self.empresa, self.uf, code=50)
+        self.c = Client()
+        self.c.login(username='cli_foto', password='senha123')
+
+    def test_upload_foto_salva_no_wfclient(self):
+        resp = self.c.post(reverse('upload_foto_perfil'), {'foto': _make_image()})
+        self.assertRedirects(resp, reverse('editar_perfil'))
+        self.wfclient.refresh_from_db()
+        self.assertTrue(self.wfclient.foto_perfil.name)
+
+    def test_editar_perfil_renderiza_com_cliente(self):
+        resp = self.c.get(reverse('editar_perfil'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('cliente', resp.context)
+
+
+# ===========================================================================
+# 8. UPLOAD DE ORÇAMENTO
+# ===========================================================================
+
+@override_settings(
+    MEDIA_ROOT='/tmp/wfhub_test/',
+    STORAGES={
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+    }
+)
+class UploadOrcamentoTest(WFTestCase):
+    def setUp(self):
+        self.empresa = make_empresa('emp-orc')
+        self.uf = make_uf('SP')
+        self.staff = make_staff('staff_orc', self.empresa)
+        self.user_cli, self.wfclient = make_cliente('cli_orc', self.empresa, self.uf, code=60)
+        self.end = make_endereco(self.wfclient, self.uf)
+        self.pedido = make_pedido(self.wfclient, self.empresa, self.end)
+        self.c = Client()
+        self.c.login(username='staff_orc', password='senha123')
+
+    def _pdf(self, name='orcamento.pdf'):
+        return SimpleUploadedFile(name, b'%PDF-1.4', content_type='application/pdf')
+
+    def test_upload_salva_via_filefield(self):
+        resp = self.c.post(
+            reverse('upload_orcamento_pdf', args=[self.pedido.id]),
+            {'orcamento_pdf_file': self._pdf()},
+        )
+        self.assertRedirects(resp, reverse('detalhes_pedido_admin', args=[self.pedido.id]))
+        self.pedido.refresh_from_db()
+        self.assertTrue(self.pedido.orcamento_pdf.name)
+        self.assertIn('orcamentos/', self.pedido.orcamento_pdf.name)
+
+    def test_upload_sem_arquivo_nao_altera_pedido(self):
+        self.c.post(reverse('upload_orcamento_pdf', args=[self.pedido.id]), {})
+        self.pedido.refresh_from_db()
+        self.assertFalse(self.pedido.orcamento_pdf)
+
+    def test_segundo_upload_salva_orcamento(self):
+        """Dois uploads consecutivos — o segundo deve ter um orcamento salvo."""
+        self.c.post(
+            reverse('upload_orcamento_pdf', args=[self.pedido.id]),
+            {'orcamento_pdf_file': self._pdf('v1.pdf')},
+        )
+        self.c.post(
+            reverse('upload_orcamento_pdf', args=[self.pedido.id]),
+            {'orcamento_pdf_file': self._pdf('v2.pdf')},
+        )
+        self.pedido.refresh_from_db()
+        self.assertTrue(self.pedido.orcamento_pdf.name)
+
+
+# ===========================================================================
+# 9. LOG DE AUDITORIA
+# ===========================================================================
+
+class LogAuditoriaTest(WFTestCase):
+    def setUp(self):
+        self.empresa = make_empresa('emp-audit')
+        self.staff = make_staff('staff_audit', self.empresa)
+
+    def test_registrar_log_cria_entrada(self):
+        from wefixhub.views import registrar_log
+        req = MagicMock()
+        req.user = self.staff
+        req.empresa = self.empresa
+        req.META = {'HTTP_X_FORWARDED_FOR': '1.2.3.4'}
+
+        registrar_log(req, 'TAREFA_CRIADA', 'Tarefa criada via teste')
+        self.assertTrue(
+            LogAuditoria.objects.filter(
+                empresa=self.empresa,
+                usuario=self.staff,
+                acao='TAREFA_CRIADA',
+            ).exists()
+        )
+
+    def test_registrar_log_nao_quebra_com_dados_invalidos(self):
+        from wefixhub.views import registrar_log
+        req = MagicMock()
+        req.user = None
+        req.empresa = None
+        req.META = {}
+        # Não deve levantar exceção
+        registrar_log(req, 'TAREFA_CRIADA', 'teste silencioso')
+
+    def test_pagina_auditoria_acessivel_para_staff(self):
+        LogAuditoria.objects.create(
+            empresa=self.empresa, usuario=self.staff,
+            acao='TAREFA_CRIADA', descricao='log de teste',
+        )
+        c = Client()
+        c.login(username='staff_audit', password='senha123')
+        resp = c.get(reverse('logs_auditoria'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'log de teste')
+
+    def test_filtro_por_acao_funciona(self):
+        LogAuditoria.objects.create(empresa=self.empresa, usuario=self.staff, acao='TAREFA_CRIADA', descricao='a')
+        LogAuditoria.objects.create(empresa=self.empresa, usuario=self.staff, acao='PEDIDO_CRIADO', descricao='b')
+        c = Client()
+        c.login(username='staff_audit', password='senha123')
+        resp = c.get(reverse('logs_auditoria') + '?acao=TAREFA_CRIADA')
+        logs = list(resp.context['page_obj'])
+        self.assertTrue(all(l.acao == 'TAREFA_CRIADA' for l in logs))
+
+
+# ===========================================================================
+# 10. TEMPLATE TAG avatar
+# ===========================================================================
+
+class AvatarTagTest(WFTestCase):
+    def setUp(self):
+        self.empresa = make_empresa('emp-avatar')
+
+    def test_avatar_sem_foto_mostra_iniciais(self):
+        from wefixhub.templatetags.format_tags import avatar
+        user = User.objects.create_user(username='joaosilva', first_name='João', last_name='Silva')
+        html = str(avatar(user, size=32))
+        self.assertIn('JO', html)
+        self.assertIn('border-radius:50%', html)
+
+    def test_avatar_none_mostra_interrogacao(self):
+        from wefixhub.templatetags.format_tags import avatar
+        html = str(avatar(None, size=32))
+        self.assertIn('?', html)
+
+    def test_avatar_respeita_tamanho(self):
+        from wefixhub.templatetags.format_tags import avatar
+        user = User.objects.create_user(username='sized_user')
+        html = str(avatar(user, size=48))
+        self.assertIn('width:48px', html)
+        self.assertIn('height:48px', html)
+
+    @override_settings(
+        MEDIA_ROOT='/tmp/wfhub_test/',
+        STORAGES={
+            'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+            'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+        }
+    )
+    def test_avatar_com_foto_membro_retorna_img(self):
+        from wefixhub.templatetags.format_tags import avatar
+        user = make_staff('staff_av_foto', self.empresa)
+        perfil = user.perfil
+        perfil.foto_perfil = 'perfis/teste.jpg'
+        perfil.save()
+        html = str(avatar(user, size=32))
+        self.assertIn('<img', html)
+        self.assertIn('perfis/teste.jpg', html)
