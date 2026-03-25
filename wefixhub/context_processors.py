@@ -1,4 +1,4 @@
-from .models import Carrinho, NotificacaoTarefa
+from .models import Carrinho, NotificacaoTarefa, NotificacaoPedido
 
 
 def carrinho_count(request):
@@ -24,3 +24,16 @@ def notif_tarefas_count(request):
         except Exception:
             pass
     return {'notif_tarefas_count': 0}
+
+
+def notif_pedidos_count(request):
+    """Injeta contagem de notificações de pedidos não lidas para staff."""
+    if request.user.is_authenticated and request.user.is_staff:
+        try:
+            count = NotificacaoPedido.objects.filter(
+                usuario=request.user, lida=False
+            ).count()
+            return {'notif_pedidos_count': count}
+        except Exception:
+            pass
+    return {'notif_pedidos_count': 0}

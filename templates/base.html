@@ -197,6 +197,15 @@
                                 {% endif %}
                             </a>
                         </li>
+                        <li class="nav-item" style="position:relative;">
+                            <a href="{% url 'notificacoes_pedidos' %}">
+                                <i class='bx bx-bell nav-icon'></i>
+                                <span class="nav-label">Pedidos</span>
+                                {% if notif_pedidos_count > 0 %}
+                                <span style="position:absolute;top:6px;left:30px;background:#ef4444;color:white;border-radius:50%;width:18px;height:18px;font-size:.6rem;display:flex;align-items:center;justify-content:center;font-weight:bold;">{{ notif_pedidos_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
                         {% endif %}
 
                         <li class="nav-item">

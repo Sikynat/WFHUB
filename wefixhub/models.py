@@ -623,3 +623,21 @@ class ChecklistItem(models.Model):
 
     def __str__(self):
         return self.texto
+
+
+class NotificacaoPedido(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='notificacoes_pedido')
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notificacoes_pedido')
+    pedido = models.ForeignKey('Pedido', on_delete=models.CASCADE, related_name='notificacoes_pedido')
+    mensagem = models.CharField(max_length=300)
+    lida = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_notificacao_pedido'
+        ordering = ['-criado_em']
+        verbose_name = 'Notificação de Pedido'
+        verbose_name_plural = 'Notificações de Pedidos'
+
+    def __str__(self):
+        return self.mensagem

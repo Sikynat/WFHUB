@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Notificações de Pedidos{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0 fw-bold"><i class='bx bx-bell me-2'></i>Pedidos — Notificações</h5>
+    {% if page_obj.object_list %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="marcar_todas" value="1">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Marcar todas como lidas</button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% for notif in page_obj %}
+        <div class="d-flex align-items-center gap-3 px-4 py-3 {% if not forloop.last %}border-bottom{% endif %} {% if not notif.lida %}bg-light{% endif %}">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                 style="width:36px;height:36px;background:{% if notif.lida %}#f3f4f6{% else %}#ede9fe{% endif %};">
+                <i class='bx bx-package' style="color:{% if notif.lida %}#9ca3af{% else %}#7c3aed{% endif %};font-size:1rem;"></i>
+            </div>
+            <div class="flex-grow-1">
+                <div class="small fw-semibold {% if notif.lida %}text-muted{% endif %}">{{ notif.mensagem }}</div>
+                <small class="text-muted" style="font-size:.7rem;">{{ notif.criado_em|date:"d/m/Y H:i" }}</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{% url 'detalhes_pedido_admin' notif.pedido.id %}" class="btn btn-sm btn-outline-primary" title="Ver pedido"><i class='bx bx-show'></i></a>
+                {% if not notif.lida %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="marcar_lida" value="{{ notif.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-success" title="Marcar como lida"><i class='bx bx-check'></i></button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-5">
+            <i class='bx bx-bell-off' style="font-size:2rem;"></i>
+            <p class="mt-2 mb-0">Nenhuma notificação de pedido.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">«</a></li>{% endif %}
+        <li class="page-item disabled"><span class="page-link">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">»</a></li>{% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

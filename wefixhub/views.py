@@ -62,6 +62,7 @@ from .models import (
     Empresa, PerfilUsuario,
     Tarefa, TagTarefa, ComentarioTarefa, NotificacaoTarefa,
     AtividadeTarefa, ChecklistItem,
+    NotificacaoPedido,
 )
 from .forms import (
     WfClientForm, EnderecoForm, GerarPedidoForm,
@@ -596,6 +597,7 @@ def checkout(request, pedido_id_rascunho=None):
                 if carrinho_bd:
                     carrinho_bd.itens.all().delete()
 
+        _notificar_novo_pedido(pedido_final)
         return redirect('pedido_concluido', pedido_id=pedido_final.id)
 
 
@@ -2035,6 +2037,7 @@ def processar_pedido_manual(request):
                 pedido_criado.valor_total = valor_final_do_pedido if valor_final_do_pedido is not None else Decimal('0.00')
                 pedido_criado.save()
 
+            _notificar_novo_pedido(pedido_criado)
             messages.success(request, f'Pedido #{pedido_criado.id} criado com sucesso para o cliente {cliente_selecionado.client_name}!')
             return redirect(reverse('gerar_pedido_manual') + '?pedido_gerado=sucesso')
 
@@ -3027,9 +3030,10 @@ def upload_pedido_cliente(request):
                     
                     novo_pedido.valor_total = total_valor_pedido
                     novo_pedido.save()
-                    
+                    _notificar_novo_pedido(novo_pedido)
+
                     return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
-            
+
             except Exception as e:
                 messages.error(request, f"Erro crítico no processamento: {e}")
                 if 'novo_pedido' in locals(): novo_pedido.delete()
@@ -5309,3 +5313,54 @@ def gerenciar_tags_tarefa(request):
         return redirect('gerenciar_tags_tarefa')
 
     return render(request, 'tarefas/tags.html', {'tags': tags})
+
+
+# ==========================================
+# NOTIFICAÇÕES DE PEDIDOS
+# ==========================================
+
+def _notificar_novo_pedido(pedido):
+    """Cria notificações para todos os membros staff da empresa quando um pedido é criado."""
+    empresa = pedido.empresa or getattr(pedido.cliente, 'empresa', None)
+    if not empresa:
+        return
+    membros = empresa.membros.select_related('user')
+    nome_cliente = pedido.cliente.client_name or str(pedido.cliente)
+    mensagem = f'Novo pedido de {nome_cliente} — #{pedido.id}'
+    notifs = [
+        NotificacaoPedido(empresa=empresa, usuario=m.user, pedido=pedido, mensagem=mensagem)
+        for m in membros
+    ]
+    if notifs:
+        try:
+            NotificacaoPedido.objects.bulk_create(notifs, ignore_conflicts=True)
+        except Exception:
+            pass
+
+
+@staff_member_required
+def notificacoes_pedidos(request):
+    if not request.empresa:
+        return redirect('home')
+
+    notifs = NotificacaoPedido.objects.filter(
+        usuario=request.user, empresa=request.empresa
+    ).select_related('pedido', 'pedido__cliente').order_by('-criado_em')
+
+    if request.method == 'POST':
+        notif_id = request.POST.get('marcar_lida')
+        marcar_todas = request.POST.get('marcar_todas')
+        if marcar_todas:
+            notifs.filter(lida=False).update(lida=True)
+        elif notif_id:
+            NotificacaoPedido.objects.filter(id=notif_id, usuario=request.user).update(lida=True)
+        return redirect('notificacoes_pedidos')
+
+    paginator = Paginator(notifs, 20)
+    page = request.GET.get('page')
+    try:
+        page_obj = paginator.page(page)
+    except (PageNotAnInteger, EmptyPage):
+        page_obj = paginator.page(1)
+
+    return render(request, 'notificacoes_pedidos.html', {'page_obj': page_obj})
