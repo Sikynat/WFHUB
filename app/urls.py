@@ -35,6 +35,7 @@ urlpatterns = [
     path('saas/empresas/<int:empresa_id>/impersonar-cliente/<int:client_id>/', views.impersonar_cliente, name='impersonar_cliente'),
     path('saas/empresas/<int:empresa_id>/atualizar-plano/', views.atualizar_plano_empresa, name='atualizar_plano_empresa'),
     path('saas/sair-impersonacao/', views.sair_impersonacao, name='sair_impersonacao'),
+    path('clientes/<int:client_id>/impersonar/', views.impersonar_cliente_staff, name='impersonar_cliente_staff'),
     path('saas/meu-perfil/', views.perfil_representante, name='perfil_representante'),
     path('saas/acesso-bloqueado/', views.acesso_bloqueado, name='acesso_bloqueado'),
     path('saas/empresas/<int:empresa_id>/toggle-permanente/', views.toggle_acesso_permanente, name='toggle_acesso_permanente'),

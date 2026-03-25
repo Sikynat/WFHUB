@@ -4627,15 +4627,35 @@ def impersonar_membro(request, empresa_id, membro_id):
 
 
 @login_required
+def impersonar_cliente_staff(request, client_id):
+    """Permite que membros is_staff façam impersonação de clientes da própria empresa."""
+    if not request.user.is_staff:
+        return redirect('home')
+    cliente = get_object_or_404(WfClient, client_id=client_id, empresa=request.empresa)
+    if not cliente.user:
+        messages.error(request, 'Este cliente não possui login vinculado.')
+        return redirect('listar_clientes')
+    staff_id = request.user.id
+    from django.contrib.auth import login as auth_login
+    auth_login(request, cliente.user, backend='django.contrib.auth.backends.ModelBackend')
+    request.session['impersonando_su_id'] = staff_id
+    return redirect('home')
+
+
+@login_required
 def sair_impersonacao(request):
     su_id = request.session.get('impersonando_su_id')
     if su_id:
-        su = get_object_or_404(User, id=su_id, is_superuser=True)
+        original = get_object_or_404(User, id=su_id)
+        if not (original.is_staff or original.is_superuser):
+            return redirect('home')
         del request.session['impersonando_su_id']
         from django.contrib.auth import login as auth_login
-        auth_login(request, su, backend='django.contrib.auth.backends.ModelBackend')
-        messages.success(request, 'Voltou ao superusuário.')
-    return redirect('saas_dashboard')
+        auth_login(request, original, backend='django.contrib.auth.backends.ModelBackend')
+        messages.success(request, 'Impersonação encerrada.')
+    if request.user.is_superuser:
+        return redirect('saas_dashboard')
+    return redirect('listar_clientes')
 
 
 @login_required

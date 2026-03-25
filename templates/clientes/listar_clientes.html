@@ -62,6 +62,14 @@
                             {% endif %}
                         </td>
                         <td class="text-end pe-3">
+                            {% if cliente.user %}
+                            <form method="post" action="{% url 'impersonar_cliente_staff' cliente.client_id %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-warning" title="Logar como {{ cliente.client_name }}">
+                                    <i class='bx bx-log-in'></i>
+                                </button>
+                            </form>
+                            {% endif %}
                             <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-sm btn-outline-secondary">
                                 <i class='bx bx-edit'></i>
                             </a>
