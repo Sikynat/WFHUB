@@ -68,6 +68,7 @@ urlpatterns = [
     path('pedidos/', views.historico_pedidos, name='pedidos'),
     path('pedidos/<int:pedido_id>/', views.detalhes_pedido, name='detalhes_pedido'),
     path('editar-perfil/', views.editar_perfil, name='editar_perfil'),
+    path('editar-perfil/foto/', views.upload_foto_perfil, name='upload_foto_perfil'),
     path('gerenciar-enderecos/', views.gerenciar_enderecos, name='gerenciar_enderecos'),
     path('editar-endereco/<int:endereco_id>/', views.editar_endereco, name='editar_endereco'),
     path('exportar_detalhes_pedido_cliente_excel/<int:pedido_id>/', views.exportar_detalhes_pedido_cliente_excel, name='exportar_pedido_cliente_excel'),

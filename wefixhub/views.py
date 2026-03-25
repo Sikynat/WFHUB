@@ -1377,6 +1377,21 @@ def atualizar_status_pedido(request, pedido_id):
     return redirect('todos_os_pedidos')
 
 @login_required
+def upload_foto_perfil(request):
+    if request.method == 'POST':
+        try:
+            cliente = request.user.wfclient
+        except WfClient.DoesNotExist:
+            return redirect('home')
+        foto = request.FILES.get('foto')
+        if foto:
+            if cliente.foto_perfil:
+                cliente.foto_perfil.delete(save=False)
+            cliente.foto_perfil.save(foto.name, foto, save=True)
+    return redirect('editar_perfil')
+
+
+@login_required
 def editar_perfil(request):
     try:
         cliente = request.user.wfclient
@@ -1399,6 +1414,7 @@ def editar_perfil(request):
         'form': form,
         'enderecos': enderecos,
         'titulo': 'Gerenciar Endereços',
+        'cliente': cliente,
     }
     return render(request, 'editar_perfil.html', contexto)
 

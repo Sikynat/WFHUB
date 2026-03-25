@@ -120,8 +120,8 @@ class WfClient(models.Model):
 
     # Campo de observação padra
 
-    observacao_preferencia = models.TextField(blank=True, null=True, verbose_name="Observação Padrão") # <-- Adicione esta linha
-
+    observacao_preferencia = models.TextField(blank=True, null=True, verbose_name="Observação Padrão")
+    foto_perfil = models.ImageField(upload_to='perfis/', blank=True, null=True)
 
     class Meta:
         db_table = 'wf_client'
