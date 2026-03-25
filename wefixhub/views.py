@@ -2446,7 +2446,7 @@ def upload_orcamento_pdf(request, pedido_id):
                 pedido.orcamento_pdf.delete(save=False)
 
             # Salva via storage backend (local em dev, R2 em produção)
-            pedido.orcamento_pdf.save(f'orcamentos/{novo_nome}', orcamento_file, save=True)
+            pedido.orcamento_pdf.save(novo_nome, orcamento_file, save=True)
 
             messages.success(request, f'Orçamento PDF "{novo_nome}" enviado com sucesso!')
         else:

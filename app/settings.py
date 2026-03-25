@@ -176,7 +176,7 @@ R2_BUCKET_NAME       = config('R2_BUCKET_NAME', default=None)
 R2_ACCOUNT_ID        = config('R2_ACCOUNT_ID', default=None)
 R2_PUBLIC_URL        = config('R2_PUBLIC_URL', default=None)
 
-if R2_ACCESS_KEY_ID and not DEBUG:
+if R2_ACCESS_KEY_ID:
     STORAGES = {
         "default": {
             "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
