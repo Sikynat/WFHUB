@@ -176,14 +176,20 @@ R2_BUCKET_NAME       = config('R2_BUCKET_NAME', default=None)
 R2_ACCOUNT_ID        = config('R2_ACCOUNT_ID', default=None)
 R2_PUBLIC_URL        = config('R2_PUBLIC_URL', default=None)
 
+# WhiteNoise sempre cuida dos arquivos estáticos (independente do R2)
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 if R2_ACCESS_KEY_ID:
-    STORAGES = {
-        "default": {
-            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        },
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        },
+    # Sobrescreve apenas o storage de uploads (media) para usar o R2
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
     }
     AWS_ACCESS_KEY_ID       = R2_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY   = R2_SECRET_ACCESS_KEY
@@ -193,7 +199,6 @@ if R2_ACCESS_KEY_ID:
     AWS_DEFAULT_ACL         = None
     AWS_S3_FILE_OVERWRITE   = False
     AWS_QUERYSTRING_AUTH    = False
-    # Faz o django-storages gerar URLs usando o domínio público do R2
     AWS_S3_CUSTOM_DOMAIN    = R2_PUBLIC_URL.replace('https://', '')
     MEDIA_URL = R2_PUBLIC_URL + '/'
 else:
