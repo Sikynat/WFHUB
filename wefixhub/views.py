@@ -3229,6 +3229,7 @@ def upload_vendas_reais(request):
             })
 
             # 4. PROCESSAMENTO PARA O BANCO — versão vetorizada (sem iterrows)
+            df_grouped['_emissao_date'] = df_grouped['Emissão_dt'].dt.date
             df_grouped['_cod_str'] = df_grouped['Código_Cliente'].astype(str).str.replace('.0', '', regex=False)
 
             codigos_na_planilha = df_grouped['_cod_str'].unique().tolist()
@@ -3247,7 +3248,7 @@ def upload_vendas_reais(request):
             empresa = request.empresa
             novas_vendas = [
                 VendaReal(
-                    Emissao=row._Emissão_dt.date(),
+                    Emissao=row._emissao_date,
                     Codigo_Cliente=int(float(row.Código_Cliente)),
                     Pedido=row._pedido_str,
                     Produto_Codigo=row._prod_cod,
