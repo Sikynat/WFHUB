@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load format_tags %}
 {% block title %}Pedido #{{ pedido.id }} - Detalhes{% endblock %}
 
 {% block content %}
@@ -241,10 +242,7 @@
 
                 {% for c in comentarios %}
                 <div class="d-flex gap-3 p-3 {% if not forloop.last %}border-bottom{% endif %} {% if c.interno %}bg-warning bg-opacity-10{% endif %}">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
-                         style="width:36px;height:36px;background:{% if c.autor.is_staff %}#6366f1{% else %}#0ea5e9{% endif %};font-size:.8rem;">
-                        {{ c.autor.get_full_name|default:c.autor.username|slice:":1"|upper }}
-                    </div>
+                    {% avatar c.autor size=36 %}
                     <div class="flex-grow-1">
                         <div class="d-flex align-items-baseline gap-2 mb-1">
                             <span class="fw-semibold small">{{ c.autor.get_full_name|default:c.autor.username }}</span>

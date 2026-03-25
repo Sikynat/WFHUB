@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load format_tags %}
 {% block title %}Logs de Auditoria{% endblock %}
 
 {% block content %}
@@ -57,9 +58,7 @@
             <td>
                 {% if log.usuario %}
                 <div class="d-flex align-items-center gap-2">
-                    <span style="width:22px;height:22px;border-radius:50%;background:#6366f1;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:white;flex-shrink:0;">
-                        {{ log.usuario.get_full_name|default:log.usuario.username|slice:":1"|upper }}
-                    </span>
+                    {% avatar log.usuario size=22 %}
                     <span class="small">{{ log.usuario.get_full_name|default:log.usuario.username }}</span>
                 </div>
                 {% else %}<span class="text-muted small">Sistema</span>{% endif %}

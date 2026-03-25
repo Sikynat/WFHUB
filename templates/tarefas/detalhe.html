@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load format_tags %}
 {% block title %}{{ tarefa.titulo }}{% endblock %}
 
 {% block content %}
@@ -184,7 +185,7 @@
             </div>
             {% for c in comentarios %}
             <div class="comment-item">
-                <div class="comment-avatar">{{ c.autor.get_full_name|default:c.autor.username|slice:":1"|upper }}</div>
+                {% avatar c.autor size=32 classes="comment-avatar" %}
                 <div class="comment-body">
                     <div class="comment-meta">
                         <span class="comment-author">{{ c.autor.get_full_name|default:c.autor.username }}</span>
@@ -252,9 +253,7 @@
                 <div class="sidebar-label">Responsável</div>
                 {% if tarefa.responsavel %}
                 <div class="d-flex align-items-center gap-2">
-                    <span style="width:26px;height:26px;border-radius:50%;background:#6366f1;display:inline-flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:white;flex-shrink:0;">
-                        {{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}
-                    </span>
+                    {% avatar tarefa.responsavel size=26 %}
                     <span class="sidebar-value">{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}</span>
                 </div>
                 {% else %}<span style="font-size:.82rem;color:#9ca3af;">Não atribuído</span>{% endif %}

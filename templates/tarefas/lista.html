@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load format_tags %}
 {% block title %}Lista de Tarefas{% endblock %}
 
 {% block content %}
@@ -181,9 +182,7 @@
                     <!-- Assignee -->
                     <td class="text-center">
                         {% if tarefa.responsavel %}
-                        {% with name=tarefa.responsavel.get_full_name|default:tarefa.responsavel.username %}
-                        <span class="avatar-sm" style="background:#6366f1;" title="{{ name }}">{{ name|slice:":1"|upper }}</span>
-                        {% endwith %}
+                        {% avatar tarefa.responsavel size=28 %}
                         {% else %}
                         <span class="text-muted" style="font-size:.75rem;">—</span>
                         {% endif %}

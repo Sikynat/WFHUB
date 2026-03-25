@@ -1,3 +1,4 @@
+{% load format_tags %}
 {% with cur_status=col_status|default:tarefa.status %}
 <div class="tarefa-card"
      id="card-{{ tarefa.id }}"
@@ -44,10 +45,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.4rem;">
             <div style="display:flex;align-items:center;gap:.4rem;">
                 {% if tarefa.responsavel %}
-                <span style="width:22px;height:22px;border-radius:50%;background:#6366f1;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:white;flex-shrink:0;"
-                      title="{{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username }}">
-                    {{ tarefa.responsavel.get_full_name|default:tarefa.responsavel.username|slice:":1"|upper }}
-                </span>
+                {% avatar tarefa.responsavel size=22 %}
                 {% endif %}
                 {% if tarefa.comentarios_total %}
                 <span style="font-size:.68rem;color:#9ca3af;display:flex;align-items:center;gap:.2rem;">
