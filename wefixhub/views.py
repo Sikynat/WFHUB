@@ -63,6 +63,7 @@ from .models import (
     Tarefa, TagTarefa, ComentarioTarefa, NotificacaoTarefa,
     AtividadeTarefa, ChecklistItem,
     NotificacaoPedido,
+    ComentarioPedido,
 )
 from .forms import (
     WfClientForm, EnderecoForm, GerarPedidoForm,
@@ -876,12 +877,17 @@ def detalhes_pedido(request, pedido_id):
             'valor_total': valor_total_item,
         })
 
+    comentarios = ComentarioPedido.objects.filter(
+        pedido=pedido, interno=False
+    ).select_related('autor')
+
     contexto = {
         'titulo': f"Detalhes do Pedido #{pedido.id}",
         'pedido': pedido,
         'itens_detalhes': itens_detalhes,
         'total_geral': total_geral,
-        'preco_exibido': preco_exibido
+        'preco_exibido': preco_exibido,
+        'comentarios': comentarios,
     }
 
     return render(request, 'detalhes_pedido.html', contexto)
@@ -1786,15 +1792,20 @@ def detalhes_pedido_admin(request, pedido_id):
             is_atrasado = True
         
         # Dicionário de contexto que é enviado para o template
+        comentarios = ComentarioPedido.objects.filter(
+            pedido=pedido
+        ).select_related('autor')
+
         contexto = {
             'titulo': f"Detalhes do Pedido #{pedido.id}",
             'pedido': pedido,
             'itens_detalhes': itens_detalhes,
             'total_geral': total_geral,
             'preco_exibido': preco_exibido,
-            'is_atrasado': is_atrasado, # <-- A linha que faltava na versão antiga
+            'is_atrasado': is_atrasado,
+            'comentarios': comentarios,
         }
-        
+
         return render(request, 'detalhes_pedido.html', contexto)
 
     except Pedido.DoesNotExist:
@@ -1803,7 +1814,40 @@ def detalhes_pedido_admin(request, pedido_id):
     except WfClient.DoesNotExist:
         messages.error(request, "Erro: Cliente associado ao pedido não encontrado.")
         return redirect('todos_os_pedidos')
-    
+
+
+@login_required
+def comentar_pedido(request, pedido_id):
+    if request.method != 'POST':
+        return redirect('home')
+
+    texto = request.POST.get('texto', '').strip()
+    if not texto:
+        return redirect(request.POST.get('next', 'home'))
+
+    # Staff acessa via empresa; cliente só acessa o próprio pedido
+    if request.user.is_staff:
+        pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
+        interno = request.POST.get('interno') == '1'
+        next_url = reverse('detalhes_pedido_admin', args=[pedido_id])
+    else:
+        try:
+            cliente = request.user.wfclient
+        except WfClient.DoesNotExist:
+            return redirect('home')
+        pedido = get_object_or_404(Pedido, id=pedido_id, cliente=cliente)
+        interno = False
+        next_url = reverse('detalhes_pedido', args=[pedido_id])
+
+    ComentarioPedido.objects.create(
+        pedido=pedido,
+        autor=request.user,
+        texto=texto,
+        interno=interno,
+    )
+    return redirect(next_url)
+
+
 @staff_member_required
 def pedidos_para_hoje(request):
     """

@@ -112,6 +112,7 @@ urlpatterns = [
     path('tarefas/checklist/<int:item_id>/excluir/', views.excluir_checklist_item, name='excluir_checklist_item'),
     path('notificacoes/pedidos/', views.notificacoes_pedidos, name='notificacoes_pedidos'),
     path('tarefas/rapida/', views.criar_tarefa_rapida, name='criar_tarefa_rapida'),
+    path('pedidos/<int:pedido_id>/comentar/', views.comentar_pedido, name='comentar_pedido'),
 ]
 
 

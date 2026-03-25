@@ -641,3 +641,20 @@ class NotificacaoPedido(models.Model):
 
     def __str__(self):
         return self.mensagem
+
+
+class ComentarioPedido(models.Model):
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='comentarios_pedido')
+    autor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    texto = models.TextField()
+    interno = models.BooleanField(default=False, verbose_name='Nota interna (só staff)')
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_comentario_pedido'
+        ordering = ['criado_em']
+        verbose_name = 'Comentário de Pedido'
+        verbose_name_plural = 'Comentários de Pedidos'
+
+    def __str__(self):
+        return f'Comentário de {self.autor} em Pedido #{self.pedido_id}'

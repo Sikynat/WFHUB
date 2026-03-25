@@ -220,5 +220,54 @@
         </table>
     </div>
 
+    <!-- Comentários -->
+    <h5 class="fw-bold text-dark mb-3 mt-2"><i class="bi bi-chat-dots me-2"></i> Comentários</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-lg-8">
+            <div class="info-card p-0 overflow-hidden">
+
+                {% for c in comentarios %}
+                <div class="d-flex gap-3 p-3 {% if not forloop.last %}border-bottom{% endif %} {% if c.interno %}bg-warning bg-opacity-10{% endif %}">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
+                         style="width:36px;height:36px;background:{% if c.autor.is_staff %}#6366f1{% else %}#0ea5e9{% endif %};font-size:.8rem;">
+                        {{ c.autor.get_full_name|default:c.autor.username|slice:":1"|upper }}
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-baseline gap-2 mb-1">
+                            <span class="fw-semibold small">{{ c.autor.get_full_name|default:c.autor.username }}</span>
+                            <small class="text-muted">{{ c.criado_em|date:"d/m/Y H:i" }}</small>
+                            {% if c.interno %}<span class="badge bg-warning text-dark" style="font-size:.6rem;">Nota interna</span>{% endif %}
+                        </div>
+                        <p class="mb-0 small" style="white-space:pre-wrap;">{{ c.texto }}</p>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-4 small">Nenhum comentário ainda.</div>
+                {% endfor %}
+
+                <div class="p-3 border-top bg-light">
+                    <form method="post" action="{% url 'comentar_pedido' pedido.id %}">
+                        {% csrf_token %}
+                        <textarea name="texto" class="form-control form-control-sm mb-2" rows="2"
+                                  placeholder="Escreva um comentário..." required></textarea>
+                        <div class="d-flex align-items-center justify-content-between">
+                            {% if user.is_staff %}
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" name="interno" value="1" id="chk-interno">
+                                <label class="form-check-label small text-muted" for="chk-interno">Nota interna (não visível ao cliente)</label>
+                            </div>
+                            {% else %}
+                            <span></span>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary btn-sm rounded-pill px-3">
+                                <i class="bi bi-send me-1"></i> Enviar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
