@@ -3229,34 +3229,40 @@ def upload_vendas_reais(request):
             })
 
             # 4. PROCESSAMENTO PARA O BANCO — versão vetorizada (sem iterrows)
-            df_grouped['emissao_date'] = df_grouped['Emissão_dt'].dt.date
-            df_grouped['_cod_str'] = df_grouped['Código_Cliente'].astype(str).str.replace('.0', '', regex=False)
+            # Cria colunas auxiliares com nomes ASCII para compatibilidade com itertuples
+            cod_str = df_grouped['Código_Cliente'].astype(str).str.replace('.0', '', regex=False)
 
-            codigos_na_planilha = df_grouped['_cod_str'].unique().tolist()
+            codigos_na_planilha = cod_str.unique().tolist()
             clientes_dict = {
                 str(c.client_code): c.client_name
                 for c in WfClient.objects.filter(client_code__in=codigos_na_planilha).only('client_code', 'client_name')
             }
 
-            df_grouped['_nome_cliente'] = df_grouped['_cod_str'].apply(
+            df_grouped['col_emissao'] = df_grouped['Emissão_dt'].dt.date
+            df_grouped['col_cod'] = cod_str
+            df_grouped['col_nome'] = cod_str.apply(
                 lambda cod: "Consumidor Final / Não Identificado" if cod == "0"
                 else clientes_dict.get(cod, f"Cod: {cod}")
             )
-            df_grouped['_pedido_str'] = df_grouped['Pedido'].astype(str).str.replace('.0', '', regex=False)
-            df_grouped['_prod_cod'] = df_grouped['Produto_Código'].astype(str).str.replace('.0', '', regex=False)
+            df_grouped['col_pedido'] = df_grouped['Pedido'].astype(str).str.replace('.0', '', regex=False)
+            df_grouped['col_prod'] = df_grouped['Produto_Código'].astype(str).str.replace('.0', '', regex=False)
+            df_grouped['col_descricao'] = df_grouped['Produto_Descrição'].astype(str)
+            df_grouped['col_qtd'] = df_grouped['Quantidade']
+            df_grouped['col_unit'] = df_grouped['Unitário'].astype(str)
+            df_grouped['col_total'] = df_grouped['Total'].astype(str)
 
             empresa = request.empresa
             novas_vendas = [
                 VendaReal(
-                    Emissao=row.emissao_date,
-                    Codigo_Cliente=int(float(row.Código_Cliente)),
-                    Pedido=row._pedido_str,
-                    Produto_Codigo=row._prod_cod,
-                    cliente_nome=row._nome_cliente,
-                    Produto_Descricao=str(row.Produto_Descrição),
-                    Quantidade=int(row.Quantidade),
-                    Unitario=Decimal(str(row.Unitário)),
-                    Total=Decimal(str(row.Total)),
+                    Emissao=row.col_emissao,
+                    Codigo_Cliente=int(float(row.col_cod)) if row.col_cod not in ('', 'nan') else 0,
+                    Pedido=row.col_pedido,
+                    Produto_Codigo=row.col_prod,
+                    cliente_nome=row.col_nome,
+                    Produto_Descricao=row.col_descricao,
+                    Quantidade=int(row.col_qtd),
+                    Unitario=Decimal(row.col_unit),
+                    Total=Decimal(row.col_total),
                     empresa=empresa,
                 )
                 for row in df_grouped.itertuples(index=False)
