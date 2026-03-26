@@ -2,19 +2,54 @@
 {% block title %}Editar Endereço — {{ cliente.client_name }}{% endblock %}
 
 {% block content %}
-<div class="container py-4" style="max-width:640px;">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<style>
+    body { background: #f8f9fc; }
+    .section-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #edf2f7;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        overflow: hidden;
+    }
+    .section-card-header {
+        padding: .85rem 1.5rem;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        font-size: .75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        color: #6b7280;
+    }
+    .form-label { font-size: .78rem; font-weight: 600; color: #374151; margin-bottom: .35rem; }
+    .form-control, .form-select {
+        border-radius: 10px; border-color: #e5e7eb; font-size: .88rem;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.08);
+    }
+</style>
+
+<div style="max-width:640px;margin:0 auto;">
+
+    <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
-            <h4 class="fw-bold mb-0">Editar Endereço</h4>
+            <h4 class="fw-bold mb-0 text-dark">Editar Endereço</h4>
             <p class="text-muted small mb-0">{{ cliente.client_name }}</p>
         </div>
-        <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-outline-secondary">
+        <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-outline-secondary rounded-pill" style="font-size:.85rem;">
             <i class='bx bx-arrow-back me-1'></i> Voltar
         </a>
     </div>
 
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
+    <div class="section-card">
+        <div class="section-card-header">
+            <i class='bx bx-map-pin'></i> Dados do Endereço
+        </div>
+        <div style="padding:1.5rem;">
             <form method="post">
                 {% csrf_token %}
                 <div class="row g-3">
@@ -31,12 +66,12 @@
                         <input type="text" name="bairro" class="form-control" value="{{ endereco.bairro }}">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">CEP <span class="text-danger">*</span></label>
-                        <input type="text" name="cep" class="form-control" value="{{ endereco.cep }}" maxlength="9" required>
-                    </div>
-                    <div class="col-md-7">
                         <label class="form-label">Cidade <span class="text-danger">*</span></label>
                         <input type="text" name="cidade" class="form-control" value="{{ endereco.cidade }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">CEP <span class="text-danger">*</span></label>
+                        <input type="text" name="cep" class="form-control" value="{{ endereco.cep }}" maxlength="9" required>
                     </div>
                     <div class="col-md-5">
                         <label class="form-label">Estado <span class="text-danger">*</span></label>
@@ -47,20 +82,21 @@
                         </select>
                     </div>
                     <div class="col-12">
-                        <div class="form-check">
-                            <input type="checkbox" name="is_default" id="is_default" class="form-check-input" value="True" {% if endereco.is_default %}checked{% endif %}>
-                            <label class="form-check-label" for="is_default">Endereço padrão</label>
+                        <div class="form-check form-switch">
+                            <input type="checkbox" name="is_default" id="is_default" class="form-check-input" role="switch" value="True" {% if endereco.is_default %}checked{% endif %}>
+                            <label class="form-check-label" for="is_default" style="font-size:.85rem;font-weight:500;">Endereço padrão</label>
                         </div>
                     </div>
                 </div>
-                <div class="d-flex justify-content-end gap-2 mt-4">
-                    <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-outline-secondary rounded-pill">Cancelar</a>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4">
+                <div class="d-flex justify-content-end gap-2 mt-4 pt-3" style="border-top:1px solid #f3f4f6;">
+                    <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-outline-secondary rounded-pill" style="font-size:.85rem;">Cancelar</a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4" style="font-size:.85rem;">
                         <i class='bx bx-save me-1'></i> Salvar
                     </button>
                 </div>
             </form>
         </div>
     </div>
+
 </div>
 {% endblock %}
