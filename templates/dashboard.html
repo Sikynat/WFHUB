@@ -1,302 +1,299 @@
 {% extends 'base.html' %}
-{% block title %}{{ titulo }}{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
 <style>
-    :root {
-        --glass-bg: rgba(255, 255, 255, 0.9);
-        --accent-color: #4361ee;
-        --text-main: #2b2d42;
-        --text-muted: #8d99ae;
-        --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+    body { background: #f8f9fc; }
+
+    /* ── KPI Cards ──────────────────────────────────────────────────────── */
+    .kpi-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #edf2f7;
+        padding: 1.25rem 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
     }
-
-    body {
-        background-color: #f8f9fc;
-        color: var(--text-main);
-        font-family: 'Inter', -apple-system, sans-serif;
-    }
-
-    .dashboard-header { margin-bottom: 2rem; padding: 1rem 0; }
-
-    .metric-card {
-        background: white; border: none; border-radius: 16px;
-        box-shadow: var(--card-shadow); transition: all 0.3s ease;
-        overflow: hidden; position: relative;
-    }
-
-    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08); }
-
-    .metric-icon {
+    .kpi-icon {
         width: 48px; height: 48px; border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 1.25rem; margin-bottom: 1rem;
+        font-size: 1.2rem; flex-shrink: 0;
     }
+    .kpi-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; margin-bottom: .15rem; }
+    .kpi-value { font-size: 1.65rem; font-weight: 800; color: #1e293b; line-height: 1; }
+    .kpi-card.faturamento { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); }
+    .kpi-card.faturamento .kpi-label,
+    .kpi-card.faturamento .kpi-value,
+    .kpi-card.faturamento a { color: white !important; }
+    .kpi-card.faturamento .kpi-icon { background: rgba(255,255,255,.15); color: white; }
 
-    .metric-value { font-size: 1.75rem; font-weight: 700; color: var(--text-main); }
-    .metric-label { color: var(--text-muted); font-weight: 500; font-size: 0.875rem; text-transform: uppercase; }
-
-    .faturamento-card { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); color: white; }
-    .faturamento-card .metric-label, .faturamento-card .metric-value { color: white; }
-
-    .status-pill {
-        background: white; border-radius: 12px; padding: 1.25rem;
-        border: 1px solid rgba(0,0,0,0.03); box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        display: flex; justify-content: space-between; align-items: center;
+    /* ── Radar Logístico ────────────────────────────────────────────────── */
+    .radar-strip {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #edf2f7;
+        padding: 1rem 1.5rem;
+        display: flex;
+        gap: 0;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
     }
-
-    .status-count { font-weight: 700; font-size: 1.25rem; }
-    .status-name { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
-
-    .action-btn {
-        background: white; border-radius: 12px; padding: 1rem; border: 1px solid #edf2f7;
-        text-decoration: none; color: var(--text-main); transition: all 0.2s;
-        display: flex; align-items: center; gap: 12px;
+    .radar-item {
+        flex: 1;
+        text-align: center;
+        padding: .6rem .5rem;
+        border-right: 1px solid #f3f4f6;
+        position: relative;
     }
+    .radar-item:last-child { border-right: none; }
+    .radar-item-bar {
+        height: 3px;
+        border-radius: 999px;
+        margin-bottom: .6rem;
+    }
+    .radar-count { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+    .radar-label { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #9ca3af; margin-top: .25rem; }
 
-    .action-btn:hover { background: #f1f5f9; color: var(--accent-color); border-color: var(--accent-color); }
-    .action-icon { color: var(--accent-color); background: rgba(67, 97, 238, 0.1); padding: 8px; border-radius: 8px; }
+    /* ── Oportunidades ──────────────────────────────────────────────────── */
+    .oportunidade-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .9rem 1rem;
+        border-radius: 12px;
+        border: 1px solid #f3f4f6;
+        background: white;
+        margin-bottom: .6rem;
+        transition: border-color .15s;
+    }
+    .oportunidade-item:hover { border-color: #10b981; }
+    .oportunidade-item:last-child { margin-bottom: 0; }
+
+    /* ── Atalhos ────────────────────────────────────────────────────────── */
+    .atalho-card {
+        background: white;
+        border-radius: 14px;
+        border: 1px solid #edf2f7;
+        padding: 1rem;
+        text-decoration: none;
+        color: #1e293b;
+        display: flex;
+        align-items: center;
+        gap: .85rem;
+        transition: all .15s;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    .atalho-card:hover { border-color: #6366f1; background: #fafafe; color: #1e293b; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,.12); }
+    .atalho-icon {
+        width: 38px; height: 38px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem; flex-shrink: 0;
+    }
+    .atalho-title { font-size: .83rem; font-weight: 700; line-height: 1.2; }
+    .atalho-sub { font-size: .7rem; color: #9ca3af; }
+
+    /* ── Section title ──────────────────────────────────────────────────── */
+    .section-title {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        color: #9ca3af;
+        margin-bottom: .85rem;
+    }
 </style>
 
-<div class="container py-4">
-    <div class="dashboard-header d-flex justify-content-between align-items-center">
-        <div>
-            <h2 class="fw-bold mb-0">Overview Administrativo</h2>
-            <p class="text-muted small mb-0">Bem-vindo, aqui estão os números de hoje.</p>
-        </div>
-        <div class="d-flex gap-2">
-            <a href="{% url 'upload_vendas_reais' %}" class="btn btn-primary px-4 py-2" style="border-radius: 10px;">
-                <i class="fas fa-plus me-2"></i>Importar ERP
-            </a>
-        </div>
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark">Dashboard</h4>
+        <p class="text-muted small mb-0">Visão geral do dia</p>
     </div>
-    
-    <div class="row g-4 mb-4">
-        <div class="col-md-4">
-            <div class="card metric-card p-4 h-100">
-                <div class="metric-icon" style="background: rgba(67, 97, 238, 0.1); color: #4361ee;"><i class="fas fa-users"></i></div>
-                <div class="metric-label">Total de Clientes</div>
-                <div class="metric-value">{{ total_clientes }}</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card metric-card p-4 h-100">
-                <div class="metric-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-shopping-cart"></i></div>
-                <div class="metric-label">Pedidos do Site</div>
-                <div class="metric-value">{{ total_pedidos }}</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card metric-card faturamento-card p-4 h-100">
-                <div class="metric-icon" style="background: rgba(255, 255, 255, 0.2); color: white;"><i class="fas fa-wallet"></i></div>
-                <div class="metric-label">Faturamento Real (ERP)</div>
-                <div class="metric-value">R$ {{ total_vendas }}</div>
-                <div class="mt-auto pt-3 d-flex gap-3">
-                    <a href="{% url 'listar_vendas_reais' %}" class="text-white small opacity-75 text-decoration-none"><i class="fas fa-list me-1"></i> Ver Itens</a>
-                    <a href="{% url 'dashboard_analise' %}" class="text-white small opacity-75 text-decoration-none"><i class="fas fa-chart-bar me-1"></i> Gráficos</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <a href="{% url 'upload_vendas_reais' %}" class="btn btn-primary rounded-pill px-4" style="font-size:.85rem;">
+        <i class='bx bx-import me-1'></i> Importar ERP
+    </a>
+</div>
 
-    <div class="card metric-card mb-4 border-success" style="border-left: 5px solid #10b981;">
-        <div class="card-header bg-white border-0 pt-4 pb-0">
-            <h5 class="fw-bold text-success mb-1"><i class="fas fa-bullhorn me-2"></i> Oportunidades de Venda (Estoque Recuperado)</h5>
-            <p class="text-muted small mb-0">Estes clientes tentaram comprar produtos que estavam em falta, mas que agora têm estoque/preço disponível.</p>
+<!-- KPIs -->
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background:#eff6ff;color:#3b82f6;">
+                <i class='bx bx-group'></i>
+            </div>
+            <div>
+                <div class="kpi-label">Clientes</div>
+                <div class="kpi-value">{{ total_clientes }}</div>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="list-group list-group-flush">
-                {% for op in oportunidades_wishlist %}
-                <div class="list-group-item d-flex justify-content-between align-items-center py-3 px-0 border-bottom border-light">
-                    <div>
-                        <h6 class="mb-1 fw-bold text-dark">
-                            <span class="text-muted me-1">#{{ op.cliente.client_code }}</span> - {{ op.cliente.client_name }}
-                        </h6>
-                        <small class="text-muted d-block mt-2">
-                            {% for prod in op.produtos %}
-                                <span class="badge bg-light text-dark border me-1 mb-1" style="font-weight: 500;">
-                                    {{ prod.codigo }} (R$ {{ prod.preco|floatformat:2 }})
-                                </span>
-                            {% endfor %}
-                        </small>
-                    </div>
-                    <a href="{% url 'notificar_wishlist_whatsapp' op.cliente.client_id %}" target="_blank" class="btn btn-sm btn-success rounded-pill px-4 shadow-sm" style="background-color: #10b981; border: none; white-space: nowrap;">
-                        <i class="fab fa-whatsapp me-1"></i> Avisar
-                    </a>
+    </div>
+    <div class="col-md-4">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background:#f0fdf4;color:#22c55e;">
+                <i class='bx bx-package'></i>
+            </div>
+            <div>
+                <div class="kpi-label">Pedidos do site</div>
+                <div class="kpi-value">{{ total_pedidos }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="kpi-card faturamento">
+            <div class="kpi-icon">
+                <i class='bx bx-wallet'></i>
+            </div>
+            <div style="flex:1;">
+                <div class="kpi-label">Faturamento Real (ERP)</div>
+                <div class="kpi-value" style="font-size:1.25rem;">R$ {{ total_vendas }}</div>
+                <div class="d-flex gap-3 mt-1">
+                    <a href="{% url 'listar_vendas_reais' %}" style="font-size:.72rem;opacity:.8;text-decoration:none;">Ver itens →</a>
+                    <a href="{% url 'dashboard_analise' %}" style="font-size:.72rem;opacity:.8;text-decoration:none;">Gráficos →</a>
                 </div>
-                {% empty %}
-                <div class="text-center py-5 bg-light rounded mt-2" style="border: 2px dashed #cbd5e1;">
-                    <div class="mb-3">
-                        <i class="fas fa-box-open text-muted" style="font-size: 2.5rem; opacity: 0.5;"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Radar Logístico -->
+<div class="section-title"><i class='bx bx-radar me-1'></i>Radar Logístico — Status ERP</div>
+<div class="radar-strip mb-4">
+    <div class="radar-item">
+        <div class="radar-bar" style="height:3px;background:#6b7280;border-radius:999px;margin-bottom:.6rem;"></div>
+        <div class="radar-count" style="color:#6b7280;">{{ erp_total }}</div>
+        <div class="radar-label">Lidos no PDF</div>
+    </div>
+    <div class="radar-item">
+        <div class="radar-bar" style="height:3px;background:#ef4444;border-radius:999px;margin-bottom:.6rem;"></div>
+        <div class="radar-count" style="color:#ef4444;">{{ erp_credito }}</div>
+        <div class="radar-label">Bloq. Crédito</div>
+    </div>
+    <div class="radar-item">
+        <div class="radar-bar" style="height:3px;background:#3b82f6;border-radius:999px;margin-bottom:.6rem;"></div>
+        <div class="radar-count" style="color:#3b82f6;">{{ erp_preco }}</div>
+        <div class="radar-label">Bloq. Preço</div>
+    </div>
+    <div class="radar-item">
+        <div class="radar-bar" style="height:3px;background:#f59e0b;border-radius:999px;margin-bottom:.6rem;"></div>
+        <div class="radar-count" style="color:#f59e0b;">{{ erp_separacao }}</div>
+        <div class="radar-label">Separação</div>
+    </div>
+    <div class="radar-item">
+        <div class="radar-bar" style="height:3px;background:#10b981;border-radius:999px;margin-bottom:.6rem;"></div>
+        <div class="radar-count" style="color:#10b981;">{{ erp_faturados }}</div>
+        <div class="radar-label">Faturados</div>
+    </div>
+    <div class="radar-item">
+        <div class="radar-bar" style="height:3px;background:#059669;border-radius:999px;margin-bottom:.6rem;"></div>
+        <div class="radar-count" style="color:#059669;">{{ erp_expedidos }}</div>
+        <div class="radar-label">Expedidos</div>
+    </div>
+</div>
+
+<div class="row g-4">
+
+    <!-- Oportunidades -->
+    <div class="col-lg-7">
+        <div class="section-title"><i class='bx bx-bulb me-1'></i>Oportunidades de Venda — Estoque Recuperado</div>
+        <div style="background:white;border-radius:16px;border:1px solid #edf2f7;padding:1.25rem;box-shadow:0 2px 8px rgba(0,0,0,.04);">
+            {% if oportunidades_wishlist %}
+                <p class="text-muted small mb-3">Clientes que tentaram comprar produtos em falta e agora têm estoque/preço disponível.</p>
+                {% for op in oportunidades_wishlist %}
+                <div class="oportunidade-item">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;font-size:.85rem;color:#1e293b;">
+                            <span style="color:#9ca3af;font-weight:500;">#{{ op.cliente.client_code }}</span>
+                            {{ op.cliente.client_name }}
+                        </div>
+                        <div class="mt-1">
+                            {% for prod in op.produtos %}
+                            <span style="background:#f3f4f6;border-radius:6px;padding:2px 7px;font-size:.72rem;font-weight:600;color:#374151;margin-right:.3rem;display:inline-block;margin-bottom:.2rem;">
+                                {{ prod.codigo }} · R$ {{ prod.preco|floatformat:2 }}
+                            </span>
+                            {% endfor %}
+                        </div>
                     </div>
-                    <h6 class="fw-bold text-muted mb-1">Nenhuma oportunidade no momento</h6>
-                    <p class="text-muted small mb-0">Não foi encontrada nenhuma recuperação de estoque pendente para aviso.</p>
+                    <a href="{% url 'notificar_wishlist_whatsapp' op.cliente.client_id %}" target="_blank"
+                       class="btn btn-sm rounded-pill px-3 flex-shrink-0"
+                       style="background:#10b981;color:white;border:none;font-size:.78rem;font-weight:600;">
+                        <i class='bx bxl-whatsapp me-1'></i>Avisar
+                    </a>
                 </div>
                 {% endfor %}
-            </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class='bx bx-check-circle' style="font-size:2.5rem;color:#d1fae5;"></i>
+                    <p class="text-muted small mt-2 mb-0">Nenhuma oportunidade pendente no momento.</p>
+                </div>
+            {% endif %}
         </div>
     </div>
 
-    <h5 class="fw-bold mb-3 mt-2"><i class="fas fa-satellite-dish me-2 text-primary"></i> Radar Logístico (Status do ERP)</h5>
-    <div class="row g-3 mb-5">
-        
-        <div class="col-12 col-sm-4 col-lg-2">
-            <div class="status-pill" style="border-left: 4px solid #6c757d;">
-                <span class="status-name text-uppercase">Lidos no PDF</span>
-                <span class="status-count text-secondary">{{ erp_total }}</span>
-            </div>
-        </div>
-
-        <div class="col-12 col-sm-4 col-lg-2">
-            <div class="status-pill" style="border-left: 4px solid #ef4444;">
-                <span class="status-name text-uppercase">Bloq. Crédito</span>
-                <span class="status-count text-danger">{{ erp_credito }}</span>
-            </div>
-        </div>
-
-        <div class="col-12 col-sm-4 col-lg-2">
-            <div class="status-pill" style="border-left: 4px solid #0d6efd;">
-                <span class="status-name text-uppercase">Bloq. Preço</span>
-                <span class="status-count text-primary">{{ erp_preco }}</span>
-            </div>
-        </div>
-
-        <div class="col-12 col-sm-4 col-lg-2">
-            <div class="status-pill" style="border-left: 4px solid #f59e0b;">
-                <span class="status-name text-uppercase">Separação</span>
-                <span class="status-count text-warning">{{ erp_separacao }}</span>
-            </div>
-        </div>
-
-        <div class="col-12 col-sm-4 col-lg-2">
-            <div class="status-pill" style="border-left: 4px solid #10b981;">
-                <span class="status-name text-uppercase">Faturados</span>
-                <span class="status-count text-success">{{ erp_faturados }}</span>
-            </div>
-        </div>
-
-        <div class="col-12 col-sm-4 col-lg-2">
-            <div class="status-pill" style="border-left: 4px solid #059669; background-color: #f0fdf4;">
-                <span class="status-name text-uppercase">Expedidos</span>
-                <span class="status-count" style="color: #059669;">{{ erp_expedidos }}</span>
-            </div>
-        </div>
-
-    </div>
-    <div class="row g-4">
-        
-        <div class="col-lg-8">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0">Tabela de Controle</h5>
-                <div class="btn-group shadow-sm">
-                    <a href="{% url 'dashboard_admin' %}" class="btn btn-sm btn-white {% if not filtro_ativo %}active{% endif %}" style="border: 1px solid #edf2f7;">Recentes</a>
-                    <a href="{% url 'dashboard_admin' %}?filtro=sincronizados" class="btn btn-sm btn-white {% if filtro_ativo == 'sincronizados' %}active{% endif %}" style="border: 1px solid #edf2f7;">
-                        <i class="fas fa-sync-alt me-1 text-primary"></i> Sincronizados
-                    </a>
-                </div>
-            </div>
-
-            <div class="card metric-card border-0 shadow-sm h-100">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 align-middle">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="ps-4 border-0">Pedido</th>
-                                <th class="border-0">Cliente</th>
-                                <th class="border-0">Data</th>
-                                <th class="border-0">Status</th>
-                                <th class="text-end pe-4 border-0">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for pedido in pedidos_recentes %}
-                            <tr {% if pedido.is_sincronizado %}class="table-success"{% endif %}>
-                                <td class="ps-4 fw-bold">
-                                    <a href="{% url 'detalhes_pedido_admin' pedido.id %}" class="text-decoration-none text-primary">#{{ pedido.id }}</a>
-                                </td>
-                                <td>
-                                    <div class="text-truncate" style="max-width: 150px;" title="{{ pedido.cliente.client_name }}">
-                                        {{ pedido.cliente.client_name }}
-                                    </div>
-                                </td>
-                                <td class="text-muted small">{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
-                                <td>
-                                    <span class="badge rounded-pill 
-                                        {% if pedido.status == 'FINALIZADO' %}bg-success
-                                        {% elif pedido.status == 'PENDENTE' %}bg-danger
-                                        {% else %}bg-primary{% endif %}" style="font-size: 0.7rem;">
-                                        {{ pedido.status_display }}
-                                    </span>
-                                </td>
-                                <td class="text-end pe-4 fw-bold" style="font-size: 0.9rem;">R$ {{ pedido.total_str }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="5" class="text-center py-4 text-muted">Nenhum pedido encontrado.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% if not filtro_ativo %}
-                <div class="card-footer bg-white text-center py-3 border-0 mt-auto">
-                    <a href="{% url 'todos_os_pedidos' %}" class="text-decoration-none small fw-bold">Ver todos os pedidos do site</a>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="col-lg-4">
-            <h5 class="fw-bold mb-3">Atalhos do Sistema</h5>
-            <div class="d-flex flex-column gap-3">
-                <a href="{% url 'dashboard_analise' %}" class="action-btn shadow-sm w-100">
-                    <div class="action-icon" style="background-color: #3c97e7; color: white;"><i class="fas fa-chart-pie"></i></div>
-                    <div><div class="fw-bold">Inteligência de Dados</div><div class="small text-muted">Rankings e Tendências</div></div>
+    <!-- Atalhos -->
+    <div class="col-lg-5">
+        <div class="section-title"><i class='bx bx-grid-alt me-1'></i>Atalhos</div>
+        <div class="row g-2">
+            <div class="col-6">
+                <a href="{% url 'dashboard_analise' %}" class="atalho-card">
+                    <div class="atalho-icon" style="background:#eff6ff;color:#3b82f6;"><i class='bx bx-pie-chart-alt'></i></div>
+                    <div><div class="atalho-title">Inteligência</div><div class="atalho-sub">Rankings e tendências</div></div>
                 </a>
-
-                <a href="{% url 'sugestoes_admin' %}" class="action-btn shadow-sm w-100">
-                    <div class="action-icon" style="background-color: #783ae3; color: white;"><i class="fas fa-lightbulb"></i></div>
-                    <div><div class="fw-bold">Sugestões de Compra</div><div class="small text-muted">Análise por cliente</div></div>
+            </div>
+            <div class="col-6">
+                <a href="{% url 'sugestoes_admin' %}" class="atalho-card">
+                    <div class="atalho-icon" style="background:#f5f3ff;color:#7c3aed;"><i class='bx bx-bulb'></i></div>
+                    <div><div class="atalho-title">Sugestões</div><div class="atalho-sub">Análise por cliente</div></div>
                 </a>
-                
-                <a href="{% url 'listar_vendas_reais' %}" class="action-btn shadow-sm w-100">
-                    <div class="action-icon" style="background-color: #67e73c; color: white;"><i class="fas fa-history"></i></div>
-                    <div><div class="fw-bold">Histórico ERP</div><div class="small text-muted">Auditoria de Vendas</div></div>
+            </div>
+            <div class="col-6">
+                <a href="{% url 'listar_vendas_reais' %}" class="atalho-card">
+                    <div class="atalho-icon" style="background:#f0fdf4;color:#22c55e;"><i class='bx bx-store'></i></div>
+                    <div><div class="atalho-title">Histórico ERP</div><div class="atalho-sub">Auditoria de vendas</div></div>
                 </a>
-                
-                <a href="{% url 'upload_status_pdf' %}" class="action-btn shadow-sm w-100">
-                    <div class="action-icon" style="background-color: #e74c3c; color: white;"><i class="fas fa-file-pdf"></i></div>
-                    <div><div class="fw-bold">Status Logística</div><div class="small text-muted">Importar PDF do ERP</div></div>
+            </div>
+            <div class="col-6">
+                <a href="{% url 'upload_status_pdf' %}" class="atalho-card">
+                    <div class="atalho-icon" style="background:#fef2f2;color:#ef4444;"><i class='bx bx-file-pdf'></i></div>
+                    <div><div class="atalho-title">Status Logística</div><div class="atalho-sub">Importar PDF ERP</div></div>
                 </a>
-                
-                <a href="{% url 'listar_status_erp' %}" class="action-btn shadow-sm w-100">
-                    <div class="action-icon" style="background-color: #3ce7cb; color: white;">
-                        <i class="fas fa-list-check"></i>
-                    </div>
-                    <div><div class="fw-bold">Monitoramento ERP</div><div class="small text-muted">Auditoria de Status</div></div>
+            </div>
+            <div class="col-6">
+                <a href="{% url 'listar_status_erp' %}" class="atalho-card">
+                    <div class="atalho-icon" style="background:#ecfdf5;color:#059669;"><i class='bx bx-git-compare'></i></div>
+                    <div><div class="atalho-title">Monitor ERP</div><div class="atalho-sub">Auditoria de status</div></div>
                 </a>
-
-                <a href="{% url 'historico_wishlist' %}" class="action-btn shadow-sm w-100">
-                    <div class="action-icon" style="background-color: #e7d03c; color: white;">
-                        <i class="fas fa-history"></i>
-                    </div>
-                    <div><div class="fw-bold">Histórico de Recuperações</div><div class="small text-muted">Auditoria da Wishlist</div></div>
+            </div>
+            <div class="col-6">
+                <a href="{% url 'historico_wishlist' %}" class="atalho-card">
+                    <div class="atalho-icon" style="background:#fffbeb;color:#f59e0b;"><i class='bx bx-heart'></i></div>
+                    <div><div class="atalho-title">Wishlist</div><div class="atalho-sub">Histórico de recuperações</div></div>
                 </a>
-
-                <a href="{% url 'tarefas_board' %}" class="action-btn shadow-sm w-100" style="position:relative;">
-                    <div class="action-icon" style="background-color: #6366f1; color: white;">
-                        <i class="fas fa-tasks"></i>
-                    </div>
+            </div>
+            <div class="col-6">
+                <a href="{% url 'todos_os_pedidos' %}" class="atalho-card">
+                    <div class="atalho-icon" style="background:#eff6ff;color:#2563eb;"><i class='bx bx-list-ul'></i></div>
+                    <div><div class="atalho-title">Todos os pedidos</div><div class="atalho-sub">Histórico completo</div></div>
+                </a>
+            </div>
+            <div class="col-6">
+                <a href="{% url 'tarefas_board' %}" class="atalho-card" style="position:relative;">
+                    <div class="atalho-icon" style="background:#f5f3ff;color:#6366f1;"><i class='bx bx-task'></i></div>
                     <div>
-                        <div class="fw-bold">Tarefas
+                        <div class="atalho-title">
+                            Tarefas
                             {% if notif_tarefas_count > 0 %}
-                            <span class="badge bg-danger ms-1" style="font-size:.65rem;">{{ notif_tarefas_count }}</span>
+                            <span class="badge bg-danger ms-1" style="font-size:.6rem;">{{ notif_tarefas_count }}</span>
                             {% endif %}
                         </div>
-                        <div class="small text-muted">Board e colaboração</div>
+                        <div class="atalho-sub">Board e colaboração</div>
                     </div>
                 </a>
             </div>
         </div>
-
     </div>
+
 </div>
 {% endblock %}

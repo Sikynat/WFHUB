@@ -1,55 +1,187 @@
 {% extends 'base.html' %}
-{% block title %}Histórico de Pedidos{% endblock %}
+{% block title %}Meus Pedidos{% endblock %}
+{% load format_tags %}
 
 {% block content %}
-    {% load format_tags %}
-    <h1>Seus Pedidos</h1>
-    <hr>
-    {% if pedidos %}
-    <div class="table-responsive">
-         <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Número do Pedido</th>
-                    <th>Situação do Pedido</th>
-                    <th>Data</th>
-                    <th>Data de Envio</th>
-                    <th>Valor Total</th> <th>Detalhes</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for pedido in pedidos %}
-                    <tr>
-                        <td>{{ pedido.id }}</td>
-                        <td>{{ pedido.status }}</td>
-                        <td>{{ pedido.data_criacao|date:"d/m/Y H:i" }}</td>
-                        <td>{{ pedido.data_envio_solicitada|date:"d/m/Y" }}</td>
-                        <td>R$ {{ pedido.get_total_geral|format_br }}</td> <td><a href="{% url 'detalhes_pedido' pedido.id %}">Ver Detalhes</a></td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<style>
+    body { background: #f8f9fc; }
+
+    .pedido-card {
+        background: white;
+        border-radius: 14px;
+        border: 1px solid #edf2f7;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+        text-decoration: none;
+        color: inherit;
+        transition: border-color .15s, box-shadow .15s, transform .1s;
+        margin-bottom: .6rem;
+    }
+    .pedido-card:hover {
+        border-color: #6366f1;
+        box-shadow: 0 4px 14px rgba(99,102,241,.1);
+        transform: translateY(-1px);
+        color: inherit;
+    }
+    .pedido-card:last-child { margin-bottom: 0; }
+
+    .pedido-num {
+        font-size: .95rem;
+        font-weight: 800;
+        color: #6366f1;
+        white-space: nowrap;
+    }
+    .pedido-date {
+        font-size: .72rem;
+        color: #9ca3af;
+        font-weight: 500;
+    }
+    .pedido-total {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #059669;
+        white-space: nowrap;
+    }
+
+    /* Status badges */
+    .badge-status {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        padding: .28rem .7rem;
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        white-space: nowrap;
+    }
+    .badge-PENDENTE   { background: #fffbeb; color: #d97706; }
+    .badge-FINALIZADO { background: #eff6ff; color: #2563eb; }
+    .badge-ENTREGUE   { background: #f0fdf4; color: #16a34a; }
+    .badge-RASCUNHO   { background: #f9fafb; color: #6b7280; border: 1px solid #e5e7eb; }
+    .badge-CANCELADO  { background: #fef2f2; color: #dc2626; }
+
+    /* Page num button */
+    .page-link {
+        border-radius: 8px !important;
+        margin: 0 2px;
+        font-size: .82rem;
+        font-weight: 600;
+        color: #6366f1;
+        border-color: #e5e7eb;
+    }
+    .page-item.active .page-link {
+        background: #6366f1;
+        border-color: #6366f1;
+        color: white;
+    }
+    .page-link:hover { background: #f5f3ff; color: #4f46e5; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark">Meus Pedidos</h4>
+        <p class="text-muted small mb-0">
+            {% if pedidos.paginator.count == 1 %}
+                1 pedido
+            {% else %}
+                {{ pedidos.paginator.count }} pedidos no total
+            {% endif %}
+        </p>
     </div>
-       
+    <a href="{% url 'home' %}" class="btn btn-primary rounded-pill px-4" style="font-size:.85rem;">
+        <i class='bx bx-plus me-1'></i> Novo Pedido
+    </a>
+</div>
 
-        {% if pedidos.has_other_pages %}
-            <nav aria-label="Navegação de Páginas">
-                <ul class="pagination justify-content-center">
-                    {% if pedidos.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.previous_page_number }}">Anterior</a></li>
-                    {% endif %}
+{% if pedidos %}
 
-                    {% for num in pedidos.paginator.page_range %}
-                        <li class="page-item {% if pedidos.number == num %}active{% endif %}"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
-                    {% endfor %}
+<div class="mb-3">
+    {% for pedido in pedidos %}
+    <a href="{% url 'detalhes_pedido' pedido.id %}" class="pedido-card">
 
-                    {% if pedidos.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ pedidos.next_page_number }}">Próximo</a></li>
-                    {% endif %}
-                </ul>
-            </nav>
+        <!-- ID + data -->
+        <div style="min-width:80px;">
+            <div class="pedido-num">#{{ pedido.id }}</div>
+            <div class="pedido-date">{{ pedido.data_criacao|date:"d/m/Y" }}</div>
+        </div>
+
+        <!-- Status -->
+        <div style="flex-shrink:0;">
+            {% if pedido.status == 'PENDENTE' %}
+                <span class="badge-status badge-PENDENTE"><i class='bx bx-time-five'></i>Pendente</span>
+            {% elif pedido.status == 'FINALIZADO' %}
+                <span class="badge-status badge-FINALIZADO"><i class='bx bx-check-circle'></i>Finalizado</span>
+            {% elif pedido.status == 'ENTREGUE' %}
+                <span class="badge-status badge-ENTREGUE"><i class='bx bx-package'></i>Entregue</span>
+            {% elif pedido.status == 'RASCUNHO' %}
+                <span class="badge-status badge-RASCUNHO"><i class='bx bx-edit'></i>Rascunho</span>
+            {% elif pedido.status == 'CANCELADO' %}
+                <span class="badge-status badge-CANCELADO"><i class='bx bx-x-circle'></i>Cancelado</span>
+            {% else %}
+                <span class="badge-status badge-RASCUNHO">{{ pedido.status }}</span>
+            {% endif %}
+        </div>
+
+        <!-- Data de envio -->
+        <div class="flex-grow-1 d-none d-md-block">
+            {% if pedido.data_envio_solicitada %}
+            <div style="font-size:.75rem;color:#9ca3af;font-weight:500;">
+                <i class='bx bx-calendar me-1'></i>Envio: {{ pedido.data_envio_solicitada|date:"d/m/Y" }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Total -->
+        <div class="pedido-total">R$ {{ pedido.get_total_geral|format_br }}</div>
+
+        <!-- Arrow -->
+        <div style="color:#d1d5db;flex-shrink:0;"><i class='bx bx-chevron-right' style="font-size:1.2rem;"></i></div>
+
+    </a>
+    {% endfor %}
+</div>
+
+{% if pedidos.has_other_pages %}
+<nav aria-label="Paginação" class="mt-3">
+    <ul class="pagination justify-content-center flex-wrap">
+        {% if pedidos.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ pedidos.previous_page_number }}">
+                <i class='bx bx-chevron-left'></i>
+            </a>
+        </li>
         {% endif %}
-    {% else %}
-        <p class="alert alert-info">Você ainda não tem pedidos.</p>
-    {% endif %}
+
+        {% for num in pedidos.paginator.page_range %}
+        <li class="page-item {% if pedidos.number == num %}active{% endif %}">
+            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+        </li>
+        {% endfor %}
+
+        {% if pedidos.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ pedidos.next_page_number }}">
+                <i class='bx bx-chevron-right'></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+
+<div style="background:white;border-radius:16px;border:1px solid #edf2f7;padding:3.5rem 2rem;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.04);">
+    <i class='bx bx-package' style="font-size:3rem;color:#d1d5db;"></i>
+    <h5 class="mt-3 mb-1 fw-semibold text-dark">Nenhum pedido ainda</h5>
+    <p class="text-muted small mb-4">Quando você fizer um pedido, ele aparecerá aqui.</p>
+    <a href="{% url 'home' %}" class="btn btn-primary rounded-pill px-5">Ir para a loja</a>
+</div>
+
+{% endif %}
 {% endblock %}
