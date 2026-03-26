@@ -2314,24 +2314,22 @@ def upload_pedido(request):
                 if not df_list:
                      messages.error(request, 'A planilha de upload está vazia.')
                      return redirect('upload_pedido')
-                     
-                df_completo = pd.concat(df_list, ignore_index=True)
-                df = df_completo.dropna(how='all') 
+
+                df = pd.concat(df_list, ignore_index=True).dropna(how='all')
 
                 if df.empty:
                     messages.error(request, 'A planilha de upload não contém dados após a leitura.')
                     return redirect('upload_pedido')
 
                 # 2. Normalização e Mapeamento de Colunas
-                # Certifique-se de que a função normalize_text existe no seu código ou imports
                 df.columns = [normalize_text(col) for col in df.columns]
-                
+
                 expected_cols = {
                     'codigo': ['codigo', 'código', 'cod'],
                     'quantidade': ['quantidade', 'qtd', 'qtde'],
                     'descricao': ['descricao', 'descrição', 'produto', 'nome', 'description']
                 }
-                
+
                 col_mapping = {
                     key: next((c for c in values if c in df.columns), None)
                     for key, values in expected_cols.items()
@@ -2340,6 +2338,16 @@ def upload_pedido(request):
                 if not col_mapping['codigo'] or not col_mapping['quantidade']:
                     messages.error(request, "A planilha deve ter colunas para 'código' e 'quantidade'.")
                     return redirect('upload_pedido')
+
+                # Filtra apenas linhas com quantidade preenchida e positiva antes do loop
+                # (evita iterar 16k linhas quando só ~50 têm qty > 0)
+                col_qtd_raw = col_mapping['quantidade']
+                df = df[pd.to_numeric(df[col_qtd_raw], errors='coerce').fillna(0) > 0]
+                # Deduplica por código — mantém a linha com maior quantidade se aparecer em múltiplas abas
+                col_cod_raw = col_mapping['codigo']
+                df = df.dropna(subset=[col_cod_raw])
+                df[col_cod_raw] = df[col_cod_raw].astype(str).str.strip()
+                df = df.sort_values(col_qtd_raw, ascending=False).drop_duplicates(subset=[col_cod_raw])
                 
                 with transaction.atomic():
                     # 3. Criação do Pedido Rascunho
@@ -2356,49 +2364,50 @@ def upload_pedido(request):
                         observacao=form.cleaned_data['observacao_preferencia'],
                     )
                     
-                    erros_texto = [] # Log para o campo texto do pedido e display
-                    itens_pedido_para_criar = [] # Itens válidos
-                    itens_ignorados_db = [] # Itens inválidos (para tabela de erros)
+                    erros_texto = []
+                    itens_pedido_para_criar = []
+                    itens_ignorados_db = []
                     total_valor_pedido = Decimal('0.0')
 
-                    # Otimização: Busca produtos em lote para evitar N queries
+                    # Busca produtos em lote (1 query)
                     from django.db.models import Max as _Max
                     _base = por_empresa(Product.objects, request)
                     _latest = _base.aggregate(d=_Max('date_product'))['d']
                     produtos_atuais = {p.product_code: p for p in _base.filter(date_product=_latest)}
 
-                    # 4. Processamento linha a linha
-                    for index, row in df.iterrows():
+                    # Constantes fora do loop
+                    col_cod  = col_mapping['codigo']
+                    col_qtd  = col_mapping['quantidade']
+                    col_desc = col_mapping.get('descricao')
+                    termos_ignorar = {'TOTAL', 'SUBTOTAL', 'GERAL', 'VALOR TOTAL'}
+                    regiao      = cliente_para_validacao.client_state.uf_name
+                    valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
 
-                        codigo_produto_raw = row[col_mapping['codigo']]
-                        if pd.isna(codigo_produto_raw):
-                             continue
-                             
+                    # 4. Processamento linha a linha (to_dict é ~10x mais rápido que iterrows)
+                    for index, row in enumerate(df.to_dict('records'), start=2):
+
+                        codigo_produto_raw = row.get(col_cod)
+                        if pd.isna(codigo_produto_raw) if not isinstance(codigo_produto_raw, str) else not str(codigo_produto_raw).strip():
+                            continue
+
                         codigo_produto = str(codigo_produto_raw).strip()
 
-                        # --- FILTRO DE RODAPÉ (TOTAL GERAL) ---
-                        # Ignora silenciosamente linhas que contêm palavras de somatório
-                        termos_ignorar = ['TOTAL', 'SUBTOTAL', 'GERAL', 'VALOR TOTAL']
-                        codigo_upper = codigo_produto.upper()
-                        if any(termo in codigo_upper for termo in termos_ignorar):
+                        if any(termo in codigo_produto.upper() for termo in termos_ignorar):
                             continue
-                        # --------------------------------------
 
-                        quantidade_raw = row[col_mapping['quantidade']]
-                        
-                        # Tenta obter a descrição da planilha (fallback caso produto não exista)
-                        descricao_excel = row.get(col_mapping.get('descricao'), 'Descrição não informada na planilha')
-                        
+                        quantidade_raw = row.get(col_qtd)
+                        descricao_excel = row.get(col_desc, 'Descrição não informada na planilha') if col_desc else 'Descrição não informada na planilha'
+
                         # --- Validação A: Quantidade Nula ---
-                        if pd.isnull(quantidade_raw):
+                        if quantidade_raw is None or (not isinstance(quantidade_raw, str) and pd.isnull(quantidade_raw)):
                             continue
 
                         # --- Validação B: Quantidade Numérica ---
                         try:
                             quantidade = int(quantidade_raw)
-                        except ValueError:
+                        except (ValueError, TypeError):
                             msg = "Quantidade inválida (não-numérica)"
-                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index}: {msg}.")
                             itens_ignorados_db.append(ItemPedidoIgnorado(
                                 pedido=novo_pedido,
                                 cliente=cliente_para_validacao,
@@ -2411,8 +2420,13 @@ def upload_pedido(request):
 
                         # --- Validação C: Quantidade Zero ou Negativa ---
                         if quantidade <= 0:
-                            msg = "Quantidade zero ou negativa"
-                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            continue
+
+                        # --- Validação D: Produto Existe no Catálogo? ---
+                        produto = produtos_atuais.get(codigo_produto)
+                        if not produto:
+                            msg = "Não encontrado no catálogo"
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index}: {msg}.")
                             itens_ignorados_db.append(ItemPedidoIgnorado(
                                 pedido=novo_pedido,
                                 cliente=cliente_para_validacao,
@@ -2423,24 +2437,7 @@ def upload_pedido(request):
                             ))
                             continue
 
-                        # --- Validação D: Produto Existe no Catálogo? ---
-                        produto = produtos_atuais.get(codigo_produto)
-                        if not produto:
-                            msg = "Não encontrado no catálogo"
-                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
-                            itens_ignorados_db.append(ItemPedidoIgnorado(
-                                pedido=novo_pedido,
-                                cliente=cliente_para_validacao,
-                                codigo_produto=codigo_produto,
-                                descricao_produto=str(descricao_excel),
-                                quantidade_tentada=quantidade,
-                                motivo_erro=msg
-                            ))
-                            continue
-                            
                         # --- Validação E: Estoque e Preço ---
-                        regiao = cliente_para_validacao.client_state.uf_name
-                        valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
                         valor_unitario = getattr(produto, valor_field)
                         
                         if valor_unitario is None or valor_unitario <= 0:
@@ -3076,8 +3073,7 @@ def upload_pedido_cliente(request):
                     xls_data = pd.read_excel(planilha_pedido, sheet_name=None, header=header_row)
                     df_list = list(xls_data.values())
 
-                df_completo = pd.concat(df_list, ignore_index=True)
-                df = df_completo.dropna(how='all')
+                df = pd.concat(df_list, ignore_index=True).dropna(how='all')
 
                 if df.empty:
                     messages.error(request, 'A planilha está vazia.')
@@ -3085,13 +3081,13 @@ def upload_pedido_cliente(request):
 
                 # 2. Normalização e Mapeamento de Colunas
                 df.columns = [normalize_text(col) for col in df.columns]
-                
+
                 expected_cols = {
                     'codigo': ['codigo', 'código', 'cod'],
                     'quantidade': ['quantidade', 'qtd', 'qtde'],
                     'descricao': ['descricao', 'descrição', 'produto', 'nome', 'description']
                 }
-                
+
                 col_mapping = {
                     key: next((c for c in values if c in df.columns), None)
                     for key, values in expected_cols.items()
@@ -3100,6 +3096,15 @@ def upload_pedido_cliente(request):
                 if not col_mapping['codigo'] or not col_mapping['quantidade']:
                     messages.error(request, "A planilha deve ter colunas para 'código' e 'quantidade'.")
                     return render(request, 'upload_pedido_cliente.html', {'upload_form': form, 'cliente': cliente})
+
+                # Filtra apenas linhas com quantidade preenchida e positiva antes do loop
+                col_qtd_raw = col_mapping['quantidade']
+                df = df[pd.to_numeric(df[col_qtd_raw], errors='coerce').fillna(0) > 0]
+                # Deduplica por código — mantém a linha com maior quantidade se aparecer em múltiplas abas
+                col_cod_raw = col_mapping['codigo']
+                df = df.dropna(subset=[col_cod_raw])
+                df[col_cod_raw] = df[col_cod_raw].astype(str).str.strip()
+                df = df.sort_values(col_qtd_raw, ascending=False).drop_duplicates(subset=[col_cod_raw])
 
                 with transaction.atomic():
                     # 3. Criação do Pedido Rascunho
@@ -3121,35 +3126,43 @@ def upload_pedido_cliente(request):
                     itens_ignorados_db = []
                     total_valor_pedido = Decimal('0.0')
 
-                    # Otimização: Busca produtos em lote
+                    # Busca produtos em lote (1 query)
                     from django.db.models import Max as _Max
                     _base = por_empresa(Product.objects, request)
                     _latest = _base.aggregate(d=_Max('date_product'))['d']
                     produtos_atuais = {p.product_code: p for p in _base.filter(date_product=_latest)}
 
-                    # 4. Processamento linha a linha
-                    for index, row in df.iterrows():
-                        codigo_raw = row[col_mapping['codigo']]
-                        if pd.isna(codigo_raw): continue
-                             
+                    # Constantes fora do loop
+                    col_cod  = col_mapping['codigo']
+                    col_qtd  = col_mapping['quantidade']
+                    col_desc = col_mapping.get('descricao')
+                    termos_ignorar = {'TOTAL', 'SUBTOTAL', 'GERAL', 'VALOR TOTAL'}
+                    regiao      = cliente.client_state.uf_name
+                    valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
+
+                    # 4. Processamento linha a linha (to_dict é ~10x mais rápido que iterrows)
+                    for index, row in enumerate(df.to_dict('records'), start=2):
+                        codigo_raw = row.get(col_cod)
+                        if codigo_raw is None or (not isinstance(codigo_raw, str) and pd.isna(codigo_raw)):
+                            continue
+
                         codigo_produto = str(codigo_raw).strip()
 
-                        # Filtro de rodapé
-                        termos_ignorar = ['TOTAL', 'SUBTOTAL', 'GERAL', 'VALOR TOTAL']
                         if any(termo in codigo_produto.upper() for termo in termos_ignorar):
                             continue
 
-                        quantidade_raw = row[col_mapping['quantidade']]
-                        descricao_excel = row.get(col_mapping.get('descricao'), 'Descrição não informada')
-                        
-                        if pd.isnull(quantidade_raw): continue
+                        quantidade_raw = row.get(col_qtd)
+                        descricao_excel = row.get(col_desc, 'Descrição não informada') if col_desc else 'Descrição não informada'
+
+                        if quantidade_raw is None or (not isinstance(quantidade_raw, str) and pd.isnull(quantidade_raw)):
+                            continue
 
                         # Validação: Quantidade Numérica
                         try:
                             quantidade = int(quantidade_raw)
-                        except ValueError:
+                        except (ValueError, TypeError):
                             msg = "Quantidade inválida (não-numérica)"
-                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index}: {msg}.")
                             itens_ignorados_db.append(ItemPedidoIgnorado(
                                 pedido=novo_pedido, cliente=cliente, codigo_produto=codigo_produto,
                                 descricao_produto=str(descricao_excel), quantidade_tentada=0, motivo_erro=msg
@@ -3158,28 +3171,20 @@ def upload_pedido_cliente(request):
 
                         # Validação: Quantidade Positiva
                         if quantidade <= 0:
-                            msg = "Quantidade zero ou negativa"
-                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
-                            itens_ignorados_db.append(ItemPedidoIgnorado(
-                                pedido=novo_pedido, cliente=cliente, codigo_produto=codigo_produto,
-                                descricao_produto=str(descricao_excel), quantidade_tentada=quantidade, motivo_erro=msg
-                            ))
                             continue
 
                         # Validação: Catálogo
                         produto = produtos_atuais.get(codigo_produto)
                         if not produto:
                             msg = "Não encontrado no catálogo"
-                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index}: {msg}.")
                             itens_ignorados_db.append(ItemPedidoIgnorado(
                                 pedido=novo_pedido, cliente=cliente, codigo_produto=codigo_produto,
                                 descricao_produto=str(descricao_excel), quantidade_tentada=quantidade, motivo_erro=msg
                             ))
                             continue
-                            
+
                         # Validação: Preço por Região (SP ou ES)
-                        regiao = cliente.client_state.uf_name
-                        valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
                         valor_unitario = getattr(produto, valor_field)
                         
                         if valor_unitario is None or valor_unitario <= 0:
