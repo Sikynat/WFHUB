@@ -2295,10 +2295,16 @@ def upload_pedido(request):
                 else:
                     # Detecta linha de cabeçalho dinamicamente (planilhas com linha de data no topo)
                     header_row = 0
+                    _aliases_cod = ['CODIGO', 'COD', 'CÓDIGO', 'CÓD']
+                    _aliases_qtd = ['QUANTIDADE', 'QTD', 'QTDE', 'QNT', 'QUANT']
                     df_scan = pd.read_excel(planilha_pedido, header=None, nrows=15, dtype=str)
                     for _i, _row in df_scan.iterrows():
-                        _vals = [str(v).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
-                        if any('COD' in v for v in _vals) and any('QTD' in v or 'QUANT' in v for v in _vals):
+                        _vals_norm = [normalize_text(str(v)).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
+                        _vals_raw  = [str(v).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
+                        _all_vals  = _vals_norm + _vals_raw
+                        _tem_cod = any(alias in v for alias in _aliases_cod for v in _all_vals)
+                        _tem_qtd = any(alias in v for alias in _aliases_qtd for v in _all_vals)
+                        if _tem_cod and _tem_qtd:
                             header_row = _i
                             break
                     planilha_pedido.seek(0)
