@@ -1545,25 +1545,49 @@ def processar_upload(request):
             return redirect('pagina_upload')
 
         try:
-            # 1. Leitura Dinâmica (Lê tudo como texto inicialmente para evitar quebras)
-            df_es_raw = pd.read_excel(planilha_es_file, dtype=str)
-            df_sp_raw = pd.read_excel(planilha_sp_file, dtype=str)
-
-            # 2. Mapeamento Inteligente de Colunas (Apelidos)
-            # O sistema vai procurar por qualquer uma destas palavras no cabeçalho
+            # Mapeamento de aliases de colunas
             aliases = {
-                'codigo': ['CÓDIGO', 'CODIGO', 'PRODUTO', 'COD'],
+                'codigo':   ['CÓDIGO', 'CODIGO', 'PRODUTO', 'COD'],
                 'descricao': ['DESCRIÇÃO', 'DESCRICAO', 'NOME DO PRODUTO'],
-                'grupo': ['GRUPO', 'CATEGORIA'],
-                'marca': ['MARCA', 'FABRICANTE'],
-                'tabela': ['TABELA', 'PREÇO NOVO', 'PRECO', 'VALOR']
+                'grupo':    ['GRUPO', 'CATEGORIA'],
+                'marca':    ['MARCA', 'FABRICANTE'],
+                'tabela':   ['TABELA', 'PREÇO NOVO', 'PRECO', 'VALOR']
             }
+
+            def encontrar_linha_cabecalho(file, max_rows=15):
+                """
+                Escaneia as primeiras linhas da planilha e retorna o índice (0-based)
+                da linha que contém ao mesmo tempo um alias de 'codigo' e de 'tabela'.
+                Faz reset do ponteiro do arquivo após a leitura.
+                """
+                df_scan = pd.read_excel(file, header=None, nrows=max_rows, dtype=str)
+                for i, row in df_scan.iterrows():
+                    vals = [str(v).upper().strip() for v in row if pd.notnull(v) and str(v).strip()]
+                    tem_codigo = any(alias in v for alias in aliases['codigo'] for v in vals)
+                    tem_tabela = any(alias in v for alias in aliases['tabela'] for v in vals)
+                    if tem_codigo and tem_tabela:
+                        file.seek(0)
+                        return i
+                file.seek(0)
+                return 0  # fallback: primeira linha
 
             def encontrar_coluna(df, nomes_possiveis):
                 for nome in nomes_possiveis:
                     if nome in df.columns:
                         return nome
                 return None
+
+            # 1. Descobre qual linha é o cabeçalho em cada planilha
+            header_es = encontrar_linha_cabecalho(planilha_es_file)
+            header_sp = encontrar_linha_cabecalho(planilha_sp_file)
+
+            # 2. Leitura com o cabeçalho correto
+            df_es_raw = pd.read_excel(planilha_es_file, header=header_es, dtype=str)
+            df_sp_raw = pd.read_excel(planilha_sp_file, header=header_sp, dtype=str)
+
+            # Normaliza nomes de colunas: remove espaços e converte para maiúsculo
+            df_es_raw.columns = [str(c).upper().strip() for c in df_es_raw.columns]
+            df_sp_raw.columns = [str(c).upper().strip() for c in df_sp_raw.columns]
 
             # Processa as colunas da Planilha ES
             col_cod_es = encontrar_coluna(df_es_raw, aliases['codigo'])
