@@ -100,5 +100,112 @@
             </button>
         </div>
     </form>
+
+    <!-- Endereços de Entrega -->
+    <div class="card border-0 shadow-sm mt-4" x-data="{ aberto: false }">
+        <div class="card-header bg-light d-flex align-items-center justify-content-between">
+            <span class="fw-bold">Endereços de Entrega</span>
+            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3"
+                    @click="aberto = !aberto" style="font-size:.8rem;">
+                <i class='bx bx-plus me-1'></i>
+                <span x-text="aberto ? 'Cancelar' : 'Novo endereço'"></span>
+            </button>
+        </div>
+
+        <!-- Lista de endereços existentes -->
+        <div class="card-body p-0">
+            {% if enderecos %}
+            <ul class="list-group list-group-flush">
+                {% for end in enderecos %}
+                <li class="list-group-item d-flex align-items-center justify-content-between gap-2 py-3 px-4">
+                    <div>
+                        <div style="font-size:.88rem;font-weight:600;color:#1e293b;">
+                            {{ end.logradouro }}, {{ end.numero }}
+                            {% if end.bairro %} — {{ end.bairro }}{% endif %}
+                            {% if end.is_default %}
+                            <span class="badge ms-2" style="background:#d1fae5;color:#065f46;font-size:.65rem;">Padrão</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size:.78rem;color:#6b7280;">
+                            {{ end.cidade }} / {{ end.estado.uf_name }} — CEP {{ end.cep }}
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 flex-shrink-0">
+                        <a href="{% url 'editar_endereco_cliente_staff' cliente.client_id end.id %}"
+                           class="btn btn-sm btn-outline-secondary" style="font-size:.78rem;">
+                            <i class='bx bx-edit'></i>
+                        </a>
+                        <form method="post"
+                              action="{% url 'excluir_endereco_cliente_staff' cliente.client_id end.id %}"
+                              data-confirm="Excluir este endereço?">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size:.78rem;">
+                                <i class='bx bx-trash'></i>
+                            </button>
+                        </form>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="text-center text-muted py-4" style="font-size:.85rem;" x-show="!aberto">
+                <i class='bx bx-map' style="font-size:1.8rem;color:#d1d5db;display:block;margin-bottom:.4rem;"></i>
+                Nenhum endereço cadastrado.
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Formulário inline para novo endereço -->
+        <div x-show="aberto" x-cloak x-transition class="card-body border-top bg-light">
+            <p class="text-muted small mb-3">Preencha os dados do novo endereço de entrega.</p>
+            <form method="post" action="{% url 'adicionar_endereco_cliente_staff' cliente.client_id %}">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-7">
+                        <label class="form-label" style="font-size:.8rem;font-weight:600;">Logradouro <span class="text-danger">*</span></label>
+                        <input type="text" name="logradouro" class="form-control form-control-sm" required placeholder="Rua, Av., etc.">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size:.8rem;font-weight:600;">Número <span class="text-danger">*</span></label>
+                        <input type="text" name="numero" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" style="font-size:.8rem;font-weight:600;">CEP <span class="text-danger">*</span></label>
+                        <input type="text" name="cep" class="form-control form-control-sm" required placeholder="00000-000" maxlength="9">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" style="font-size:.8rem;font-weight:600;">Bairro</label>
+                        <input type="text" name="bairro" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label" style="font-size:.8rem;font-weight:600;">Cidade <span class="text-danger">*</span></label>
+                        <input type="text" name="cidade" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" style="font-size:.8rem;font-weight:600;">Estado <span class="text-danger">*</span></label>
+                        <select name="estado" class="form-select form-select-sm" required>
+                            <option value="">---</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf.uf_id }}">{{ uf.uf_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_default" id="is_default_new" class="form-check-input" value="True">
+                            <label class="form-check-label" for="is_default_new" style="font-size:.83rem;">Definir como endereço padrão</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" @click="aberto = false">Cancelar</button>
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4">
+                        <i class='bx bx-save me-1'></i> Salvar endereço
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
 {% endblock %}

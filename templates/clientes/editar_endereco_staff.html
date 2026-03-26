@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Editar Endereço — {{ cliente.client_name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:640px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0">Editar Endereço</h4>
+            <p class="text-muted small mb-0">{{ cliente.client_name }}</p>
+        </div>
+        <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-outline-secondary">
+            <i class='bx bx-arrow-back me-1'></i> Voltar
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label">Logradouro <span class="text-danger">*</span></label>
+                        <input type="text" name="logradouro" class="form-control" value="{{ endereco.logradouro }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Número <span class="text-danger">*</span></label>
+                        <input type="text" name="numero" class="form-control" value="{{ endereco.numero }}" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Bairro</label>
+                        <input type="text" name="bairro" class="form-control" value="{{ endereco.bairro }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">CEP <span class="text-danger">*</span></label>
+                        <input type="text" name="cep" class="form-control" value="{{ endereco.cep }}" maxlength="9" required>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label">Cidade <span class="text-danger">*</span></label>
+                        <input type="text" name="cidade" class="form-control" value="{{ endereco.cidade }}" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Estado <span class="text-danger">*</span></label>
+                        <select name="estado" class="form-select" required>
+                            {% for uf in ufs %}
+                            <option value="{{ uf.uf_id }}" {% if endereco.estado_id == uf.uf_id %}selected{% endif %}>{{ uf.uf_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_default" id="is_default" class="form-check-input" value="True" {% if endereco.is_default %}checked{% endif %}>
+                            <label class="form-check-label" for="is_default">Endereço padrão</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{% url 'editar_cliente' cliente.client_id %}" class="btn btn-outline-secondary rounded-pill">Cancelar</a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">
+                        <i class='bx bx-save me-1'></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

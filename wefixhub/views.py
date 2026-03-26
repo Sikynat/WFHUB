@@ -4639,12 +4639,66 @@ def editar_cliente(request, client_id):
         messages.success(request, f'Cliente "{cliente.client_name}" atualizado.')
         return redirect('listar_clientes')
 
+    enderecos = Endereco.objects.filter(cliente=cliente).order_by('-is_default', 'id')
+    form_endereco = EnderecoForm()
     return render(request, 'clientes/editar_cliente.html', {
         'cliente': cliente,
         'ufs': ufs,
         'erros': {},
         'frete_choices': WfClient.FRETE_CHOICES,
         'nf_choices': WfClient.NOTA_FISCAL_CHOICES,
+        'enderecos': enderecos,
+        'form_endereco': form_endereco,
+    })
+
+
+@login_required
+@staff_member_required
+def adicionar_endereco_cliente_staff(request, client_id):
+    cliente = get_empresa_or_404(WfClient, request, client_id=client_id)
+    if request.method == 'POST':
+        form = EnderecoForm(request.POST)
+        if form.is_valid():
+            novo = form.save(commit=False)
+            novo.cliente = cliente
+            novo.save()
+            messages.success(request, 'Endereço adicionado.')
+        else:
+            messages.error(request, 'Verifique os campos do endereço.')
+    return redirect('editar_cliente', client_id=client_id)
+
+
+@login_required
+@staff_member_required
+def excluir_endereco_cliente_staff(request, client_id, endereco_id):
+    cliente = get_empresa_or_404(WfClient, request, client_id=client_id)
+    endereco = get_object_or_404(Endereco, id=endereco_id, cliente=cliente)
+    if request.method == 'POST':
+        endereco.delete()
+        messages.success(request, 'Endereço removido.')
+    return redirect('editar_cliente', client_id=client_id)
+
+
+@login_required
+@staff_member_required
+def editar_endereco_cliente_staff(request, client_id, endereco_id):
+    from .models import wefixhub_uf
+    cliente = get_empresa_or_404(WfClient, request, client_id=client_id)
+    endereco = get_object_or_404(Endereco, id=endereco_id, cliente=cliente)
+    ufs = wefixhub_uf.objects.all().order_by('uf_name')
+    if request.method == 'POST':
+        form = EnderecoForm(request.POST, instance=endereco)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Endereço atualizado.')
+            return redirect('editar_cliente', client_id=client_id)
+    else:
+        form = EnderecoForm(instance=endereco)
+    return render(request, 'clientes/editar_endereco_staff.html', {
+        'cliente': cliente,
+        'form': form,
+        'endereco': endereco,
+        'ufs': ufs,
     })
 
 
