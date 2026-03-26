@@ -180,22 +180,22 @@
             <i class='bx bx-x-circle'></i>
         </div>
         <div>
-            <div class="kpi-label">Itens Rejeitados</div>
-            <div class="kpi-value">{{ total_registros }}</div>
+            <div class="kpi-label">Total de Faltas</div>
+            <div class="kpi-value">{{ total_unidades }}</div>
             <div style="font-size:.68rem;color:#9ca3af;margin-top:.2rem;">
-                {{ total_registros }} linha{{ total_registros|pluralize:"s" }} de pedido sem estoque ou preço
+                unidades solicitadas que não foram entregues
             </div>
         </div>
     </div>
     <div class="kpi-card">
         <div class="kpi-icon" style="background:#fffbeb;color:#d97706;">
-            <i class='bx bx-package'></i>
+            <i class='bx bx-receipt'></i>
         </div>
         <div>
-            <div class="kpi-label">Unidades Não Atendidas</div>
-            <div class="kpi-value">{{ total_unidades }}</div>
+            <div class="kpi-label">Ocorrências</div>
+            <div class="kpi-value">{{ total_registros }}</div>
             <div style="font-size:.68rem;color:#9ca3af;margin-top:.2rem;">
-                {{ total_unidades }} unidade{{ total_unidades|pluralize:"s" }} solicitada{{ total_unidades|pluralize:"s" }} que não saíram
+                vezes que um item faltou em algum pedido
             </div>
         </div>
     </div>
@@ -204,10 +204,10 @@
             <i class='bx bx-barcode'></i>
         </div>
         <div>
-            <div class="kpi-label">SKUs Únicos em Falta</div>
+            <div class="kpi-label">Produtos Diferentes</div>
             <div class="kpi-value">{{ produtos_distintos }}</div>
             <div style="font-size:.68rem;color:#9ca3af;margin-top:.2rem;">
-                {{ produtos_distintos }} produto{{ produtos_distintos|pluralize:"s" }} diferente{{ produtos_distintos|pluralize:"s" }} entre os {{ total_registros }} rejeitos
+                SKUs distintos envolvidos nas {{ total_registros }} ocorrências
             </div>
         </div>
     </div>
