@@ -180,8 +180,11 @@
             <i class='bx bx-x-circle'></i>
         </div>
         <div>
-            <div class="kpi-label">Total de faltas</div>
+            <div class="kpi-label">Itens Rejeitados</div>
             <div class="kpi-value">{{ total_registros }}</div>
+            <div style="font-size:.68rem;color:#9ca3af;margin-top:.2rem;">
+                {{ total_registros }} linha{{ total_registros|pluralize:"s" }} de pedido sem estoque ou preço
+            </div>
         </div>
     </div>
     <div class="kpi-card">
@@ -189,8 +192,11 @@
             <i class='bx bx-package'></i>
         </div>
         <div>
-            <div class="kpi-label">Unidades solicitadas</div>
+            <div class="kpi-label">Unidades Não Atendidas</div>
             <div class="kpi-value">{{ total_unidades }}</div>
+            <div style="font-size:.68rem;color:#9ca3af;margin-top:.2rem;">
+                {{ total_unidades }} unidade{{ total_unidades|pluralize:"s" }} solicitada{{ total_unidades|pluralize:"s" }} que não saíram
+            </div>
         </div>
     </div>
     <div class="kpi-card">
@@ -198,8 +204,11 @@
             <i class='bx bx-barcode'></i>
         </div>
         <div>
-            <div class="kpi-label">Produtos distintos</div>
+            <div class="kpi-label">SKUs Únicos em Falta</div>
             <div class="kpi-value">{{ produtos_distintos }}</div>
+            <div style="font-size:.68rem;color:#9ca3af;margin-top:.2rem;">
+                {{ produtos_distintos }} produto{{ produtos_distintos|pluralize:"s" }} diferente{{ produtos_distintos|pluralize:"s" }} entre os {{ total_registros }} rejeitos
+            </div>
         </div>
     </div>
 </div>
