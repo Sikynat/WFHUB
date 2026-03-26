@@ -4506,6 +4506,7 @@ def cadastrar_cliente(request):
         client_cnpj = request.POST.get('client_cnpj', '').strip()
         client_adress = request.POST.get('client_adress', '').strip()
         client_city = request.POST.get('client_city', '').strip()
+        client_cep = request.POST.get('client_cep', '').strip().replace('-', '')
         client_state_id = request.POST.get('client_state', '')
         client_state_subscription = request.POST.get('client_state_subscription', '').strip()
         client_is_active = request.POST.get('client_is_active') == 'on'
@@ -4564,6 +4565,7 @@ def cadastrar_cliente(request):
             client_cnpj=client_cnpj,
             client_adress=client_adress,
             client_city=client_city,
+            client_cep=client_cep,
             client_state=uf,
             client_state_subscription=client_state_subscription or None,
             client_is_active=client_is_active,
@@ -4597,6 +4599,7 @@ def editar_cliente(request, client_id):
         client_cnpj = request.POST.get('client_cnpj', '').strip()
         client_adress = request.POST.get('client_adress', '').strip()
         client_city = request.POST.get('client_city', '').strip()
+        client_cep = request.POST.get('client_cep', '').strip().replace('-', '')
         client_state_id = request.POST.get('client_state', '')
         client_state_subscription = request.POST.get('client_state_subscription', '').strip()
         client_is_active = request.POST.get('client_is_active') == 'on'
@@ -4628,6 +4631,7 @@ def editar_cliente(request, client_id):
         cliente.client_cnpj = client_cnpj
         cliente.client_adress = client_adress
         cliente.client_city = client_city
+        cliente.client_cep = client_cep
         cliente.client_state = uf
         cliente.client_state_subscription = client_state_subscription or None
         cliente.client_is_active = client_is_active

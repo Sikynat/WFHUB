@@ -41,7 +41,7 @@
     <!-- Dados principais -->
     <div class="section-card">
         <div class="section-card-header"><i class='bx bx-user'></i> Dados do Cliente</div>
-        <div class="section-card-body">
+        <div class="section-card-body" data-cep-scope>
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Código <span class="text-danger">*</span></label>
@@ -70,10 +70,23 @@
                     <input type="text" name="client_state_subscription" class="form-control"
                            value="{{ post.client_state_subscription|default:'' }}">
                 </div>
-                <div class="col-md-8">
+                <div class="col-md-3">
+                    <label class="form-label">CEP</label>
+                    <input type="text" name="client_cep" class="form-control"
+                           value="{{ post.client_cep|default:'' }}"
+                           data-mask="cep" placeholder="00000-000"
+                           data-cep-map='{"logradouro":"client_adress","cidade":"client_city","estado":"client_state"}'>
+                    <div class="form-text" style="font-size:.68rem;">Preenche endereço e cidade automaticamente</div>
+                </div>
+                <div class="col-md-7">
                     <label class="form-label">Endereço fiscal</label>
                     <input type="text" name="client_adress" class="form-control"
-                           value="{{ post.client_adress|default:'' }}">
+                           value="{{ post.client_adress|default:'' }}" placeholder="Auto-preenchido pelo CEP">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Número</label>
+                    <input type="text" name="client_numero" class="form-control"
+                           value="{{ post.client_numero|default:'' }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Cidade</label>

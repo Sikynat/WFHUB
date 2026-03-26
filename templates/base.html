@@ -455,17 +455,23 @@
                     const d   = await res.json();
                     if (d.erro) return;
 
+                    // Support custom field name mapping via data-cep-map='{"logradouro":"my_field"}'
+                    const fieldMap = {};
+                    try { Object.assign(fieldMap, JSON.parse(el.dataset.cepMap || '{}')); } catch(e) {}
+                    const fname = std => fieldMap[std] || std;
+
                     const setField = (name, val) => {
                         const i = q(`[name="${name}"]`);
                         if (i) { i.value = val; i.classList.add('cep-filled'); setTimeout(() => i.classList.remove('cep-filled'), 1000); }
                     };
 
-                    setField('logradouro', d.logradouro || '');
-                    setField('bairro',     d.bairro     || '');
-                    setField('cidade',     d.localidade || '');
+                    setField(fname('logradouro'), d.logradouro || '');
+                    setField(fname('bairro'),     d.bairro     || '');
+                    setField(fname('cidade'),     d.localidade || '');
 
-                    // Match UF select by option text (e.g. "SP", "ES")
-                    const sel = q('[name="estado"]');
+                    // Match UF select — support custom name via map
+                    const estadoName = fname('estado');
+                    const sel = q(`[name="${estadoName}"]`);
                     if (sel) {
                         Array.from(sel.options).forEach(o => {
                             o.selected = o.text.trim().toUpperCase() === (d.uf || '').toUpperCase();
