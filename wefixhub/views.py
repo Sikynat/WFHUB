@@ -4807,6 +4807,134 @@ def atualizar_plano_empresa(request, empresa_id):
 
 
 # ==============================================================================
+# RELATÓRIO DE FALTAS (staff)
+# ==============================================================================
+
+@login_required
+@staff_member_required
+def relatorio_faltas(request):
+    hoje = timezone.localdate()
+    mes  = int(request.GET.get('mes',  hoje.month))
+    ano  = int(request.GET.get('ano',  hoje.year))
+    cliente_id = request.GET.get('cliente', '')
+
+    qs = por_empresa(
+        ItemPedidoIgnorado.objects.select_related('cliente', 'pedido'),
+        request, campo='cliente__empresa'
+    ).filter(
+        data_tentativa__year=ano,
+        data_tentativa__month=mes,
+    )
+
+    if cliente_id:
+        qs = qs.filter(cliente__client_id=cliente_id)
+
+    qs = qs.order_by('-data_tentativa')
+
+    # Resumo agregado
+    from django.db.models import Count, Sum
+    resumo_produtos = (
+        qs.values('codigo_produto', 'descricao_produto')
+          .annotate(total_qtd=Sum('quantidade_tentada'), ocorrencias=Count('id'))
+          .order_by('-ocorrencias')[:10]
+    )
+    resumo_clientes = (
+        qs.values('cliente__client_code', 'cliente__client_name')
+          .annotate(total_faltas=Count('id'))
+          .order_by('-total_faltas')[:10]
+    )
+    total_registros   = qs.count()
+    total_unidades    = qs.aggregate(t=Sum('quantidade_tentada'))['t'] or 0
+    produtos_distintos = qs.values('codigo_produto').distinct().count()
+
+    # Lista de clientes para o filtro
+    clientes = por_empresa(
+        WfClient.objects.filter(client_is_active=True),
+        request
+    ).order_by('client_name')
+
+    # Anos disponíveis para o filtro
+    anos = list(range(hoje.year, hoje.year - 4, -1))
+
+    paginator = Paginator(qs, 30)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'analise/relatorio_faltas.html', {
+        'page_obj': page_obj,
+        'mes': mes,
+        'ano': ano,
+        'cliente_id': cliente_id,
+        'clientes': clientes,
+        'anos': anos,
+        'total_registros': total_registros,
+        'total_unidades': total_unidades,
+        'produtos_distintos': produtos_distintos,
+        'resumo_produtos': resumo_produtos,
+        'resumo_clientes': resumo_clientes,
+        'meses': [
+            (1,'Janeiro'),(2,'Fevereiro'),(3,'Março'),(4,'Abril'),
+            (5,'Maio'),(6,'Junho'),(7,'Julho'),(8,'Agosto'),
+            (9,'Setembro'),(10,'Outubro'),(11,'Novembro'),(12,'Dezembro'),
+        ],
+    })
+
+
+@login_required
+@staff_member_required
+def exportar_faltas_excel(request):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from django.http import HttpResponse
+
+    hoje = timezone.localdate()
+    mes  = int(request.GET.get('mes',  hoje.month))
+    ano  = int(request.GET.get('ano',  hoje.year))
+    cliente_id = request.GET.get('cliente', '')
+
+    qs = por_empresa(
+        ItemPedidoIgnorado.objects.select_related('cliente', 'pedido'),
+        request, campo='cliente__empresa'
+    ).filter(data_tentativa__year=ano, data_tentativa__month=mes)
+
+    if cliente_id:
+        qs = qs.filter(cliente__client_id=cliente_id)
+
+    qs = qs.order_by('-data_tentativa')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Faltas'
+
+    header_fill = PatternFill('solid', fgColor='6366F1')
+    header_font = Font(bold=True, color='FFFFFF')
+    headers = ['Data', 'Cód. Cliente', 'Cliente', 'Pedido', 'Cód. Produto', 'Descrição', 'Qtd', 'Motivo']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+
+    for row_num, item in enumerate(qs, 2):
+        ws.cell(row=row_num, column=1, value=item.data_tentativa.strftime('%d/%m/%Y %H:%M') if item.data_tentativa else '')
+        ws.cell(row=row_num, column=2, value=item.cliente.client_code if item.cliente else '')
+        ws.cell(row=row_num, column=3, value=item.cliente.client_name if item.cliente else '')
+        ws.cell(row=row_num, column=4, value=str(item.pedido_id) if item.pedido_id else '')
+        ws.cell(row=row_num, column=5, value=item.codigo_produto)
+        ws.cell(row=row_num, column=6, value=item.descricao_produto or '')
+        ws.cell(row=row_num, column=7, value=item.quantidade_tentada or 0)
+        ws.cell(row=row_num, column=8, value=item.motivo_erro)
+
+    for col in ws.columns:
+        ws.column_dimensions[col[0].column_letter].width = max(len(str(c.value or '')) for c in col) + 4
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    nome_arquivo = f'faltas_{ano}_{mes:02d}.xlsx'
+    response['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
+    wb.save(response)
+    return response
+
+
+# ==============================================================================
 # DASHBOARD SAAS (superuser)
 # ==============================================================================
 

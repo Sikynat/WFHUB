@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+{% block title %}Relatório de Faltas{% endblock %}
+
+{% block content %}
+<style>
+    body { background: #f8f9fc; }
+
+    .kpi-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: .85rem;
+        margin-bottom: 1.25rem;
+    }
+    .kpi-card {
+        background: white;
+        border-radius: 14px;
+        border: 1px solid #edf2f7;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+        display: flex;
+        align-items: center;
+        gap: .85rem;
+    }
+    .kpi-icon {
+        width: 42px; height: 42px; border-radius: 11px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.1rem; flex-shrink: 0;
+    }
+    .kpi-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; }
+    .kpi-value { font-size: 1.5rem; font-weight: 800; color: #1e293b; line-height: 1; }
+
+    .section-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #edf2f7;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    .section-header {
+        padding: .85rem 1.5rem;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .section-title {
+        font-size: .72rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .6px; color: #6b7280;
+        display: flex; align-items: center; gap: .4rem;
+    }
+
+    .filter-bar {
+        background: white;
+        border-radius: 14px;
+        border: 1px solid #edf2f7;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: flex-end;
+        gap: .75rem;
+        flex-wrap: wrap;
+    }
+    .filter-bar .form-select, .filter-bar .form-control {
+        font-size: .83rem;
+        border-radius: 9px;
+        border-color: #e5e7eb;
+    }
+    .filter-bar label { font-size: .72rem; font-weight: 600; color: #6b7280; }
+
+    /* Table */
+    .faltas-table { width: 100%; border-collapse: collapse; }
+    .faltas-table th {
+        font-size: .65rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .5px; color: #9ca3af;
+        padding: .65rem 1rem; border-bottom: 1px solid #f3f4f6;
+        text-align: left; white-space: nowrap;
+    }
+    .faltas-table td {
+        padding: .7rem 1rem; border-bottom: 1px solid #f9fafb;
+        font-size: .83rem; color: #374151;
+    }
+    .faltas-table tr:last-child td { border-bottom: none; }
+    .faltas-table tr:hover td { background: #fafafa; }
+
+    .badge-motivo {
+        display: inline-block;
+        padding: .2rem .6rem;
+        border-radius: 6px;
+        font-size: .68rem;
+        font-weight: 600;
+    }
+    .badge-estoque { background: #fef2f2; color: #dc2626; }
+    .badge-preco   { background: #fffbeb; color: #d97706; }
+    .badge-outro   { background: #f3f4f6; color: #6b7280; }
+
+    /* Top ranking */
+    .rank-row {
+        display: flex; align-items: center; gap: .75rem;
+        padding: .6rem 1.25rem;
+        border-bottom: 1px solid #f9fafb;
+    }
+    .rank-row:last-child { border-bottom: none; }
+    .rank-num {
+        width: 22px; height: 22px; border-radius: 6px;
+        background: #f3f4f6; color: #6b7280;
+        font-size: .7rem; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .rank-num.top { background: #fef3c7; color: #d97706; }
+
+    @media (max-width: 768px) {
+        .kpi-strip { grid-template-columns: 1fr; }
+    }
+</style>
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark">Relatório de Faltas</h4>
+        <p class="text-muted small mb-0">Itens solicitados que não puderam ser atendidos</p>
+    </div>
+    <a href="{% url 'exportar_faltas_excel' %}?mes={{ mes }}&ano={{ ano }}{% if cliente_id %}&cliente={{ cliente_id }}{% endif %}"
+       class="btn btn-sm rounded-pill px-3"
+       style="background:#16a34a;color:white;border:none;font-size:.8rem;font-weight:600;">
+        <i class='bx bx-download me-1'></i> Exportar Excel
+    </a>
+</div>
+
+<!-- Filtros -->
+<form method="get" class="filter-bar" x-data>
+    <div>
+        <label class="d-block mb-1">Mês</label>
+        <select name="mes" class="form-select form-select-sm" style="min-width:130px;">
+            {% for num, nome in meses %}
+            <option value="{{ num }}" {% if mes == num %}selected{% endif %}>{{ nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="d-block mb-1">Ano</label>
+        <select name="ano" class="form-select form-select-sm" style="min-width:90px;">
+            {% for a in anos %}
+            <option value="{{ a }}" {% if ano == a %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div style="flex:1;min-width:200px;max-width:320px;">
+        <label class="d-block mb-1">Cliente</label>
+        <select name="cliente" class="form-select form-select-sm">
+            <option value="">Todos os clientes</option>
+            {% for c in clientes %}
+            <option value="{{ c.client_id }}" {% if cliente_id == c.client_id|stringformat:"s" %}selected{% endif %}>
+                #{{ c.client_code }} {{ c.client_name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4" style="font-size:.82rem;">
+            <i class='bx bx-filter-alt me-1'></i> Filtrar
+        </button>
+    </div>
+    {% if cliente_id or mes != hoje_mes or ano != hoje_ano %}
+    <div>
+        <a href="{% url 'relatorio_faltas' %}" class="btn btn-sm btn-outline-secondary rounded-pill" style="font-size:.82rem;">
+            Limpar
+        </a>
+    </div>
+    {% endif %}
+</form>
+
+<!-- KPIs -->
+<div class="kpi-strip">
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:#fef2f2;color:#ef4444;">
+            <i class='bx bx-x-circle'></i>
+        </div>
+        <div>
+            <div class="kpi-label">Total de faltas</div>
+            <div class="kpi-value">{{ total_registros }}</div>
+        </div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:#fffbeb;color:#d97706;">
+            <i class='bx bx-package'></i>
+        </div>
+        <div>
+            <div class="kpi-label">Unidades solicitadas</div>
+            <div class="kpi-value">{{ total_unidades }}</div>
+        </div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon" style="background:#f0fdf4;color:#16a34a;">
+            <i class='bx bx-barcode'></i>
+        </div>
+        <div>
+            <div class="kpi-label">Produtos distintos</div>
+            <div class="kpi-value">{{ produtos_distintos }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <!-- Top produtos mais faltosos -->
+    <div class="col-lg-6">
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-title"><i class='bx bx-trending-up'></i> Top Produtos com Mais Faltas</span>
+            </div>
+            {% if resumo_produtos %}
+                {% for p in resumo_produtos %}
+                <div class="rank-row">
+                    <div class="rank-num {% if forloop.counter <= 3 %}top{% endif %}">{{ forloop.counter }}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:.82rem;font-weight:700;color:#1e293b;">{{ p.codigo_produto }}</div>
+                        {% if p.descricao_produto %}
+                        <div style="font-size:.72rem;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.descricao_produto }}</div>
+                        {% endif %}
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:.82rem;font-weight:700;color:#ef4444;">{{ p.ocorrencias }}×</div>
+                        <div style="font-size:.68rem;color:#9ca3af;">{{ p.total_qtd }} un.</div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="text-center py-4 text-muted" style="font-size:.85rem;">Nenhum dado neste período.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Top clientes com mais faltas -->
+    <div class="col-lg-6">
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-title"><i class='bx bx-user-x'></i> Clientes com Mais Faltas</span>
+            </div>
+            {% if resumo_clientes %}
+                {% for c in resumo_clientes %}
+                <div class="rank-row">
+                    <div class="rank-num {% if forloop.counter <= 3 %}top{% endif %}">{{ forloop.counter }}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:.82rem;font-weight:700;color:#1e293b;">
+                            <span style="color:#9ca3af;font-weight:500;">#{{ c.cliente__client_code }}</span>
+                            {{ c.cliente__client_name }}
+                        </div>
+                    </div>
+                    <div style="font-size:.85rem;font-weight:800;color:#6366f1;flex-shrink:0;">
+                        {{ c.total_faltas }} faltas
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="text-center py-4 text-muted" style="font-size:.85rem;">Nenhum dado neste período.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Tabela detalhada -->
+<div class="section-card">
+    <div class="section-header">
+        <span class="section-title"><i class='bx bx-list-ul'></i> Registros Detalhados</span>
+        <span style="font-size:.75rem;color:#9ca3af;">{{ page_obj.paginator.count }} registros</span>
+    </div>
+
+    {% if page_obj %}
+    <div style="overflow-x:auto;">
+        <table class="faltas-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Cliente</th>
+                    <th>Pedido</th>
+                    <th>Produto</th>
+                    <th>Descrição</th>
+                    <th>Qtd</th>
+                    <th>Motivo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in page_obj %}
+                <tr>
+                    <td style="white-space:nowrap;color:#6b7280;">
+                        {{ item.data_tentativa|date:"d/m/Y" }}<br>
+                        <span style="font-size:.7rem;">{{ item.data_tentativa|date:"H:i" }}</span>
+                    </td>
+                    <td>
+                        {% if item.cliente %}
+                        <div style="font-weight:600;font-size:.82rem;">
+                            <span style="color:#9ca3af;">#{{ item.cliente.client_code }}</span>
+                            {{ item.cliente.client_name }}
+                        </div>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if item.pedido_id %}
+                        <a href="{% url 'detalhes_pedido_admin' item.pedido_id %}"
+                           style="color:#6366f1;font-weight:600;font-size:.82rem;">#{{ item.pedido_id }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="font-weight:700;color:#6366f1;font-size:.83rem;">{{ item.codigo_produto }}</td>
+                    <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        {{ item.descricao_produto|default:"—" }}
+                    </td>
+                    <td style="font-weight:700;">{{ item.quantidade_tentada|default:"—" }}</td>
+                    <td>
+                        {% if "estoque" in item.motivo_erro|lower %}
+                        <span class="badge-motivo badge-estoque"><i class='bx bx-x'></i> Estoque</span>
+                        {% elif "preço" in item.motivo_erro|lower or "preco" in item.motivo_erro|lower %}
+                        <span class="badge-motivo badge-preco"><i class='bx bx-dollar'></i> Preço</span>
+                        {% else %}
+                        <span class="badge-motivo badge-outro">{{ item.motivo_erro|truncatechars:40 }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <div style="padding:1rem 1.5rem;border-top:1px solid #f3f4f6;">
+        <nav>
+            <ul class="pagination pagination-sm justify-content-center mb-0 flex-wrap">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?mes={{ mes }}&ano={{ ano }}&cliente={{ cliente_id }}&page={{ page_obj.previous_page_number }}">
+                        <i class='bx bx-chevron-left'></i>
+                    </a>
+                </li>
+                {% endif %}
+                {% for num in page_obj.paginator.page_range %}
+                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                    <a class="page-link" href="?mes={{ mes }}&ano={{ ano }}&cliente={{ cliente_id }}&page={{ num }}">{{ num }}</a>
+                </li>
+                {% endfor %}
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?mes={{ mes }}&ano={{ ano }}&cliente={{ cliente_id }}&page={{ page_obj.next_page_number }}">
+                        <i class='bx bx-chevron-right'></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class='bx bx-check-circle' style="font-size:2.5rem;color:#d1fae5;display:block;margin-bottom:.5rem;"></i>
+        <span style="font-size:.88rem;">Nenhuma falta registrada neste período.</span>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

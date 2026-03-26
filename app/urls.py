@@ -124,6 +124,8 @@ urlpatterns = [
     path('tarefas/<int:tarefa_id>/anexo/', views.upload_anexo_tarefa, name='upload_anexo_tarefa'),
     path('tarefas/anexo/<int:anexo_id>/excluir/', views.excluir_anexo_tarefa, name='excluir_anexo_tarefa'),
     path('auditoria/', views.logs_auditoria, name='logs_auditoria'),
+    path('relatorio/faltas/', views.relatorio_faltas, name='relatorio_faltas'),
+    path('relatorio/faltas/exportar/', views.exportar_faltas_excel, name='exportar_faltas_excel'),
 ]
 
 
