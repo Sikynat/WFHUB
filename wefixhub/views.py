@@ -2293,9 +2293,18 @@ def upload_pedido(request):
                 if planilha_pedido.name.endswith('.csv'):
                     df_list = [pd.read_csv(planilha_pedido)]
                 else:
-                    xls_data = pd.read_excel(planilha_pedido, sheet_name=None)
+                    # Detecta linha de cabeçalho dinamicamente (planilhas com linha de data no topo)
+                    header_row = 0
+                    df_scan = pd.read_excel(planilha_pedido, header=None, nrows=15, dtype=str)
+                    for _i, _row in df_scan.iterrows():
+                        _vals = [str(v).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
+                        if any('COD' in v for v in _vals) and any('QTD' in v or 'QUANT' in v for v in _vals):
+                            header_row = _i
+                            break
+                    planilha_pedido.seek(0)
+                    xls_data = pd.read_excel(planilha_pedido, sheet_name=None, header=header_row)
                     df_list = list(xls_data.values())
-                
+
                 if not df_list:
                      messages.error(request, 'A planilha de upload está vazia.')
                      return redirect('upload_pedido')
@@ -3049,11 +3058,20 @@ def upload_pedido_cliente(request):
                 if planilha_pedido.name.endswith('.csv'):
                     df_list = [pd.read_csv(planilha_pedido)]
                 else:
-                    xls_data = pd.read_excel(planilha_pedido, sheet_name=None)
+                    # Detecta linha de cabeçalho dinamicamente (planilhas com linha de data no topo)
+                    header_row = 0
+                    df_scan = pd.read_excel(planilha_pedido, header=None, nrows=15, dtype=str)
+                    for _i, _row in df_scan.iterrows():
+                        _vals = [str(v).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
+                        if any('COD' in v for v in _vals) and any('QTD' in v or 'QUANT' in v for v in _vals):
+                            header_row = _i
+                            break
+                    planilha_pedido.seek(0)
+                    xls_data = pd.read_excel(planilha_pedido, sheet_name=None, header=header_row)
                     df_list = list(xls_data.values())
-                
+
                 df_completo = pd.concat(df_list, ignore_index=True)
-                df = df_completo.dropna(how='all') 
+                df = df_completo.dropna(how='all')
 
                 if df.empty:
                     messages.error(request, 'A planilha está vazia.')
