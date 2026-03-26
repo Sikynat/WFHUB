@@ -20,7 +20,20 @@
       <link rel="stylesheet" href="{% static 'wefixhub/css/footer-style.css' %}">
       <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
       <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
-      <style>[x-cloak]{display:none!important}</style>
+      <script src="https://unpkg.com/imask@7.6.1/dist/imask.min.js"></script>
+      <style>
+        [x-cloak]{display:none!important}
+
+        /* ── IMask / ViaCEP feedback ─────────────────────────────── */
+        .input-cep-loading {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' stroke='%236366f1' stroke-width='3' fill='none' stroke-dasharray='31.4' stroke-dashoffset='10'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 12 12' to='360 12 12' dur='.8s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right .75rem center;
+          padding-right: 2.25rem !important;
+        }
+        @keyframes cepFilled { 0%,100%{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.15)} 50%{border-color:#10b981;} }
+        .cep-filled { animation: cepFilled .9s ease; }
+      </style>
 </head>
 <body>
  
@@ -405,6 +418,76 @@
             setSidebar(sidebar.classList.contains('close'));
             toggle.addEventListener('click', () => setSidebar(!sidebar.classList.contains('close')));
         });
+    </script>
+
+    <script>
+    // ── Masks & ViaCEP ──────────────────────────────────────────────────────
+    function initMasks(root) {
+        root = root || document;
+
+        // CNPJ: display 00.000.000/0000-00, submit only digits
+        root.querySelectorAll('[data-mask="cnpj"]:not([data-masked])').forEach(el => {
+            el.setAttribute('data-masked', '1');
+            el.removeAttribute('maxlength');
+            const m = IMask(el, { mask: '00.000.000/0000-00' });
+            // Pre-fill if already has value (digits only)
+            if (el.value) m.unmaskedValue = el.value.replace(/\D/g, '');
+            el.closest('form')?.addEventListener('submit', () => { el.value = m.unmaskedValue; });
+        });
+
+        // CEP: display 00000-000, submit only digits, auto-fill via ViaCEP
+        root.querySelectorAll('[data-mask="cep"]:not([data-masked])').forEach(el => {
+            el.setAttribute('data-masked', '1');
+            el.removeAttribute('maxlength');
+            const m = IMask(el, { mask: '00000-000' });
+            if (el.value) m.unmaskedValue = el.value.replace(/\D/g, '');
+            el.closest('form')?.addEventListener('submit', () => { el.value = m.unmaskedValue; });
+
+            m.on('accept', async () => {
+                if (m.unmaskedValue.length !== 8) return;
+                const scope = el.closest('[data-cep-scope]') || el.closest('form');
+                if (!scope) return;
+                const q = s => scope.querySelector(s);
+
+                el.classList.add('input-cep-loading');
+                try {
+                    const res = await fetch(`https://viacep.com.br/ws/${m.unmaskedValue}/json/`);
+                    const d   = await res.json();
+                    if (d.erro) return;
+
+                    const setField = (name, val) => {
+                        const i = q(`[name="${name}"]`);
+                        if (i) { i.value = val; i.classList.add('cep-filled'); setTimeout(() => i.classList.remove('cep-filled'), 1000); }
+                    };
+
+                    setField('logradouro', d.logradouro || '');
+                    setField('bairro',     d.bairro     || '');
+                    setField('cidade',     d.localidade || '');
+
+                    // Match UF select by option text (e.g. "SP", "ES")
+                    const sel = q('[name="estado"]');
+                    if (sel) {
+                        Array.from(sel.options).forEach(o => {
+                            o.selected = o.text.trim().toUpperCase() === (d.uf || '').toUpperCase();
+                        });
+                        sel.dispatchEvent(new Event('change'));
+                    }
+                } catch(e) {}
+                el.classList.remove('input-cep-loading');
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => initMasks());
+
+    // Re-run masks when Alpine reveals hidden elements (e.g. x-show inline forms)
+    document.addEventListener('alpine:initialized', () => {
+        document.addEventListener('click', e => {
+            if (e.target.closest('[\\@click]') || e.target.closest('[x-on\\:click]')) {
+                setTimeout(() => initMasks(), 50);
+            }
+        });
+    });
     </script>
 </body>
 </html>

@@ -164,7 +164,8 @@
                     <label class="form-label">CNPJ <span class="text-danger">*</span></label>
                     <input type="text" name="client_cnpj"
                            class="form-control {% if erros.client_cnpj %}is-invalid{% endif %}"
-                           value="{{ cliente.client_cnpj }}" maxlength="14">
+                           value="{{ cliente.client_cnpj }}" maxlength="14"
+                           data-mask="cnpj" placeholder="00.000.000/0000-00">
                     {% if erros.client_cnpj %}<div class="invalid-feedback">{{ erros.client_cnpj }}</div>{% endif %}
                 </div>
                 <div class="col-md-6">
@@ -334,20 +335,22 @@
     <!-- Formulário inline -->
     <div x-show="aberto" x-cloak x-transition class="add-form-wrap">
         <p class="text-muted small mb-3 fw-500">Novo endereço de entrega</p>
-        <form method="post" action="{% url 'adicionar_endereco_cliente_staff' cliente.client_id %}">
+        <form method="post" action="{% url 'adicionar_endereco_cliente_staff' cliente.client_id %}" data-cep-scope>
             {% csrf_token %}
             <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">CEP <span class="text-danger">*</span></label>
+                    <input type="text" name="cep" class="form-control" required placeholder="00000-000"
+                           data-mask="cep" @focus="$nextTick(() => initMasks($el.closest('form')))">
+                    <div class="form-text" style="font-size:.68rem;">Digite o CEP para auto-preencher</div>
+                </div>
                 <div class="col-md-7">
                     <label class="form-label">Logradouro <span class="text-danger">*</span></label>
-                    <input type="text" name="logradouro" class="form-control" required placeholder="Rua, Av., etc.">
+                    <input type="text" name="logradouro" class="form-control" required placeholder="Auto-preenchido pelo CEP">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Número <span class="text-danger">*</span></label>
                     <input type="text" name="numero" class="form-control" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">CEP <span class="text-danger">*</span></label>
-                    <input type="text" name="cep" class="form-control" required placeholder="00000-000" maxlength="9">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Bairro</label>

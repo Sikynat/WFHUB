@@ -50,7 +50,7 @@
             <i class='bx bx-map-pin'></i> Dados do Endereço
         </div>
         <div style="padding:1.5rem;">
-            <form method="post">
+            <form method="post" data-cep-scope>
                 {% csrf_token %}
                 <div class="row g-3">
                     <div class="col-md-8">
@@ -71,7 +71,8 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">CEP <span class="text-danger">*</span></label>
-                        <input type="text" name="cep" class="form-control" value="{{ endereco.cep }}" maxlength="9" required>
+                        <input type="text" name="cep" class="form-control" value="{{ endereco.cep }}" required
+                           data-mask="cep" placeholder="00000-000">
                     </div>
                     <div class="col-md-5">
                         <label class="form-label">Estado <span class="text-danger">*</span></label>

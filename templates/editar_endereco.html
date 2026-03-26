@@ -2,60 +2,95 @@
 {% block title %}{{ titulo }}{% endblock %}
 
 {% block content %}
-    <h1 class="mb-4">{{ titulo }}</h1>
-    <div class="row">
-   
-        
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Adicionar Novo Endereço</h3>
-                </div>
-                <div class="card-body">
-                    <form method="post">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            <label for="id_logradouro" class="form-label">Logradouro:</label>
-                            {{ form.logradouro }}
-                        </div>
-                        <div class="mb-3">
-                            <label for="id_numero" class="form-label">Número:</label>
-                            {{ form.numero }}
-                        </div>
-                        <div class="mb-3">
-                            <label for="id_bairro" class="form-label">Bairro:</label>
-                            {{ form.bairro }}
-                        </div>
-                        <div class="mb-3">
-                            <label for="id_cidade" class="form-label">Cidade:</label>
-                            {{ form.cidade }}
-                        </div>
-                        <div class="mb-3">
-                            <label for="id_estado" class="form-label">Estado:</label>
-                            {{ form.estado }}
-                        </div>
-                        <div class="mb-3">
-                            <label for="id_cep" class="form-label">CEP:</label>
-                            {{ form.cep }}
-                        </div>
+<style>
+    body { background: #f8f9fc; }
+    .section-card {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04); overflow: hidden;
+    }
+    .section-card-header {
+        padding: .85rem 1.5rem; border-bottom: 1px solid #f3f4f6;
+        display: flex; align-items: center; gap: .45rem;
+        font-size: .75rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .6px; color: #6b7280;
+    }
+    .form-label { font-size: .78rem; font-weight: 600; color: #374151; margin-bottom: .35rem; }
+    .form-control, .form-select {
+        border-radius: 10px; border-color: #e5e7eb; font-size: .88rem;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.08);
+    }
+</style>
 
-                        <div class="mb-3">
-                            <label class="form-label">Endereço Padrão?</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="is_default" id="id_is_default_0" value="True">
-                                <label class="form-check-label" for="id_is_default_0">Sim</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="is_default" id="id_is_default_1" value="False">
-                                <label class="form-check-label" for="id_is_default_1">Não</label>
-                            </div>
-                        </div>
+<div style="max-width:640px;margin:0 auto;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h4 class="fw-bold mb-0 text-dark">{{ titulo }}</h4>
+        <a href="{% url 'editar_perfil' %}" class="btn btn-outline-secondary rounded-pill" style="font-size:.85rem;">
+            <i class='bx bx-arrow-back me-1'></i> Voltar
+        </a>
+    </div>
 
-                        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-                        <a href="{% url 'editar_perfil' %}" class="btn btn-secondary">Cancelar</a>
-                    </form>
+    <div class="section-card">
+        <div class="section-card-header"><i class='bx bx-map-pin'></i> Dados do Endereço</div>
+        <div style="padding:1.5rem;">
+            <form method="post" data-cep-scope>
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">CEP <span class="text-danger">*</span></label>
+                        <input type="text" name="cep" class="form-control"
+                               value="{{ form.cep.value|default:'' }}"
+                               data-mask="cep" placeholder="00000-000" required>
+                        <div class="form-text" style="font-size:.68rem;">Digite o CEP para auto-preencher</div>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Logradouro <span class="text-danger">*</span></label>
+                        <input type="text" name="logradouro" class="form-control"
+                               value="{{ form.logradouro.value|default:'' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Número <span class="text-danger">*</span></label>
+                        <input type="text" name="numero" class="form-control"
+                               value="{{ form.numero.value|default:'' }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Bairro</label>
+                        <input type="text" name="bairro" class="form-control"
+                               value="{{ form.bairro.value|default:'' }}">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Cidade <span class="text-danger">*</span></label>
+                        <input type="text" name="cidade" class="form-control"
+                               value="{{ form.cidade.value|default:'' }}" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Estado <span class="text-danger">*</span></label>
+                        <select name="estado" class="form-select" required>
+                            {% for val, label in form.estado.field.choices %}
+                            {% if val %}
+                            <option value="{{ val }}" {% if form.estado.value == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" name="is_default" id="is_default" class="form-check-input" role="switch"
+                                   value="True" {% if form.is_default.value %}checked{% endif %}>
+                            <label class="form-check-label" for="is_default" style="font-size:.85rem;font-weight:500;">Endereço padrão</label>
+                        </div>
+                    </div>
                 </div>
-            </div>
+                <div class="d-flex justify-content-end gap-2 mt-4 pt-3" style="border-top:1px solid #f3f4f6;">
+                    <a href="{% url 'editar_perfil' %}" class="btn btn-outline-secondary rounded-pill" style="font-size:.85rem;">Cancelar</a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4" style="font-size:.85rem;">
+                        <i class='bx bx-save me-1'></i> Salvar
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 {% endblock %}
