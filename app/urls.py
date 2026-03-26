@@ -126,6 +126,7 @@ urlpatterns = [
     path('auditoria/', views.logs_auditoria, name='logs_auditoria'),
     path('relatorio/faltas/', views.relatorio_faltas, name='relatorio_faltas'),
     path('relatorio/faltas/exportar/', views.exportar_faltas_excel, name='exportar_faltas_excel'),
+    path('pedido/<int:pedido_id>/faltas/exportar/', views.exportar_faltas_pedido_excel, name='exportar_faltas_pedido_excel'),
 ]
 
 

@@ -51,6 +51,9 @@
             {% if user.is_staff %}
                 <a href="{% url 'todos_os_pedidos' %}" class="btn btn-light border rounded-pill shadow-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
                 <a href="{% url 'exportar_detalhes_pedido_admin_excel' pedido.id %}" class="btn btn-outline-info rounded-pill shadow-sm"><i class="bi bi-file-earmark-excel me-1"></i> Exportar</a>
+                {% if itens_ignorados %}
+                <a href="{% url 'exportar_faltas_pedido_excel' pedido.id %}" class="btn btn-outline-danger rounded-pill shadow-sm"><i class="bi bi-x-circle me-1"></i> Exportar Faltas</a>
+                {% endif %}
                 <a href="{% url 'enviar_whatsapp' pedido.id %}" target="_blank" class="btn btn-success rounded-pill shadow-sm"><i class="bi bi-whatsapp me-1"></i> WhatsApp</a>
             {% else %}
                 <a href="{% url 'pedidos' %}" class="btn btn-light border rounded-pill shadow-sm"><i class="bi bi-arrow-left me-1"></i> Histórico</a>
@@ -233,6 +236,41 @@
             </tfoot>
         </table>
     </div>
+
+    <!-- Faltas (staff only) -->
+    {% if user.is_staff and itens_ignorados %}
+    <h5 class="fw-bold text-dark mb-3 mt-2"><i class="bi bi-x-circle text-danger me-2"></i> Itens com Falta</h5>
+    <div class="table-container mb-5">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Código</th>
+                    <th>Descrição</th>
+                    <th class="text-center">Qtd. Tentada</th>
+                    <th>Motivo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in itens_ignorados %}
+                <tr>
+                    <td class="fw-bold ps-4 text-danger">{{ item.codigo_produto }}</td>
+                    <td class="text-muted small">{{ item.descricao_produto|default:"—" }}</td>
+                    <td class="text-center fw-bold">{{ item.quantidade_tentada|default:"—" }}</td>
+                    <td>
+                        <span class="badge rounded-pill px-3 py-1
+                            {% if 'estoque' in item.motivo_erro|lower %}bg-danger
+                            {% elif 'pre' in item.motivo_erro|lower %}bg-warning text-dark
+                            {% else %}bg-secondary{% endif %}"
+                            style="font-size:.72rem;">
+                            {{ item.motivo_erro|truncatechars:50 }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
 
     <!-- Comentários -->
     <h5 class="fw-bold text-dark mb-3 mt-2"><i class="bi bi-chat-dots me-2"></i> Comentários</h5>

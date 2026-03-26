@@ -1185,6 +1185,42 @@ def exportar_detalhes_pedido_excel(request, pedido_id):
     return response
 
 
+@login_required
+@staff_member_required
+def exportar_faltas_pedido_excel(request, pedido_id):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from django.http import HttpResponse
+
+    pedido = get_empresa_or_404(Pedido, request, id=pedido_id)
+    itens = ItemPedidoIgnorado.objects.filter(pedido=pedido).order_by('codigo_produto')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f'Faltas Pedido {pedido_id}'
+
+    header_fill = PatternFill('solid', fgColor='6366F1')
+    header_font = Font(bold=True, color='FFFFFF')
+    headers = ['Cód. Produto', 'Descrição', 'Qtd. Tentada', 'Motivo']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+
+    for row_num, item in enumerate(itens, 2):
+        ws.cell(row=row_num, column=1, value=item.codigo_produto)
+        ws.cell(row=row_num, column=2, value=item.descricao_produto or '')
+        ws.cell(row=row_num, column=3, value=item.quantidade_tentada or 0)
+        ws.cell(row=row_num, column=4, value=item.motivo_erro)
+
+    for col in ws.columns:
+        ws.column_dimensions[col[0].column_letter].width = max(len(str(c.value or '')) for c in col) + 4
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="faltas_pedido_{pedido_id}.xlsx"'
+    wb.save(response)
+    return response
 
 
 @staff_member_required
@@ -1899,6 +1935,8 @@ def detalhes_pedido_admin(request, pedido_id):
             pedido=pedido
         ).select_related('autor')
 
+        itens_ignorados = ItemPedidoIgnorado.objects.filter(pedido=pedido).order_by('codigo_produto')
+
         contexto = {
             'titulo': f"Detalhes do Pedido #{pedido.id}",
             'pedido': pedido,
@@ -1907,6 +1945,7 @@ def detalhes_pedido_admin(request, pedido_id):
             'preco_exibido': preco_exibido,
             'is_atrasado': is_atrasado,
             'comentarios': comentarios,
+            'itens_ignorados': itens_ignorados,
         }
 
         return render(request, 'detalhes_pedido.html', contexto)

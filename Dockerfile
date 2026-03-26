@@ -39,4 +39,5 @@ ENV DEBUG="False"
 RUN python manage.py collectstatic --noinput
 
 # 8. COMANDO DE INICIALIZAÇÃO
-CMD ["gunicorn", "app.wsgi:application", "--bind", "0.0.0.0:8000"]
+# migrate roda automaticamente antes do gunicorn em cada deploy
+CMD ["sh", "-c", "python manage.py migrate --no-input && gunicorn app.wsgi:application --bind 0.0.0.0:8000 --timeout 120 --workers 2"]
