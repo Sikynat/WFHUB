@@ -1243,16 +1243,15 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
     worksheet.title = f"Pedido #{pedido.id}"
 
     # Define as colunas dinamicamente com base no estado do cliente
-    # MUDANÇA 1: Inclusão de 'Grupo' e 'Marca' nos cabeçalhos
     if uf_cliente == 'SP':
-        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        columns = ['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'Valor Unitário (SP)', 'QUANTIDADE', 'SUBTOTAL']
         valor_key = 'valor_unitario_sp'
     elif uf_cliente == 'ES':
-        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        columns = ['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'Valor Unitário (ES)', 'QUANTIDADE', 'SUBTOTAL']
         valor_key = 'valor_unitario_es'
     else:
         # Padrão caso o estado não seja SP ou ES
-        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        columns = ['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'Valor Unitário', 'QUANTIDADE', 'SUBTOTAL']
         valor_key = 'valor_unitario_sp'
 
     row_num = 1
@@ -1266,29 +1265,22 @@ def exportar_detalhes_pedido_admin_excel(request, pedido_id):
         row_num += 1
 
         valor_unitario = getattr(item, valor_key)
-        
+
         if valor_unitario is None:
             valor_unitario = 0
 
         subtotal = valor_unitario * item.quantidade
         total_geral += subtotal
 
-        # MUDANÇA 2: Preenchimento das células com os novos índices
         worksheet.cell(row=row_num, column=1, value=item.produto.product_code)
         worksheet.cell(row=row_num, column=2, value=item.produto.product_description)
-        
-        # Novas Colunas
-        worksheet.cell(row=row_num, column=3, value=item.produto.product_group) # Grupo
-        worksheet.cell(row=row_num, column=4, value=item.produto.product_brand) # Marca
-        
-        # Colunas deslocadas (+2 posições)
-        worksheet.cell(row=row_num, column=5, value=item.quantidade)
-        worksheet.cell(row=row_num, column=6, value=valor_unitario)
+        worksheet.cell(row=row_num, column=3, value=item.produto.product_group)
+        worksheet.cell(row=row_num, column=4, value=item.produto.product_brand)
+        worksheet.cell(row=row_num, column=5, value=valor_unitario)
+        worksheet.cell(row=row_num, column=6, value=item.quantidade)
         worksheet.cell(row=row_num, column=7, value=subtotal)
 
     row_num += 1
-    
-    # MUDANÇA 3: Ajuste da posição do Total Geral (agora nas colunas 6 e 7)
     worksheet.cell(row=row_num, column=6, value="Total Geral:")
     worksheet.cell(row=row_num, column=7, value=total_geral)
 
@@ -2625,16 +2617,15 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
     uf_cliente = pedido.cliente.client_state.uf_name
 
     # Define as colunas e a chave de valor dinamicamente
-    # MUDANÇA 1: Adicionei 'Grupo' e 'Marca' nas listas de colunas abaixo
     if uf_cliente == 'SP':
-        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (SP)', 'Subtotal']
+        columns = ['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'Valor Unitário (SP)', 'QUANTIDADE', 'SUBTOTAL']
         valor_key = 'valor_unitario_sp'
     elif uf_cliente == 'ES':
-        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário (ES)', 'Subtotal']
+        columns = ['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'Valor Unitário (ES)', 'QUANTIDADE', 'SUBTOTAL']
         valor_key = 'valor_unitario_es'
     else:
         # Padrão caso o estado não seja SP ou ES
-        columns = ['Código', 'Descrição', 'Grupo', 'Marca', 'Quantidade', 'Valor Unitário', 'Subtotal']
+        columns = ['CÓDIGO', 'DESCRIÇÃO', 'GRUPO', 'MARCA', 'Valor Unitário', 'QUANTIDADE', 'SUBTOTAL']
         valor_key = 'valor_unitario_sp'
 
     # Criação do DataFrame com os dados dos itens
@@ -2646,31 +2637,24 @@ def exportar_detalhes_pedido_publico_excel(request, pedido_id):
         valor_unitario = getattr(item, valor_key)
         if valor_unitario is None:
             valor_unitario = 0
-            
+
         subtotal = float(item.get_total())
 
-        # Adiciona os dados à lista
-        # MUDANÇA 2: Adicionei o mapeamento de Group e Brand
         data.append({
-            'Código': item.produto.product_code,
-            'Descrição': item.produto.product_description,
-            'Grupo': item.produto.product_group,  # Novo campo
-            'Marca': item.produto.product_brand,  # Novo campo
-            'Quantidade': item.quantidade,
-            'Valor Unitário': float(valor_unitario),
-            'Subtotal': subtotal
+            'CÓDIGO': item.produto.product_code,
+            'DESCRIÇÃO': item.produto.product_description,
+            'GRUPO': item.produto.product_group,
+            'MARCA': item.produto.product_brand,
+            columns[4]: float(valor_unitario),
+            'QUANTIDADE': item.quantidade,
+            'SUBTOTAL': subtotal
         })
-        
+
         total_geral += subtotal
 
     df = pd.DataFrame(data)
+    df = df[columns]  # Garante a ordem das colunas
 
-    # Renomeia a coluna 'Valor Unitário' para o nome correto (SP ou ES)
-    df = df.rename(columns={'Valor Unitário': columns[5]}) # Ajustei o índice de 3 para 5, pois inserimos 2 colunas novas
-    df = df[columns] # Reordena as colunas
-
-    # MUDANÇA 3: Ajuste na linha de totais
-    # A tabela agora tem 7 colunas. Precisamos de 5 vazias, 1 rótulo e 1 valor.
     df.loc[len(df)] = ['', '', '', '', '', 'Total Geral:', total_geral]
 
     # Criação da resposta HTTP
