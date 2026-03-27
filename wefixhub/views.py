@@ -791,9 +791,8 @@ def salvar_pedido(request):
             endereco_selecionado = Endereco.objects.get(id=endereco_id, cliente=cliente)
             data_envio = datetime.datetime.strptime(data_envio_str, '%Y-%m-%d').date()
             
-            # Puxa o carrinho do cliente (ajuste conforme o nome da sua variável de sessão ou model)
-            # Supondo que você use uma lógica de itens no banco ou sessão:
-            itens_carrinho = Carrinho.objects.filter(cliente=cliente) # Exemplo
+            carrinho_obj = Carrinho.objects.filter(cliente=cliente).first()
+            itens_carrinho = carrinho_obj.itens.select_related('produto').all() if carrinho_obj else []
 
             with transaction.atomic():
                 # 1. Cria o Pedido primeiro
@@ -822,7 +821,8 @@ def salvar_pedido(request):
                 novo_pedido.save() 
 
                 # 4. Limpa o carrinho após salvar
-                itens_carrinho.delete()
+                if carrinho_obj:
+                    carrinho_obj.itens.all().delete()
 
             messages.success(request, 'Pedido realizado com sucesso!')
             return redirect('pedido_concluido') # Ou para a tela de checkout final
@@ -1043,7 +1043,7 @@ def dashboard_admin(request):
     # =========================================================
     # 4. OPORTUNIDADES DE RETORNO (WISHLIST) (CACHE: 15 MINUTOS)
     # =========================================================
-    oportunidades_wishlist_cache = cache.get('dashboard_wishlist')
+    oportunidades_wishlist_cache = cache.get(f'dashboard_wishlist_{empresa_key}')
     
     # Usamos "is None" porque a lista de cache pode estar propositalmente vazia []
     if oportunidades_wishlist_cache is None:
@@ -1084,7 +1084,7 @@ def dashboard_admin(request):
         
         # Converte o dicionário em lista para facilitar a renderização e o cache
         oportunidades_wishlist_cache = list(oportunidades_wishlist.values())
-        cache.set('dashboard_wishlist', oportunidades_wishlist_cache, 900)
+        cache.set(f'dashboard_wishlist_{empresa_key}', oportunidades_wishlist_cache, 900)
 
     # --- CONTEXTO ---
     contexto = {
@@ -1573,7 +1573,6 @@ def editar_endereco(request, endereco_id):
 
 
 # A página para exibir o formulário de upload
-@staff_member_required
 @staff_member_required
 def pagina_upload(request):
     return render(request, 'upload_planilha.html')
@@ -2163,8 +2162,8 @@ def processar_pedido_manual(request):
                 messages.error(request, 'Por favor, selecione um endereço válido.')
                 return redirect('gerar_pedido_manual')
             try:
-                endereco_selecionado = get_object_or_404(Endereco, id=endereco_id)
-            except Endereco.DoesNotExist:
+                endereco_selecionado = get_empresa_or_404(Endereco, request, id=endereco_id, cliente=cliente_selecionado)
+            except Exception:
                 messages.error(request, 'Endereço inválido.')
                 return redirect('gerar_pedido_manual')
 
@@ -2597,17 +2596,9 @@ def continuar_pedido(request, pedido_id):
     request.session['pedido_id_rascunho'] = pedido.id
 
     messages.info(request, f'Você está continuando a edição do Pedido #{pedido.id}.')
-    
-    # --- DEBUG COM PRINT() ---
-    url_nome = 'checkout_rascunho'
-    url_kwargs = {'pedido_id_rascunho': pedido.id}
-    print("================ DEBUG URL ================")
-    print(f"Tentando redirecionar para a URL com nome: '{url_nome}'")
-    print(f"Com os argumentos de palavra-chave: {url_kwargs}")
-    print("-------------------------------------------")
-    
+
     # 3. Redireciona para o checkout usando a URL específica com o ID
-    return redirect(url_nome, **url_kwargs)
+    return redirect('checkout_rascunho', pedido_id_rascunho=pedido.id)
 
 # ... (restante do código)
 
@@ -2888,6 +2879,7 @@ def enviar_whatsapp(request, pedido_id):
 
 
 
+@staff_member_required
 def pedidos_atrasados_view(request):
     # Pega a data de hoje para comparação
     hoje = date.today()
