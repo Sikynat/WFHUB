@@ -134,21 +134,25 @@
                 {% csrf_token %}
                 
                 <div class="dropzone-area" id="dropzone">
-                    <input type="file" name="planilha_vendas" class="file-input-hidden" id="fileInput" required accept=".xlsx">
+                    <input type="file" name="planilha_vendas" class="file-input-hidden" id="fileInput" required accept=".xlsx,.xls,.pdf">
                     <i class="fas fa-cloud-upload-alt upload-icon"></i>
                     <h5 class="fw-bold mb-1">Clique ou arraste o arquivo</h5>
-                    <p class="text-muted small mb-0" id="fileName">Apenas arquivos Excel (.xlsx)</p>
+                    <p class="text-muted small mb-0" id="fileName">PDF do ERP ou Excel (.xlsx)</p>
                 </div>
 
                 <div class="layout-info">
-                    <h6><i class="fas fa-info-circle me-1"></i> Layout esperado das colunas</h6>
-                    <div class="d-flex flex-wrap mt-2">
-                        <span class="column-badge">DATA</span>
-                        <span class="column-badge">CODIGO</span>
-                        <span class="column-badge">CLIENTE</span>
-                        <span class="column-badge">NOTA</span>
-                        <span class="column-badge">VALOR</span>
+                    <h6><i class="fas fa-info-circle me-1"></i> Formatos aceitos</h6>
+                    <div class="d-flex flex-wrap mt-2 gap-2">
+                        <span class="column-badge" style="background:#fff5f5;border-color:#fc8181;color:#c53030;">
+                            <i class="fas fa-file-pdf me-1"></i> PDF do ERP
+                        </span>
+                        <span class="column-badge" style="background:#f0fff4;border-color:#68d391;color:#276749;">
+                            <i class="fas fa-file-excel me-1"></i> Excel (.xlsx)
+                        </span>
                     </div>
+                    <p class="text-muted small mt-2 mb-0">
+                        O PDF é processado automaticamente — não é necessário converter antes.
+                    </p>
                 </div>
 
                 <button type="submit" class="btn btn-process shadow-sm">

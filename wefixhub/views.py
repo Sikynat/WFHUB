@@ -452,8 +452,12 @@ def atualizar_carrinho(request):
                     # Procura pelos inputs de quantidade que nomeamos no HTML
                     if key.startswith('quantidade_'):
                         produto_id = key.split('_')[1]
-                        nova_qtd = int(value)
-                        
+                        try:
+                            nova_qtd = int(value)
+                        except (ValueError, TypeError):
+                            messages.warning(request, f'Quantidade inválida para o produto {produto_id}, ignorado.')
+                            continue
+
                         if nova_qtd > 0:
                             ItemCarrinho.objects.filter(
                                 carrinho=carrinho_obj, 
@@ -535,6 +539,15 @@ def checkout(request, pedido_id_rascunho=None):
         frete_option = request.POST.get('frete_option')
         nota_fiscal = request.POST.get('nota_fiscal')
         observacao = request.POST.get('observacao')
+
+        _frete_validos = [c[0] for c in Pedido.FRETE_CHOICES]
+        _nota_validos = [c[0] for c in Pedido.NOTA_FISCAL_CHOICES]
+        if frete_option not in _frete_validos:
+            messages.error(request, 'Opção de frete inválida.')
+            return redirect('checkout')
+        if nota_fiscal not in _nota_validos:
+            messages.error(request, 'Opção de nota fiscal inválida.')
+            return redirect('checkout')
 
         id_do_pedido = pedido_id_rascunho or request.POST.get('pedido_id_rascunho')
 
@@ -705,10 +718,12 @@ def checkout(request, pedido_id_rascunho=None):
         for product_id, quantidade in carrinho_da_sessao.items():
             product = produtos_dict.get(str(product_id))
             if not product:
+                messages.warning(request, f'Um produto (ID {product_id}) foi removido do catálogo e não pôde ser incluído no pedido.')
                 continue
-            if cliente_logado.client_state.uf_name == 'SP':
+            uf_cliente = cliente_logado.client_state.uf_name if cliente_logado.client_state else 'SP'
+            if uf_cliente == 'SP':
                 valor_unitario = product.product_value_sp
-            elif cliente_logado.client_state.uf_name == 'ES':
+            elif uf_cliente == 'ES':
                 valor_unitario = product.product_value_es
             else:
                 valor_unitario = product.product_value_sp
@@ -722,9 +737,10 @@ def checkout(request, pedido_id_rascunho=None):
                 'valor_total': valor_total_item,
             })
 
-    if cliente_logado and cliente_logado.client_state.uf_name == 'SP':
+    _uf_display = cliente_logado.client_state.uf_name if (cliente_logado and cliente_logado.client_state) else None
+    if _uf_display == 'SP':
         preco_exibido = 'sp'
-    elif cliente_logado and cliente_logado.client_state.uf_name == 'ES':
+    elif _uf_display == 'ES':
         preco_exibido = 'es'
     else:
         preco_exibido = 'sp'
@@ -2092,6 +2108,9 @@ def gerar_pedido_manual(request):
             products = products.filter(product_brand__icontains=marca)
         
         # Lógica de Preço baseada no Estado
+        if not cliente_selecionado.client_state:
+            messages.error(request, f'Cliente {cliente_selecionado.client_name} não possui estado (SP/ES) cadastrado.')
+            return redirect('gerar_pedido_manual')
         estado_cliente = cliente_selecionado.client_state.uf_name.upper()
         preco_exibido = estado_cliente.lower()
 
@@ -2177,6 +2196,8 @@ def processar_pedido_manual(request):
                 produtos_dict = Product.objects.in_bulk(product_ids, field_name='product_id')
                 
                 itens_para_criar = []
+                if not cliente_selecionado.client_state:
+                    raise ValueError(f'Cliente {cliente_selecionado.client_name} não possui estado (SP/ES) cadastrado.')
                 estado_cliente = cliente_selecionado.client_state.uf_name
 
                 for product_id_str, quantidade in cart_data.items():
@@ -2215,7 +2236,10 @@ def processar_pedido_manual(request):
                     total_es=Sum(F('quantidade') * F('valor_unitario_es'))
                 )
                 
-                valor_final_do_pedido = total_pedido['total_sp'] if total_pedido['total_sp'] is not None else total_pedido['total_es']
+                if estado_cliente == 'SP':
+                    valor_final_do_pedido = total_pedido['total_sp']
+                else:
+                    valor_final_do_pedido = total_pedido['total_es']
                 
                 pedido_criado.valor_total = valor_final_do_pedido if valor_final_do_pedido is not None else Decimal('0.00')
                 pedido_criado.save()
@@ -2287,26 +2311,30 @@ def upload_pedido(request):
                     return redirect('upload_pedido')
                     
                 # 1. Leitura do arquivo (Excel ou CSV)
-                if planilha_pedido.name.endswith('.csv'):
-                    df_list = [pd.read_csv(planilha_pedido)]
-                else:
-                    # Detecta linha de cabeçalho dinamicamente (planilhas com linha de data no topo)
-                    header_row = 0
-                    _aliases_cod = ['CODIGO', 'COD', 'CÓDIGO', 'CÓD']
-                    _aliases_qtd = ['QUANTIDADE', 'QTD', 'QTDE', 'QNT', 'QUANT']
-                    df_scan = pd.read_excel(planilha_pedido, header=None, nrows=15, dtype=str)
-                    for _i, _row in df_scan.iterrows():
-                        _vals_norm = [normalize_text(str(v)).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
-                        _vals_raw  = [str(v).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
-                        _all_vals  = _vals_norm + _vals_raw
-                        _tem_cod = any(alias in v for alias in _aliases_cod for v in _all_vals)
-                        _tem_qtd = any(alias in v for alias in _aliases_qtd for v in _all_vals)
-                        if _tem_cod and _tem_qtd:
-                            header_row = _i
-                            break
-                    planilha_pedido.seek(0)
-                    xls_data = pd.read_excel(planilha_pedido, sheet_name=None, header=header_row)
-                    df_list = list(xls_data.values())
+                try:
+                    if planilha_pedido.name.endswith('.csv'):
+                        df_list = [pd.read_csv(planilha_pedido)]
+                    else:
+                        # Detecta linha de cabeçalho dinamicamente (planilhas com linha de data no topo)
+                        header_row = 0
+                        _aliases_cod = ['CODIGO', 'COD', 'CÓDIGO', 'CÓD']
+                        _aliases_qtd = ['QUANTIDADE', 'QTD', 'QTDE', 'QNT', 'QUANT']
+                        df_scan = pd.read_excel(planilha_pedido, header=None, nrows=15, dtype=str)
+                        for _i, _row in df_scan.iterrows():
+                            _vals_norm = [normalize_text(str(v)).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
+                            _vals_raw  = [str(v).upper().strip() for v in _row if pd.notnull(v) and str(v).strip()]
+                            _all_vals  = _vals_norm + _vals_raw
+                            _tem_cod = any(alias in v for alias in _aliases_cod for v in _all_vals)
+                            _tem_qtd = any(alias in v for alias in _aliases_qtd for v in _all_vals)
+                            if _tem_cod and _tem_qtd:
+                                header_row = _i
+                                break
+                        planilha_pedido.seek(0)
+                        xls_data = pd.read_excel(planilha_pedido, sheet_name=None, header=header_row)
+                        df_list = list(xls_data.values())
+                except Exception:
+                    messages.error(request, 'Arquivo inválido ou corrompido. Envie um arquivo Excel (.xlsx) ou CSV válido.')
+                    return redirect('upload_pedido')
 
                 if not df_list:
                      messages.error(request, 'A planilha de upload está vazia.')
@@ -2340,11 +2368,17 @@ def upload_pedido(request):
                 # (evita iterar 16k linhas quando só ~50 têm qty > 0)
                 col_qtd_raw = col_mapping['quantidade']
                 df = df[pd.to_numeric(df[col_qtd_raw], errors='coerce').fillna(0) > 0]
-                # Deduplica por código — mantém a linha com maior quantidade se aparecer em múltiplas abas
+
+                if df.empty:
+                    messages.error(request, 'Nenhuma linha com quantidade positiva encontrada na planilha.')
+                    return redirect('upload_pedido')
+
+                # Agrupa por código somando quantidades (mesmo produto em múltiplas linhas/abas)
                 col_cod_raw = col_mapping['codigo']
                 df = df.dropna(subset=[col_cod_raw])
                 df[col_cod_raw] = df[col_cod_raw].astype(str).str.strip()
-                df = df.sort_values(col_qtd_raw, ascending=False).drop_duplicates(subset=[col_cod_raw])
+                _other_cols = {c: 'first' for c in df.columns if c not in [col_cod_raw, col_qtd_raw]}
+                df = df.groupby(col_cod_raw, as_index=False).agg({col_qtd_raw: 'sum', **_other_cols})
                 
                 with transaction.atomic():
                     # 3. Criação do Pedido Rascunho
@@ -2377,6 +2411,8 @@ def upload_pedido(request):
                     col_qtd  = col_mapping['quantidade']
                     col_desc = col_mapping.get('descricao')
                     termos_ignorar = {'TOTAL', 'SUBTOTAL', 'GERAL', 'VALOR TOTAL'}
+                    if not cliente_para_validacao.client_state:
+                        raise ValueError(f'Cliente {cliente_para_validacao.client_name} não possui estado (SP/ES) cadastrado.')
                     regiao      = cliente_para_validacao.client_state.uf_name
                     valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
 
@@ -2439,7 +2475,7 @@ def upload_pedido(request):
                         
                         if valor_unitario is None or valor_unitario <= 0:
                             msg = "Produto indisponível no estoque/tabela"
-                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index + 2}: {msg}.")
+                            erros_texto.append(f"Produto '{codigo_produto}' na linha {index}: {msg}.")
                             itens_ignorados_db.append(ItemPedidoIgnorado(
                                 pedido=novo_pedido,
                                 cliente=cliente_para_validacao,
@@ -3319,12 +3355,117 @@ from django.shortcuts import redirect, render
 import pandas as pd
 from decimal import Decimal
 
+def _extrair_df_do_pdf_vendas(file_obj):
+    """
+    Extrai um DataFrame de vendas a partir de um PDF do ERP.
+    Retorna DataFrame com colunas: Código_Cliente, Emissão, Pedido,
+    Produto_Código, Produto_Descrição, Quantidade, Unitário, Total.
+    """
+    import fitz
+
+    conteudo_bytes = file_obj.read()
+    doc = fitz.open(stream=conteudo_bytes, filetype="pdf")
+    texto_completo = "".join(page.get_text() for page in doc)
+    doc.close()
+
+    if not texto_completo.strip():
+        return pd.DataFrame()
+
+    dados_combinados = []
+
+    padrao_cliente = re.compile(r"(Cliente:\s*(\d+)\s+-\s*.*?)", re.IGNORECASE | re.DOTALL)
+    padrao_linhas = re.compile(
+        r"(R\$\s*[\d\.\,]+(?:[0-9]*))\s*(R\$\s*[\d\.\,]+)\s*"
+        r"(.+?)\s*([A-Z0-9]+)\s*"
+        r"([\d\.\,]+)\s*(\d{2}/\d{2}/\d{4})\s*(\d+)",
+        re.IGNORECASE | re.DOTALL
+    )
+    padrao_bloco_tabela = re.compile(
+        r"The following table:[\s\n]*\"Emissão\s*\n\s*\",\"Pedido\s*\n\s*\",\"Produto\s*\n\s*\",,?"
+        r"(?:\"Quantidade\s*\n\s*\",\"Unitário\s*\n\s*\",\"Total\s*\n\s*\")?[\s\n]*"
+        r"((?:\"[^\"]*\"(?:,\s*\"[^\"]*\")*,\s*\"[^\"]*\"\s*\n)+)",
+        re.IGNORECASE
+    )
+
+    secoes = re.split(padrao_cliente, texto_completo)
+    secoes = [s.strip() for s in secoes if s.strip()]
+    codigo_cliente_atual = "N/A"
+
+    for secao in secoes:
+        match_cliente = padrao_cliente.search(secao)
+        if match_cliente:
+            codigo_cliente_atual = match_cliente.group(2)
+            continue
+
+        for linha in padrao_linhas.findall(secao):
+            dados_combinados.append([
+                codigo_cliente_atual,
+                linha[5],                              # Data
+                linha[6],                              # Pedido
+                linha[3],                              # Código Produto
+                linha[2].strip().replace('\n', ' '),   # Descrição
+                linha[4],                              # Quantidade
+                linha[0],                              # Unitário
+                linha[1],                              # Total
+            ])
+
+        for bloco in padrao_bloco_tabela.findall(secao):
+            for linha in bloco.strip().split('\n'):
+                partes = [p.strip().replace('"', '').replace('\n', '') for p in linha.split(',')]
+                partes = [p for p in partes if p and not p.isspace()]
+                if len(partes) >= 7:
+                    dados_combinados.append([codigo_cliente_atual] + partes[:7])
+                elif len(partes) >= 6:
+                    dados_combinados.append([codigo_cliente_atual, partes[0], partes[1], partes[2], "", partes[3], partes[4], partes[5]])
+
+    colunas = ["Código_Cliente", "Emissão", "Pedido", "Produto_Código", "Produto_Descrição", "Quantidade", "Unitário", "Total"]
+    if not dados_combinados:
+        return pd.DataFrame(columns=colunas)
+
+    df = pd.DataFrame(dados_combinados, columns=colunas)
+
+    for col in ["Quantidade", "Unitário", "Total"]:
+        df[col] = (df[col].astype(str)
+                   .str.replace(r'R\$\s*', '', regex=True)
+                   .str.replace(r'\.', '', regex=True)
+                   .str.replace(r',', '.', regex=False)
+                   .str.strip())
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    for col in ["Emissão", "Pedido", "Produto_Código", "Produto_Descrição"]:
+        df[col] = df[col].astype(str).str.strip().str.replace('\n', ' ', regex=False)
+
+    df = df.dropna(subset=['Total']).drop_duplicates().reset_index(drop=True)
+    return df
+
+
 @staff_member_required
 def upload_vendas_reais(request):
     if request.method == 'POST' and request.FILES.get('planilha_vendas'):
         file = request.FILES['planilha_vendas']
         try:
-            df = pd.read_excel(file)
+            nome = file.name.lower()
+            if nome.endswith('.pdf'):
+                df = _extrair_df_do_pdf_vendas(file)
+                if df.empty:
+                    messages.error(request, 'Não foi possível extrair dados do PDF. Verifique se o arquivo é um relatório de vendas válido.')
+                    return redirect('dashboard_admin')
+                # Renomeia colunas para bater com o formato esperado
+                df = df.rename(columns={
+                    'Código_Cliente': 'Código_Cliente',
+                    'Emissão': 'Emissão',
+                    'Pedido': 'Pedido',
+                    'Produto_Código': 'Produto_Código',
+                    'Produto_Descrição': 'Produto_Descrição',
+                    'Quantidade': 'Quantidade',
+                    'Unitário': 'Unitário',
+                    'Total': 'Total',
+                })
+            elif nome.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file)
+            else:
+                messages.error(request, 'Formato inválido. Envie um arquivo PDF ou Excel (.xlsx).')
+                return redirect('dashboard_admin')
             df = df.dropna(how='all')
 
             # 1. OTIMIZAÇÃO: Conversão de data
@@ -3950,8 +4091,11 @@ def cancelar_aviso(request, item_id):
 @require_POST
 def adicionar_ao_carrinho_bd(request):
     product_id = request.POST.get('product_id')
-    quantidade = int(request.POST.get('quantidade', 1))
-    
+    try:
+        quantidade = int(request.POST.get('quantidade', 1))
+    except (ValueError, TypeError):
+        return JsonResponse({'erro': 'Quantidade inválida.'}, status=400)
+
     try:
         cliente_logado = request.user.wfclient
     except WfClient.DoesNotExist:

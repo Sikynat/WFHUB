@@ -30,4 +30,5 @@ django-storages
 boto3
 cryptography
 pdfplumber
+PyMuPDF
 stripe
