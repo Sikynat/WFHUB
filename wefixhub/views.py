@@ -2078,6 +2078,11 @@ def gerar_pedido_manual(request):
         # Filtros de Produtos
         hoje = timezone.localdate()
         products = por_empresa(Product.objects.filter(date_product=hoje), request).order_by('product_code')
+        if not products.exists():
+            from django.db.models import Max
+            ultima_data = Product.objects.aggregate(d=Max('date_product'))['d']
+            if ultima_data:
+                products = por_empresa(Product.objects.filter(date_product=ultima_data), request).order_by('product_code')
 
         # Captura dos filtros do GET
         codigo = request.GET.get('codigo')
