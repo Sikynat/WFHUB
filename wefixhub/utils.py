@@ -146,6 +146,7 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado, empresa=None
 
     # Wishlist com isolamento por empresa e filtro correto
     itens_pendentes = ItemPedidoIgnorado.objects.filter(
+        notificado=False,
         descartado_pelo_cliente=False,
         motivo_erro__icontains="estoque"
     ).select_related('cliente', 'cliente__client_state')
