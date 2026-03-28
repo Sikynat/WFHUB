@@ -1052,6 +1052,7 @@ def dashboard_admin(request):
         itens_pendentes = por_empresa(
             ItemPedidoIgnorado.objects.filter(
                 notificado=False,
+                descartado_pelo_cliente=False,
                 motivo_erro__icontains="estoque",
                 data_tentativa__gte=data_limite
             ), request, campo='cliente__empresa'
@@ -4234,7 +4235,8 @@ def notificar_wishlist_whatsapp(request, cliente_id):
     estado = cliente.client_state.uf_name
     
     itens_pendentes = ItemPedidoIgnorado.objects.filter(
-        cliente=cliente, notificado=False, motivo_erro__icontains="estoque"
+        cliente=cliente, notificado=False, descartado_pelo_cliente=False,
+        motivo_erro__icontains="estoque"
     )
     
     produtos_recuperados = []
