@@ -477,9 +477,13 @@ PERIODOS_EVOLUCAO = {
 def _intervalo_periodo(periodo, ano=None):
     """Retorna (data_inicio, data_fim) para o período selecionado."""
     hoje = date.today()
-    if periodo == 'ytd' or ano is not None:
-        _ano = ano if ano is not None else hoje.year
-        return date(_ano, 1, 1), date(_ano, 12, 31)
+    if ano is not None:
+        # Ano específico: Jan 1 → Dez 31 (ou hoje se for o ano atual)
+        fim = hoje if ano == hoje.year else date(ano, 12, 31)
+        return date(ano, 1, 1), fim
+    if periodo == 'ytd':
+        # Início do ano até hoje — comparação com mesmo período do ano anterior
+        return date(hoje.year, 1, 1), hoje
     if periodo == '3m':
         return (hoje.replace(day=1) - timedelta(days=2 * 28)).replace(day=1), hoje
     if periodo == '6m':
