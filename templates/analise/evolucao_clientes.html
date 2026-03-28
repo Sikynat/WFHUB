@@ -218,7 +218,7 @@
                     <tr data-nome="{{ c.nome|lower }}"
                         data-cod="{{ c.codigo }}"
                         data-tendencia="{% if comp_selecionado == 'externo' %}{{ c.tendencia }}{% else %}{{ c.tendencia_int }}{% endif %}"
-                        data-novo="{% if c.total_ant == 0 %}true{% else %}false{% endif %}">
+                        data-novo="{% if comp_selecionado == 'externo' and not c.tem_historico %}true{% else %}false{% endif %}">
                         <td class="col-cod-body">{{ c.codigo }}</td>
                         <td class="col-nome-body" title="{{ c.nome }}">{{ c.nome }}</td>
                         {% for m in meses_com_dados %}
