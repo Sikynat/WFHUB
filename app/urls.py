@@ -80,6 +80,7 @@ urlpatterns = [
     path('exportar_detalhes_pedido_cliente_excel/<int:pedido_id>/', views.exportar_detalhes_pedido_cliente_excel, name='exportar_pedido_cliente_excel'),
     path('exportar_publico/excel/<int:pedido_id>/', views.exportar_detalhes_pedido_publico_excel, name='exportar_detalhes_pedido_publico_excel'),
     path('pedido/upload-planilha/', views.upload_pedido_cliente, name='upload_pedido_cliente'),
+    path('pedido/texto/', views.pedido_por_texto, name='pedido_por_texto'),
     path('exportar-recuperados/<int:cliente_id>/', views.exportar_itens_recuperados_excel, name='exportar_itens_recuperados_excel'),
     # Rotas do administrador
     path('dashboard/analise/', views.analise_dados_dashboard, name='analise_dados_dashboard'),

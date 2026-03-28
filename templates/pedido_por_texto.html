@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Pedido por Texto{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8 col-md-10">
+
+      <div class="card shadow-lg p-4">
+        <div class="card-body">
+
+          <h1 class="text-center mb-1 fw-bold">Pedido por Texto</h1>
+          <p class="text-center text-muted mb-4">
+            Olá, <strong>{{ cliente.client_name }}</strong>. Cole a lista de produtos abaixo — o sistema interpreta automaticamente.
+          </p>
+
+          <!-- Exemplo de formato -->
+          <div class="alert alert-light border mb-4" style="font-size:0.85rem;">
+            <strong>Formatos aceitos por linha:</strong>
+            <pre class="mb-0 mt-1" style="font-size:0.82rem; color:#555;">K6020 —- 10
+C2011  PLACA CARGA SAMSUNG A03  - 7
+M6049 —— 6</pre>
+            <small class="text-muted">Código no início, quantidade no final após traço(s). A descrição no meio é ignorada.</small>
+          </div>
+
+          <form method="post">
+            {% csrf_token %}
+
+            <!-- Textarea principal -->
+            <div class="mb-4">
+              <label class="form-label fw-bold">Lista de Produtos</label>
+              <textarea name="texto_pedido" rows="12" class="form-control font-monospace"
+                placeholder="K6020 —- 10&#10;K1070 —- 2&#10;C2011 PLACA CARGA SAMSUNG A03 - 7"
+                required></textarea>
+            </div>
+
+            <hr class="my-4">
+
+            <!-- Campos de entrega -->
+            <div class="row g-3 mb-4">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Data de Expedição</label>
+                <input type="date" name="data_expedicao" class="form-control" required>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Nota Fiscal</label>
+                <select name="nota_fiscal" class="form-select" required>
+                  {% for val, label in nota_choices %}
+                    <option value="{{ val }}" {% if val == nota_preferencia %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Frete</label>
+                <select name="frete_option" class="form-select" required id="freteSelect">
+                  {% for val, label in frete_choices %}
+                    <option value="{{ val }}" {% if val == frete_preferencia %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6" id="enderecoField">
+                <label class="form-label fw-bold">Endereço de Entrega</label>
+                <select name="endereco_selecionado" class="form-select">
+                  <option value="">Selecione...</option>
+                  {% for end in enderecos %}
+                    <option value="{{ end.id }}">{{ end.logradouro }}, {{ end.numero }} — {{ end.cidade }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-bold">Observações</label>
+                <textarea name="observacao" class="form-control" rows="2" placeholder="Observações opcionais..."></textarea>
+              </div>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-check2-circle me-2"></i>Gerar Pedido
+              </button>
+              <a href="{% url 'home' %}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+          </form>
+
+        </div>
+      </div>
+
+      <!-- Link para upload por planilha -->
+      <p class="text-center mt-3 text-muted small">
+        Prefere enviar por arquivo?
+        <a href="{% url 'upload_pedido_cliente' %}">Fazer pedido por planilha</a>
+      </p>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // Oculta campo de endereço para fretes sem entrega
+  const freteSelect = document.getElementById('freteSelect');
+  const enderecoField = document.getElementById('enderecoField');
+  const fretesSemEndereco = ['ONIBUS', 'RETIRADA'];
+
+  function toggleEndereco() {
+    enderecoField.style.display = fretesSemEndereco.includes(freteSelect.value) ? 'none' : '';
+  }
+
+  freteSelect.addEventListener('change', toggleEndereco);
+  toggleEndereco();
+</script>
+{% endblock %}

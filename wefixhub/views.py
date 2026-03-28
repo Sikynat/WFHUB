@@ -3307,6 +3307,182 @@ def exportar_detalhes_pedido_whatsapp_excel(request, pedido_id):
     response['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
+def _parse_texto_pedido(texto):
+    """
+    Interpreta um texto livre de pedido enviado via WhatsApp/mensagem.
+    Suporta formatos:
+        K6020 —-10
+        K1071 ——3
+        C2011    PLACA CARGA SAMSUNG A03    -7
+    Retorna lista de dicts: [{'codigo': 'K6020', 'quantidade': 10}, ...]
+    """
+    itens = []
+    vistos = {}  # deduplica somando quantidades
+
+    for linha in texto.splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        # Código: 1-2 letras maiúsculas + dígitos no início da linha
+        # Quantidade: último número após traços (-, —, combinações)
+        match = re.match(r'^([A-Z]{1,2}\d+).*[-—]+\s*(\d+)\s*$', linha, re.IGNORECASE)
+        if match:
+            codigo = match.group(1).upper()
+            quantidade = int(match.group(2))
+            if quantidade > 0:
+                vistos[codigo] = vistos.get(codigo, 0) + quantidade
+
+    for codigo, quantidade in vistos.items():
+        itens.append({'codigo': codigo, 'quantidade': quantidade})
+
+    return itens
+
+
+@login_required
+def pedido_por_texto(request):
+    """
+    Permite que clientes colem um pedido em texto livre (formato WhatsApp)
+    e o sistema interpreta, valida e cria o rascunho automaticamente.
+    """
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        messages.error(request, 'Usuário sem cliente associado.')
+        return redirect('home')
+
+    enderecos = Endereco.objects.filter(cliente=cliente)
+
+    if request.method == 'POST':
+        texto = request.POST.get('texto_pedido', '').strip()
+        endereco_id = request.POST.get('endereco_selecionado')
+        data_envio_str = request.POST.get('data_expedicao')
+        frete_option = request.POST.get('frete_option')
+        nota_fiscal = request.POST.get('nota_fiscal')
+        observacao = request.POST.get('observacao', '')
+
+        # Validações básicas
+        _frete_validos = [c[0] for c in Pedido.FRETE_CHOICES]
+        _nota_validos = [c[0] for c in Pedido.NOTA_FISCAL_CHOICES]
+        if frete_option not in _frete_validos or nota_fiscal not in _nota_validos:
+            messages.error(request, 'Opção de frete ou nota fiscal inválida.')
+            return redirect('pedido_por_texto')
+
+        if not texto:
+            messages.error(request, 'Cole o texto do pedido antes de enviar.')
+            return redirect('pedido_por_texto')
+
+        fretes_sem_endereco = ['ONIBUS', 'RETIRADA']
+        endereco_selecionado = None
+        if frete_option not in fretes_sem_endereco:
+            if not endereco_id:
+                messages.error(request, 'Selecione um endereço de entrega.')
+                return redirect('pedido_por_texto')
+            endereco_selecionado = get_object_or_404(Endereco, id=endereco_id, cliente=cliente)
+
+        try:
+            data_envio_obj = datetime.strptime(data_envio_str, '%Y-%m-%d').date() if data_envio_str else None
+        except ValueError:
+            messages.error(request, 'Data de expedição inválida.')
+            return redirect('pedido_por_texto')
+
+        itens_parseados = _parse_texto_pedido(texto)
+        if not itens_parseados:
+            messages.error(request, 'Nenhum item reconhecido no texto. Verifique o formato: CÓDIGO —- QUANTIDADE.')
+            return redirect('pedido_por_texto')
+
+        # Busca produtos em lote
+        if not cliente.client_state:
+            messages.error(request, 'Seu cadastro não possui estado (SP/ES) definido. Contate o suporte.')
+            return redirect('pedido_por_texto')
+        regiao = cliente.client_state.uf_name
+        valor_field = 'product_value_sp' if regiao == 'SP' else 'product_value_es'
+
+        from django.db.models import Max as _Max
+        _base = por_empresa(Product.objects, request)
+        _latest = _base.aggregate(d=_Max('date_product'))['d']
+        produtos_atuais = {p.product_code: p for p in _base.filter(date_product=_latest)}
+
+        erros = []
+        itens_pedido = []
+        itens_ignorados = []
+        total = Decimal('0.00')
+
+        for item in itens_parseados:
+            codigo = item['codigo']
+            quantidade = item['quantidade']
+            produto = produtos_atuais.get(codigo)
+
+            if not produto:
+                erros.append(f"'{codigo}': não encontrado no catálogo.")
+                itens_ignorados.append({'codigo': codigo, 'motivo': 'Não encontrado no catálogo'})
+                continue
+
+            valor_unitario = getattr(produto, valor_field)
+            if not valor_unitario or valor_unitario <= 0:
+                erros.append(f"'{codigo}': indisponível no estoque.")
+                itens_ignorados.append({'codigo': codigo, 'motivo': 'Indisponível no estoque'})
+                continue
+
+            total += valor_unitario * Decimal(quantidade)
+            itens_pedido.append(ItemPedido(
+                produto=produto,
+                quantidade=quantidade,
+                valor_unitario_sp=produto.product_value_sp,
+                valor_unitario_es=produto.product_value_es,
+            ))
+
+        if not itens_pedido:
+            messages.error(request, 'Nenhum item válido encontrado. Erros: ' + ' | '.join(erros))
+            return redirect('pedido_por_texto')
+
+        with transaction.atomic():
+            novo_pedido = Pedido.objects.create(
+                cliente=cliente,
+                empresa=cliente.empresa,
+                endereco=endereco_selecionado,
+                data_envio_solicitada=data_envio_obj,
+                frete_option=frete_option,
+                nota_fiscal=nota_fiscal,
+                observacao=observacao,
+                status='RASCUNHO',
+                criado_por=request.user,
+                valor_total=total,
+            )
+            for item in itens_pedido:
+                item.pedido = novo_pedido
+            ItemPedido.objects.bulk_create(itens_pedido)
+
+            if itens_ignorados:
+                ItemPedidoIgnorado.objects.bulk_create([
+                    ItemPedidoIgnorado(
+                        pedido=novo_pedido,
+                        cliente=cliente,
+                        codigo_produto=i['codigo'],
+                        descricao_produto='',
+                        quantidade_tentada=0,
+                        motivo_erro=i['motivo'],
+                    ) for i in itens_ignorados
+                ])
+
+        if erros:
+            messages.warning(request, f'Pedido criado com {len(itens_pedido)} iten(s). Ignorados: ' + ' | '.join(erros))
+        else:
+            messages.success(request, f'Pedido interpretado com sucesso! {len(itens_pedido)} iten(s) adicionados.')
+
+        return redirect('checkout_rascunho', pedido_id_rascunho=novo_pedido.id)
+
+    contexto = {
+        'titulo': 'Pedido por Texto',
+        'enderecos': enderecos,
+        'cliente': cliente,
+        'frete_choices': Pedido.FRETE_CHOICES,
+        'nota_choices': Pedido.NOTA_FISCAL_CHOICES,
+        'frete_preferencia': cliente.frete_preferencia,
+        'nota_preferencia': cliente.nota_fiscal_preferencia,
+    }
+    return render(request, 'pedido_por_texto.html', contexto)
+
+
 @login_required
 def detalhes_produto(request, product_id):
     product = get_object_or_404(Product, product_id=product_id)
