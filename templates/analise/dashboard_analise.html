@@ -164,29 +164,13 @@
                 </div>
             </div>
 
-            <div class="row mb-4 g-3">
-                <div class="col-lg-8">
-                    <div class="metric-card p-4 h-100">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="metric-card p-4">
                         <h5 class="fw-bold mb-4"><i class="fas fa-chart-line text-primary me-2"></i> Evolução Diária</h5>
-                        <div style="height: 280px;">
+                        <div style="height: 300px;">
                             <canvas id="graficoVendas"></canvas>
                         </div>
-                    </div>
-                </div>
-                <div class="col-lg-4">
-                    <div class="metric-card p-4 h-100">
-                        <h5 class="fw-bold mb-3"><i class="fas fa-map-marker-alt text-danger me-2"></i> SP vs ES</h5>
-                        {% if total_sp > 0 or total_es > 0 %}
-                        <div style="height: 200px; display:flex; align-items:center; justify-content:center;">
-                            <canvas id="graficoEstados"></canvas>
-                        </div>
-                        <div class="d-flex justify-content-center gap-4 mt-2" style="font-size:.8rem;">
-                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4361ee;" class="me-1"></span>SP</span>
-                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#0dcaf0;" class="me-1"></span>ES</span>
-                        </div>
-                        {% else %}
-                        <div class="text-center text-muted py-5" style="font-size:.85rem;">Sem dados de estado no período</div>
-                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -264,8 +248,24 @@
 
         <div class="tab-pane fade" id="pills-logistica" role="tabpanel">
             <div class="row g-4">
-                <div class="col-12">
-                    <div class="metric-card p-4">
+                <div class="col-md-4">
+                    <div class="metric-card p-4 h-100">
+                        <h5 class="fw-bold mb-3"><i class="fas fa-map-marker-alt text-danger me-2"></i> Distribuição SP vs ES</h5>
+                        {% if total_sp > 0 or total_es > 0 %}
+                        <div style="height: 220px; display:flex; align-items:center; justify-content:center;">
+                            <canvas id="graficoEstados"></canvas>
+                        </div>
+                        <div class="d-flex justify-content-center gap-4 mt-3" style="font-size:.85rem;">
+                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4361ee;" class="me-1"></span>SP</span>
+                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#0dcaf0;" class="me-1"></span>ES</span>
+                        </div>
+                        {% else %}
+                        <div class="text-center text-muted py-5" style="font-size:.85rem;">Sem dados de estado no período</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="metric-card p-4 h-100">
                         <h5 class="fw-bold mb-4 text-dark"><i class="fas fa-calendar-week text-info me-2"></i> Concentração Logística Semanal</h5>
                         <div style="height: 350px;">
                             <canvas id="graficoSemana"></canvas>
@@ -464,7 +464,7 @@
     // Gráfico SP vs ES
     {% if total_sp > 0 or total_es > 0 %}
     const ctxEstados = document.getElementById('graficoEstados').getContext('2d');
-    new Chart(ctxEstados, {
+    const chartEstados = new Chart(ctxEstados, {
         type: 'doughnut',
         data: {
             labels: ['SP', 'ES'],
@@ -510,7 +510,12 @@
     });
 
     // Correção de resize para as abas
-    document.getElementById('pills-logistica-tab').addEventListener('shown.bs.tab', () => chartSemana.resize());
+    document.getElementById('pills-logistica-tab').addEventListener('shown.bs.tab', () => {
+        chartSemana.resize();
+        {% if total_sp > 0 or total_es > 0 %}
+        if (typeof chartEstados !== 'undefined') chartEstados.resize();
+        {% endif %}
+    });
     document.getElementById('pills-comercial-tab').addEventListener('shown.bs.tab', () => chartVendas.resize());
 </script>
 {% endblock %}
