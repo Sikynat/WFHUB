@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Pedido por Texto{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8 col-md-10">
+      <div class="card shadow-lg p-4">
+        <div class="card-body">
+
+          <h1 class="text-center mb-5 display-4 fw-bold text-dark">Pedido por Texto</h1>
+
+          <!-- Seleção de cliente (igual ao upload_pedido) -->
+          <h4 class="fw-semibold text-secondary mb-3">
+            <i class="bi bi-person-fill me-2"></i>Selecione o Cliente
+          </h4>
+          <form id="cliente-form" method="get" class="mb-4">
+            <div class="input-group">
+              {{ form_cliente.cliente }}
+              <button type="submit" class="btn btn-primary px-4">Confirmar</button>
+            </div>
+          </form>
+
+          {% if cliente_selecionado %}
+          <div class="alert alert-success bg-success-subtle text-success py-3 mb-4" role="alert">
+            <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+            Cliente selecionado: <strong>{{ cliente_selecionado.client_name }}</strong>
+            (Código: {{ cliente_selecionado.client_code }})
+          </div>
+
+          <hr class="my-4">
+
+          <!-- Exemplo de formato -->
+          <div class="alert alert-light border mb-4" style="font-size:0.85rem;">
+            <strong>Formatos aceitos por linha:</strong>
+            <pre class="mb-0 mt-1" style="font-size:0.82rem;color:#555;">K6020 —- 10
+C2011  PLACA CARGA SAMSUNG A03  - 7
+M6049 —— 6</pre>
+            <small class="text-muted">Código no início, quantidade no final após traço(s). A descrição no meio é ignorada.</small>
+          </div>
+
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="cliente_id" value="{{ cliente_selecionado.client_id }}">
+
+            <!-- Textarea -->
+            <div class="mb-4">
+              <label class="form-label fw-bold">Lista de Produtos</label>
+              <textarea name="texto_pedido" rows="14" class="form-control font-monospace"
+                placeholder="K6020 —- 10&#10;K1070 —- 2&#10;C2011 PLACA CARGA SAMSUNG A03 - 7"
+                required></textarea>
+            </div>
+
+            <hr class="my-4">
+
+            <!-- Campos de entrega -->
+            <div class="row g-3 mb-4">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Data de Expedição</label>
+                <input type="date" name="data_expedicao" class="form-control" required id="dataInput">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Nota Fiscal</label>
+                <select name="nota_fiscal" class="form-select" required>
+                  {% for val, label in nota_choices %}
+                    <option value="{{ val }}"
+                      {% if val == cliente_selecionado.nota_fiscal_preferencia %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Frete</label>
+                <select name="frete_option" class="form-select" required id="freteSelect">
+                  {% for val, label in frete_choices %}
+                    <option value="{{ val }}"
+                      {% if val == cliente_selecionado.frete_preferencia %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6" id="enderecoField">
+                <label class="form-label fw-bold">Endereço de Entrega</label>
+                <select name="endereco_selecionado" class="form-select">
+                  <option value="">Selecione...</option>
+                  {% for end in enderecos %}
+                    <option value="{{ end.id }}">
+                      {{ end.logradouro }}, {{ end.numero }} — {{ end.cidade }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">Observação</label>
+                <textarea name="observacao" class="form-control" rows="2"
+                  placeholder="Observações opcionais...">{{ cliente_selecionado.observacao_preferencia|default:'' }}</textarea>
+              </div>
+            </div>
+
+            <div class="mt-4 text-center d-flex gap-3 justify-content-center">
+              <button type="submit" class="btn btn-success btn-lg px-5">
+                <i class="bi bi-check-circle me-2"></i>Gerar Pedido
+              </button>
+              <a href="{% url 'upload_pedido' %}?cliente={{ cliente_selecionado.pk }}"
+                 class="btn btn-outline-secondary btn-lg">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Usar Planilha
+              </a>
+            </div>
+          </form>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Preenche data com hoje
+  const dataInput = document.getElementById('dataInput');
+  if (dataInput && !dataInput.value) {
+    const today = new Date();
+    dataInput.value = today.toISOString().split('T')[0];
+  }
+
+  // Toggle endereço por tipo de frete
+  const freteSelect = document.getElementById('freteSelect');
+  const enderecoField = document.getElementById('enderecoField');
+  const fretesSemEndereco = ['ONIBUS', 'RETIRADA'];
+
+  function toggleEndereco() {
+    if (enderecoField) {
+      enderecoField.style.display = fretesSemEndereco.includes(freteSelect.value) ? 'none' : '';
+    }
+  }
+
+  if (freteSelect) {
+    freteSelect.addEventListener('change', toggleEndereco);
+    toggleEndereco();
+  }
+
+  // Select2 no campo de cliente
+  document.addEventListener('DOMContentLoaded', function () {
+    const clienteSelect = document.getElementById('id_cliente');
+    if (clienteSelect && typeof $ !== 'undefined') {
+      $(clienteSelect).select2({ theme: 'bootstrap-5', placeholder: 'Selecione um cliente', allowClear: true });
+    }
+  });
+</script>
+{% endblock %}

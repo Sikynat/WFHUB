@@ -95,6 +95,7 @@ urlpatterns = [
     path('gerar-pedido-manual/', views.gerar_pedido_manual, name='gerar_pedido_manual'),
     path('processar-pedido-manual/', views.processar_pedido_manual, name='processar_pedido_manual'),
     path('upload-pedido/', views.upload_pedido, name='upload_pedido'),
+    path('upload-pedido/texto/', views.pedido_por_texto_admin, name='pedido_por_texto_admin'),
     path('upload-produtos/', views.pagina_upload, name='pagina_upload'),
     path('processar-upload-produtos/', views.processar_upload, name='processar_upload'),
     path('gerar-pedido/', views.gerar_pedido, name='gerar_pedido'),
