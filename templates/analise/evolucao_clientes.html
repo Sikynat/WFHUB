@@ -100,7 +100,7 @@
             <p>Comparando com {{ label_comparacao }} — identifique quem está crescendo ou sumindo</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'exportar_evolucao_clientes_excel' %}?periodo={{ periodo_selecionado }}{% if periodo_selecionado == 'ano' %}&ano={{ ano_selecionado }}{% endif %}"
+            <a href="{% url 'exportar_evolucao_clientes_excel' %}?periodo={{ periodo_selecionado }}{% if periodo_selecionado == 'ano' %}&ano={{ ano_selecionado }}{% endif %}&comp={{ comp_selecionado }}"
                class="btn btn-success btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
             </a>
@@ -110,48 +110,54 @@
         </div>
     </div>
 
-    <!-- Painel de período -->
-    <div class="filter-bar" style="gap:.75rem;">
-        <!-- Botões de período rápido -->
+    <!-- Painel de período — linha 1 -->
+    <div class="filter-bar" style="gap:.75rem; flex-wrap:wrap;">
         <label>Período:</label>
         <div class="btn-group btn-group-sm" role="group">
             {% for key, label in periodos_disponiveis.items %}
-            <a href="?periodo={{ key }}"
+            <a href="?periodo={{ key }}&comp={{ comp_selecionado }}"
                class="btn {% if periodo_selecionado == key %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-               style="font-size:.78rem;">
-                {{ label }}
-            </a>
+               style="font-size:.78rem;">{{ label }}</a>
             {% endfor %}
         </div>
 
-        <!-- Separador + seletor de ano específico -->
         <div class="vr mx-1"></div>
-        <label>Ano específico:</label>
-        <select onchange="window.location='?ano='+this.value" style="min-width:90px;">
+        <label>Ano:</label>
+        <select onchange="window.location='?ano='+this.value+'&comp={{ comp_selecionado }}'" style="min-width:85px;">
             <option value="">—</option>
             {% for a in anos_disponiveis %}
-            <option value="{{ a }}" {% if periodo_selecionado == 'ano' and a == ano_selecionado %}selected{% endif %}>
-                {{ a }}
-            </option>
+            <option value="{{ a }}" {% if periodo_selecionado == 'ano' and a == ano_selecionado %}selected{% endif %}>{{ a }}</option>
             {% endfor %}
         </select>
 
-        <!-- Filtros de tabela -->
         <div class="vr mx-1"></div>
-        <label>Buscar:</label>
-        <input type="text" id="searchCliente" placeholder="Nome ou código..."
-               oninput="filtrarTabela()" style="min-width:160px;">
+        <!-- Toggle modo de comparação -->
+        <label>Comparar:</label>
+        <div class="btn-group btn-group-sm" role="group">
+            <a href="?periodo={{ periodo_selecionado }}{% if periodo_selecionado == 'ano' %}&ano={{ ano_selecionado }}{% endif %}&comp=interno"
+               class="btn {% if comp_selecionado == 'interno' %}btn-warning{% else %}btn-outline-secondary{% endif %}"
+               style="font-size:.78rem;" title="Crescimento do 1º ao último mês do período">
+               📊 Dentro do período
+            </a>
+            <a href="?periodo={{ periodo_selecionado }}{% if periodo_selecionado == 'ano' %}&ano={{ ano_selecionado }}{% endif %}&comp=externo"
+               class="btn {% if comp_selecionado == 'externo' %}btn-info text-white{% else %}btn-outline-secondary{% endif %}"
+               style="font-size:.78rem;" title="Comparar com mesmo período do ano anterior">
+               📅 Vs ano anterior
+            </a>
+        </div>
 
-        <label>Tendência:</label>
-        <select id="filtroTendencia" onchange="filtrarTabela()">
-            <option value="">Todas</option>
+        <div class="vr mx-1"></div>
+        <input type="text" id="searchCliente" placeholder="Buscar cliente..."
+               oninput="filtrarTabela()" style="min-width:160px;font-size:.82rem;padding:.3rem .6rem;border:1px solid #e2e8f0;border-radius:8px;">
+        <select id="filtroTendencia" onchange="filtrarTabela()" style="font-size:.82rem;padding:.3rem .6rem;border:1px solid #e2e8f0;border-radius:8px;">
+            <option value="">Todas tendências</option>
             <option value="crescendo">📈 Crescendo</option>
             <option value="caindo">📉 Caindo</option>
             <option value="estavel">➡️ Estável</option>
         </select>
 
         <span class="ms-auto text-muted" style="font-size:.78rem;">
-            <strong id="contadorVisivel">{{ clientes|length }}</strong> clientes exibidos
+            <strong id="contadorVisivel">{{ clientes|length }}</strong> clientes
         </span>
     </div>
 
@@ -200,7 +206,9 @@
                         <th>{{ meses_nomes|get_item:m }}</th>
                         {% endfor %}
                         <th>Total {{ label_periodo }}</th>
-                        <th>Comparação ({{ label_comparacao }})</th>
+                        {% if comp_selecionado == 'externo' %}
+                        <th>{{ label_comparacao }}</th>
+                        {% endif %}
                         <th>Var %</th>
                         <th>Tendência</th>
                     </tr>
@@ -209,46 +217,55 @@
                     {% for c in clientes %}
                     <tr data-nome="{{ c.nome|lower }}"
                         data-cod="{{ c.codigo }}"
-                        data-tendencia="{{ c.tendencia }}"
+                        data-tendencia="{% if comp_selecionado == 'externo' %}{{ c.tendencia }}{% else %}{{ c.tendencia_int }}{% endif %}"
                         data-novo="{% if c.total_ant == 0 %}true{% else %}false{% endif %}">
                         <td class="col-cod-body">{{ c.codigo }}</td>
                         <td class="col-nome-body" title="{{ c.nome }}">{{ c.nome }}</td>
                         {% for m in meses_com_dados %}
                         {% with val=c.meses|get_item:m %}
-                        <td class="col-val {% if val > 0 %}positive{% else %}zero{% endif %}"
-                            data-val="{{ val }}">
-                            {% if val > 0 %}
-                                R$ {{ val|floatformat:0|intcomma_br }}
-                            {% else %}
-                                <span style="color:#e2e8f0;">—</span>
-                            {% endif %}
+                        <td class="col-val {% if val > 0 %}positive{% else %}zero{% endif %}" data-val="{{ val }}">
+                            {% if val > 0 %}R$ {{ val|floatformat:0|intcomma_br }}
+                            {% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
                         </td>
                         {% endwith %}
                         {% endfor %}
                         <td class="col-val positive"><strong>R$ {{ c.total_ano|floatformat:0|intcomma_br }}</strong></td>
+                        {% if comp_selecionado == 'externo' %}
                         <td class="col-val {% if c.total_ant > 0 %}positive{% else %}zero{% endif %}">
                             {% if c.total_ant > 0 %}R$ {{ c.total_ant|floatformat:0|intcomma_br }}{% else %}—{% endif %}
                         </td>
+                        {% endif %}
                         <td>
-                            {% if c.total_ant == 0 %}
-                                <span class="badge-var badge-new">Novo</span>
-                            {% elif c.variacao_pct >= 10 %}
-                                <span class="badge-var badge-up">+{{ c.variacao_pct|floatformat:1 }}%</span>
-                            {% elif c.variacao_pct <= -10 %}
-                                <span class="badge-var badge-down">{{ c.variacao_pct|floatformat:1 }}%</span>
+                            {% if comp_selecionado == 'interno' %}
+                                {% if c.variacao_int >= 10 %}
+                                    <span class="badge-var badge-up">+{{ c.variacao_int|floatformat:1 }}%</span>
+                                {% elif c.variacao_int <= -10 %}
+                                    <span class="badge-var badge-down">{{ c.variacao_int|floatformat:1 }}%</span>
+                                {% else %}
+                                    <span class="badge-var badge-flat">{{ c.variacao_int|floatformat:1 }}%</span>
+                                {% endif %}
                             {% else %}
-                                <span class="badge-var badge-flat">{{ c.variacao_pct|floatformat:1 }}%</span>
+                                {% if not c.tem_historico %}
+                                    <span class="badge-var badge-new">Novo</span>
+                                {% elif c.variacao_pct >= 10 %}
+                                    <span class="badge-var badge-up">+{{ c.variacao_pct|floatformat:1 }}%</span>
+                                {% elif c.variacao_pct <= -10 %}
+                                    <span class="badge-var badge-down">{{ c.variacao_pct|floatformat:1 }}%</span>
+                                {% else %}
+                                    <span class="badge-var badge-flat">{{ c.variacao_pct|floatformat:1 }}%</span>
+                                {% endif %}
                             {% endif %}
                         </td>
                         <td>
-                            {% if c.total_ant == 0 %}
-                                <span style="color:#007bff;">🆕 Novo</span>
-                            {% elif c.tendencia == 'crescendo' %}
-                                <span class="tend-crescendo">📈 Crescendo</span>
-                            {% elif c.tendencia == 'caindo' %}
-                                <span class="tend-caindo">📉 Caindo</span>
+                            {% if comp_selecionado == 'interno' %}
+                                {% if c.tendencia_int == 'crescendo' %}<span class="tend-crescendo">📈 Crescendo</span>
+                                {% elif c.tendencia_int == 'caindo' %}<span class="tend-caindo">📉 Caindo</span>
+                                {% else %}<span class="tend-estavel">➡️ Estável</span>{% endif %}
                             {% else %}
-                                <span class="tend-estavel">➡️ Estável</span>
+                                {% if not c.tem_historico %}<span style="color:#007bff;">🆕 Novo</span>
+                                {% elif c.tendencia == 'crescendo' %}<span class="tend-crescendo">📈 Crescendo</span>
+                                {% elif c.tendencia == 'caindo' %}<span class="tend-caindo">📉 Caindo</span>
+                                {% else %}<span class="tend-estavel">➡️ Estável</span>{% endif %}
                             {% endif %}
                         </td>
                     </tr>
@@ -262,7 +279,7 @@
                         <td class="col-val">R$ {{ totais_mensais|get_item:m|floatformat:0|intcomma_br }}</td>
                         {% endfor %}
                         <td class="col-val">R$ {{ total_geral|floatformat:0|intcomma_br }}</td>
-                        <td></td>
+                        {% if comp_selecionado == 'externo' %}<td></td>{% endif %}
                         <td></td>
                         <td></td>
                     </tr>

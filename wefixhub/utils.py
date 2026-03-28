@@ -558,19 +558,37 @@ def calcular_evolucao_clientes(empresa=None, ano=None, periodo='ytd'):
 
     clientes = []
     for cod, c in clientes_dict.items():
+        meses_ativos = [m for m in meses_periodo if c['meses'][m] > 0]
         total_periodo = sum(c['meses'][m] for m in meses_periodo)
         total_ant = total_ant_por_cliente.get(cod, Decimal('0')) or Decimal('0')
 
+        # Variação vs ano anterior
         if total_ant > 0:
-            variacao_pct = float((total_periodo - total_ant) / total_ant * 100)
+            variacao_ext = float((total_periodo - total_ant) / total_ant * 100)
         elif total_periodo > 0:
-            variacao_pct = 100.0
+            variacao_ext = 100.0
         else:
-            variacao_pct = 0.0
+            variacao_ext = 0.0
 
-        tendencia = ('crescendo' if variacao_pct >= 10
-                     else 'caindo' if variacao_pct <= -10
-                     else 'estavel')
+        # Crescimento interno: primeiro mês ativo → último mês ativo no período
+        if len(meses_ativos) >= 2:
+            val_primeiro = c['meses'][meses_ativos[0]]
+            val_ultimo   = c['meses'][meses_ativos[-1]]
+            if val_primeiro > 0:
+                variacao_int = float((val_ultimo - val_primeiro) / val_primeiro * 100)
+            else:
+                variacao_int = 0.0
+        elif len(meses_ativos) == 1:
+            variacao_int = 0.0  # só um mês, sem tendência interna
+        else:
+            variacao_int = 0.0
+
+        tendencia_ext = ('crescendo' if variacao_ext >= 10
+                         else 'caindo' if variacao_ext <= -10
+                         else 'estavel')
+        tendencia_int = ('crescendo' if variacao_int >= 10
+                         else 'caindo' if variacao_int <= -10
+                         else 'estavel')
 
         for m, v in c['meses'].items():
             if v > 0:
@@ -578,13 +596,16 @@ def calcular_evolucao_clientes(empresa=None, ano=None, periodo='ytd'):
                 totais_mensais[m] += v
 
         clientes.append({
-            'codigo': cod,
-            'nome': c['nome'],
-            'meses': c['meses'],
-            'total_ano': total_periodo,
-            'total_ant': total_ant,
-            'variacao_pct': variacao_pct,
-            'tendencia': tendencia,
+            'codigo':       cod,
+            'nome':         c['nome'],
+            'meses':        c['meses'],
+            'total_ano':    total_periodo,
+            'total_ant':    total_ant,
+            'variacao_pct': variacao_ext,   # vs ano anterior
+            'variacao_int': variacao_int,   # crescimento interno no período
+            'tendencia':    tendencia_ext,
+            'tendencia_int': tendencia_int,
+            'tem_historico': total_ant > 0,
         })
 
     clientes.sort(key=lambda x: x['total_ano'], reverse=True)

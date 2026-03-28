@@ -4770,10 +4770,15 @@ def evolucao_clientes(request):
         reverse=True
     )
 
+    comp = request.GET.get('comp', 'interno')
+    if comp not in ('interno', 'externo'):
+        comp = 'interno'
+
     dados['anos_disponiveis'] = anos_disponiveis
     dados['ano_selecionado'] = ano or date.today().year
     dados['periodo_selecionado'] = periodo
     dados['periodos_disponiveis'] = PERIODOS_EVOLUCAO
+    dados['comp_selecionado'] = comp
 
     MESES_PT = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
                 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
