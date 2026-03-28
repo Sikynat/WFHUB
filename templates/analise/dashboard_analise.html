@@ -75,8 +75,15 @@
     .op-card:hover { border-color: #783ae3; }
 
     /* ── Alerta row ── */
-    .alert-row-danger { background: #fff5f5; }
+    .alert-row-danger  { background: #fff5f5; }
     .alert-row-warning { background: #fffbeb; }
+
+    /* ── RFM ── */
+    .rfm-dot {
+        display: inline-block; width: 10px; height: 10px;
+        border-radius: 50%; margin: 0 1px;
+    }
+    .rfm-seg-card.active-seg { box-shadow: 0 0 0 2px currentColor; }
 </style>
 
 <!-- HEADER -->
@@ -159,6 +166,11 @@
                 {{ oportunidades_wishlist|length }}
             </span>
             {% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="tab-rfm-btn" data-bs-toggle="pill" data-bs-target="#tab-rfm" type="button" role="tab">
+            <i class="fas fa-users-cog me-2"></i>RFM
         </button>
     </li>
 </ul>
@@ -561,6 +573,143 @@
 
     </div><!-- /tab wishlist -->
 
+    <!-- ══════════════════════════════════════════
+         ABA 6 — RFM
+         "Quem é quem na sua base"
+    ══════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-rfm" role="tabpanel">
+
+        {% if rfm.total > 0 %}
+
+        <!-- Cards de segmento -->
+        <div class="row g-3 mb-3">
+            {% for nome, seg in rfm.segmentos.items %}
+            <div class="col-sm-6 col-xl">
+                <div class="kpi-card rfm-seg-card" data-seg="{{ nome }}" style="border-left:3px solid {{ seg.cor }};cursor:pointer;" onclick="filtrarSegmento('{{ nome }}')">
+                    <div class="kpi-icon" style="background:{{ seg.bg }};color:{{ seg.cor }};"><i class="fas fa-circle" style="font-size:.7rem;"></i></div>
+                    <div style="flex:1;min-width:0;">
+                        <div class="kpi-label">{{ nome }}</div>
+                        <div class="kpi-value" style="color:{{ seg.cor }};">{{ seg.count }}</div>
+                        <div class="kpi-sub" style="font-size:.65rem;">{{ seg.acao }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            <div class="col-sm-6 col-xl">
+                <div class="kpi-card" style="border-left:3px solid #e2e8f0;cursor:pointer;" onclick="filtrarSegmento('')">
+                    <div class="kpi-icon" style="background:#f8fafc;color:#94a3b8;"><i class="fas fa-th-list"></i></div>
+                    <div>
+                        <div class="kpi-label">Total</div>
+                        <div class="kpi-value text-dark">{{ rfm.total }}</div>
+                        <div class="kpi-sub">todos os clientes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico + explicação lado a lado -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <div class="section-card h-100">
+                    <span class="section-label"><i class="fas fa-chart-pie text-primary me-1"></i>Distribuição da Base</span>
+                    <div style="height:220px;display:flex;align-items:center;justify-content:center;">
+                        <canvas id="graficoRFM"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="section-card h-100">
+                    <span class="section-label"><i class="fas fa-info-circle text-primary me-1"></i>Como ler o RFM</span>
+                    <div class="row g-2">
+                        {% for nome, seg in rfm.segmentos.items %}
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start gap-2 p-2 rounded" style="background:{{ seg.bg }};">
+                                <span class="fw-bold mt-1" style="color:{{ seg.cor }};font-size:.75rem;white-space:nowrap;">{{ nome }}</span>
+                                <span class="text-muted" style="font-size:.72rem;">{{ seg.acao }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <div class="col-12 mt-2">
+                            <p class="text-muted mb-0" style="font-size:.72rem;">
+                                <strong>R</strong> = Recência (dias desde a última compra) &nbsp;·&nbsp;
+                                <strong>F</strong> = Frequência (pedidos nos últimos 12 meses) &nbsp;·&nbsp;
+                                <strong>M</strong> = Valor monetário (faturamento gerado)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de clientes -->
+        <div class="section-card">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <span class="section-label mb-0"><i class="fas fa-table text-primary me-1"></i>Clientes — <span id="rfm-label-count">todos os {{ rfm.total }}</span></span>
+                <div class="d-flex gap-2 flex-wrap">
+                    <input type="text" id="rfm-search" class="form-control form-control-sm" placeholder="Buscar cliente..." style="width:180px;border-radius:10px;" oninput="filtrarTabela()">
+                    <select id="rfm-seg-select" class="form-select form-select-sm" style="width:160px;border-radius:10px;" onchange="filtrarSegmento(this.value)">
+                        <option value="">Todos os segmentos</option>
+                        {% for nome, seg in rfm.segmentos.items %}<option value="{{ nome }}">{{ nome }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle small mb-0" id="rfm-table">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>Cliente</th>
+                            <th class="text-center">Segmento</th>
+                            <th class="text-center" title="Dias desde a última compra">Recência</th>
+                            <th class="text-center" title="Pedidos distintos nos últimos 12 meses">Frequência</th>
+                            <th class="text-end" title="Faturamento total nos últimos 12 meses">Valor (12m)</th>
+                            <th class="text-center">Score R·F·M</th>
+                            <th class="text-end">Última compra</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rfm-tbody">
+                        {% for c in rfm.clientes %}
+                        <tr class="rfm-row" data-seg="{{ c.segmento }}" data-nome="{{ c.nome|lower }}" data-codigo="{{ c.codigo }}">
+                            <td>
+                                <span class="fw-bold d-block">{{ c.nome|truncatechars:40 }}</span>
+                                <span class="text-muted small">Cód: {{ c.codigo }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge rounded-pill fw-bold" style="background:{{ c.bg }};color:{{ c.cor }};font-size:.7rem;">
+                                    {{ c.segmento }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="fw-bold" style="color:{{ c.cor }};">{{ c.recencia }}d</span>
+                            </td>
+                            <td class="text-center fw-bold">{{ c.frequencia }}×</td>
+                            <td class="text-end fw-bold">R$ {{ c.monetario_fmt }}</td>
+                            <td class="text-center">
+                                <span class="rfm-dot" style="background:{% if c.r_score >= 4 %}#10b981{% elif c.r_score >= 3 %}#f59e0b{% else %}#ef4444{% endif %};" title="R={{ c.r_score }}"></span>
+                                <span class="rfm-dot" style="background:{% if c.f_score >= 4 %}#10b981{% elif c.f_score >= 3 %}#f59e0b{% else %}#ef4444{% endif %};" title="F={{ c.f_score }}"></span>
+                                <span class="rfm-dot" style="background:{% if c.m_score >= 4 %}#10b981{% elif c.m_score >= 3 %}#f59e0b{% else %}#ef4444{% endif %};" title="M={{ c.m_score }}"></span>
+                                <span class="text-muted ms-1" style="font-size:.65rem;">{{ c.rfm_score }}/15</span>
+                            </td>
+                            <td class="text-end text-muted">{{ c.ultima_compra }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div id="rfm-empty" class="text-center py-4 text-muted d-none">
+                <i class="fas fa-search me-2"></i>Nenhum cliente encontrado para este filtro.
+            </div>
+        </div>
+
+        {% else %}
+        <div class="section-card text-center py-5">
+            <i class="fas fa-chart-bar fa-3x mb-3 text-muted opacity-25"></i>
+            <h5 class="fw-bold text-dark">Sem dados para análise RFM</h5>
+            <p class="text-muted mb-0">Importe dados do ERP para ativar esta análise.</p>
+        </div>
+        {% endif %}
+
+    </div><!-- /tab rfm -->
+
 </div><!-- /tab-content -->
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -652,5 +801,68 @@
         if (typeof chartEstados !== 'undefined') chartEstados.resize();
         {% endif %}
     });
+
+    // ── RFM ──
+    {% if rfm.total > 0 %}
+    const rfmData = {{ rfm.segmentos_json|safe }};
+    const rfmCores = {
+        'Campeão':    '#10b981',
+        'Fiel':       '#3b82f6',
+        'Potencial':  '#8b5cf6',
+        'Em Risco':   '#f59e0b',
+        'Adormecido': '#6b7280',
+    };
+    const chartRFM = new Chart(document.getElementById('graficoRFM'), {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(rfmData),
+            datasets: [{
+                data: Object.values(rfmData),
+                backgroundColor: Object.keys(rfmData).map(k => rfmCores[k] || '#ccc'),
+                borderWidth: 0,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed} clientes` } }
+            },
+            cutout: '60%'
+        }
+    });
+
+    document.getElementById('tab-rfm-btn').addEventListener('shown.bs.tab', () => chartRFM.resize());
+
+    // Filtro por segmento
+    let _activeSeg = '';
+    function filtrarSegmento(seg) {
+        _activeSeg = seg;
+        // Sync select
+        document.getElementById('rfm-seg-select').value = seg;
+        // Highlight card
+        document.querySelectorAll('.rfm-seg-card').forEach(c => {
+            c.style.opacity = (!seg || c.dataset.seg === seg) ? '1' : '0.4';
+        });
+        filtrarTabela();
+    }
+
+    function filtrarTabela() {
+        const q = document.getElementById('rfm-search').value.toLowerCase();
+        const rows = document.querySelectorAll('.rfm-row');
+        let visible = 0;
+        rows.forEach(row => {
+            const matchSeg  = !_activeSeg || row.dataset.seg === _activeSeg;
+            const matchText = !q || row.dataset.nome.includes(q) || String(row.dataset.codigo).includes(q);
+            const show = matchSeg && matchText;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        document.getElementById('rfm-empty').classList.toggle('d-none', visible > 0);
+        const label = _activeSeg ? `${visible} ${_activeSeg}` : `${visible} clientes`;
+        document.getElementById('rfm-label-count').textContent = label;
+    }
+    {% endif %}
 </script>
 {% endblock %}

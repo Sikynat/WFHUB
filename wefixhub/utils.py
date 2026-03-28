@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Sum, Max, Q
+from django.db.models import Sum, Max, Q, Count
 
 # Removi o 'messages' daqui, pois ele pertence às views
 # Removi as duplicatas de Pedido e Product
@@ -237,10 +237,126 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado, empresa=None
         'total_sp_fmt': "{:,.2f}".format(float(total_sp)).replace(",", "X").replace(".", ",").replace("X", "."),
         'total_es_fmt': "{:,.2f}".format(float(total_es)).replace(",", "X").replace(".", ",").replace("X", "."),
         'valores_estados': json.dumps([float(total_sp), float(total_es)]),
+        'rfm': calcular_rfm(empresa=empresa),
     }
 
 # ====================================================================
-# 2. FUNÇÃO DE EXPORTAÇÃO EXCEL DE VENDAS REAIS
+# 2. ANÁLISE RFM (Recência, Frequência, Valor)
+# ====================================================================
+
+def calcular_rfm(empresa=None):
+    """
+    Calcula RFM dos últimos 12 meses e classifica cada cliente em um segmento.
+    Retorna dict com a lista de clientes e os totais por segmento.
+    """
+    import bisect
+
+    hoje = date.today()
+    data_inicio = hoje - timedelta(days=365)
+
+    vendas_qs = VendaReal.objects.filter(Emissao__gte=data_inicio)
+    if empresa:
+        vendas_qs = vendas_qs.filter(empresa=empresa)
+
+    dados = list(
+        vendas_qs
+        .values('Codigo_Cliente', 'cliente_nome')
+        .annotate(
+            ultima_compra=Max('Emissao'),
+            frequencia=Count('Pedido', distinct=True),
+            monetario=Sum('Total'),
+        )
+    )
+
+    if not dados:
+        return {'clientes': [], 'segmentos': {}, 'segmentos_json': '{}', 'total': 0}
+
+    # Calcula recência em dias
+    for c in dados:
+        c['recencia_dias'] = (hoje - c['ultima_compra']).days
+
+    # Scoring por quintil (1-5) usando posição relativa
+    def _scores(values, reverse=False):
+        unique_sorted = sorted(set(values))
+        n = len(unique_sorted)
+        result = {}
+        for v in unique_sorted:
+            pos = bisect.bisect_left(unique_sorted, v)
+            pct = pos / (n - 1) if n > 1 else 0.5
+            score = round(pct * 4) + 1   # 1..5
+            result[v] = (6 - score) if reverse else score
+        return result
+
+    r_map = _scores([c['recencia_dias'] for c in dados], reverse=True)  # menos dias = melhor
+    f_map = _scores([c['frequencia']    for c in dados])
+    m_map = _scores([float(c['monetario']) for c in dados])
+
+    # Definição dos 5 segmentos — cada um com ação clara
+    SEGMENTOS = {
+        'Campeão':     {'cor': '#10b981', 'bg': '#d1fae5', 'acao': 'Fidelize e recompense'},
+        'Fiel':        {'cor': '#3b82f6', 'bg': '#dbeafe', 'acao': 'Venda mais, cross-sell'},
+        'Potencial':   {'cor': '#8b5cf6', 'bg': '#ede9fe', 'acao': 'Converta em recorrente'},
+        'Em Risco':    {'cor': '#f59e0b', 'bg': '#fef3c7', 'acao': 'Ligar hoje — risco real de perda'},
+        'Adormecido':  {'cor': '#6b7280', 'bg': '#f3f4f6', 'acao': 'Última tentativa de reativação'},
+    }
+
+    def _segmento(r, f, m):
+        if r >= 4 and f >= 3 and m >= 3:
+            return 'Campeão'
+        if f >= 3 and m >= 2:
+            return 'Fiel'
+        if r >= 4 and f <= 2:
+            return 'Potencial'
+        if r <= 2 and f >= 3:
+            return 'Em Risco'
+        return 'Adormecido'
+
+    _fmt = lambda v: "{:,.2f}".format(float(v)).replace(",", "X").replace(".", ",").replace("X", ".")
+
+    clientes = []
+    contagem_seg = {k: 0 for k in SEGMENTOS}
+
+    for c in dados:
+        r = r_map[c['recencia_dias']]
+        f = f_map[c['frequencia']]
+        m = m_map[float(c['monetario'])]
+        seg = _segmento(r, f, m)
+        contagem_seg[seg] += 1
+        clientes.append({
+            'codigo':        c['Codigo_Cliente'],
+            'nome':          c['cliente_nome'] or 'Desconhecido',
+            'recencia':      c['recencia_dias'],
+            'frequencia':    c['frequencia'],
+            'monetario':     float(c['monetario']),
+            'monetario_fmt': _fmt(c['monetario']),
+            'ultima_compra': c['ultima_compra'].strftime('%d/%m/%Y'),
+            'r_score':       r,
+            'f_score':       f,
+            'm_score':       m,
+            'rfm_score':     r + f + m,
+            'segmento':      seg,
+            'cor':           SEGMENTOS[seg]['cor'],
+            'bg':            SEGMENTOS[seg]['bg'],
+            'acao':          SEGMENTOS[seg]['acao'],
+        })
+
+    clientes.sort(key=lambda x: x['rfm_score'], reverse=True)
+
+    segmentos_completos = {
+        k: {'count': contagem_seg[k], **v}
+        for k, v in SEGMENTOS.items()
+    }
+
+    return {
+        'clientes':       clientes,
+        'segmentos':      segmentos_completos,
+        'segmentos_json': json.dumps({k: v['count'] for k, v in segmentos_completos.items()}),
+        'total':          len(clientes),
+    }
+
+
+# ====================================================================
+# 3. FUNÇÃO DE EXPORTAÇÃO EXCEL DE VENDAS REAIS
 # ====================================================================
 def gerar_excel_vendas_reais(filtro_pedido, filtro_produto, filtro_cliente, filtro_mes, filtro_ano):
     vendas_qs = VendaReal.objects.all().order_by('-Emissao')
