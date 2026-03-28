@@ -26,6 +26,8 @@ tzdata==2025.2
 urllib3==2.5.0
 whitenoise==6.11.0
 xlsxwriter==3.2.9
+django-apscheduler==0.7.0
+tzlocal==5.3.1
 django-storages
 boto3
 cryptography

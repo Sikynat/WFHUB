@@ -52,7 +52,12 @@ INSTALLED_APPS = [
     'storages',
     # Seus aplicativos personalizados
     'wefixhub',
+    'django_apscheduler',
 ]
+
+# APScheduler — executa jobs agendados uma única vez por instância
+APSCHEDULER_DATETIME_FORMAT = "N j, Y, f:s a"
+APSCHEDULER_RUN_NOW_TIMEOUT = 25  # segundos
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
