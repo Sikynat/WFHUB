@@ -2,490 +2,617 @@
 
 {% block content %}
 <style>
-    .metric-card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); transition: transform 0.2s; }
-    .metric-card:hover { transform: translateY(-5px); }
-    .text-label { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
-    .bg-dark-card { background: #2d3748 !important; }
-    /* Ajuste para as abas */
-    .nav-pills .nav-link { color: #64748b; border-radius: 10px; padding: 10px 20px; font-weight: 600; transition: all 0.3s; }
-    .nav-pills .nav-link.active { background-color: #4361ee; color: white; box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3); }
-    /* Estilo para os cards de clientes por dia */
-    .day-card { border-top: 4px solid #4361ee; background: #f8fafc; }
-    .bg-soft-primary { background-color: rgba(67, 97, 238, 0.1); }
+    body { background: #f8f9fc; }
+
+    /* ── KPI Cards ── */
+    .kpi-card {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        transition: transform .15s, box-shadow .15s; height: 100%;
+    }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+    .kpi-icon {
+        width: 48px; height: 48px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.2rem; flex-shrink: 0;
+    }
+    .kpi-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; margin-bottom: .2rem; }
+    .kpi-value { font-size: 1.4rem; font-weight: 800; color: #1e293b; line-height: 1.1; }
+    .kpi-sub   { font-size: .72rem; color: #9ca3af; margin-top: .2rem; }
+
+    /* ── Secondary metric cards ── */
+    .metric-sm {
+        background: white; border-radius: 14px; border: 1px solid #edf2f7;
+        padding: 1rem 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,.04); height: 100%;
+    }
+    .metric-sm .ms-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: .25rem; }
+    .metric-sm .ms-value { font-size: 1.25rem; font-weight: 800; color: #1e293b; }
+
+    /* ── Section cards ── */
+    .section-card {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        padding: 1.25rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    }
+    .section-label {
+        font-size: .68rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .6px; color: #9ca3af; margin-bottom: .85rem; display: block;
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+        background: white; border-radius: 14px; border: 1px solid #edf2f7;
+        padding: .75rem 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap;
+    }
+    .filter-bar label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; margin-bottom: .25rem; display: block; }
+    .filter-bar .form-select {
+        border: 1px solid #e2e8f0; border-radius: 10px; font-size: .85rem;
+        font-weight: 600; color: #1e293b; padding: .45rem .85rem; min-width: 130px; box-shadow: none;
+    }
+    .filter-bar .form-select:focus { border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,.1); }
+
+    /* ── Tabs ── */
+    .analytics-tabs { display: flex; gap: 0; border-bottom: 2px solid #edf2f7; margin-bottom: 1.5rem; }
+    .analytics-tabs .nav-link {
+        color: #64748b; border-radius: 0; padding: .65rem 1.1rem; font-weight: 600; font-size: .83rem;
+        border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+        transition: color .15s, border-color .15s; background: none;
+    }
+    .analytics-tabs .nav-link:hover { color: #4361ee; }
+    .analytics-tabs .nav-link.active { color: #4361ee; border-bottom-color: #4361ee; }
+    .analytics-tabs .nav-link .tab-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px; border-radius: 50%; font-size: .6rem;
+        font-weight: 800; margin-left: .35rem;
+    }
+
+    /* ── Wishlist op cards ── */
+    .op-card {
+        background: #fdfdff; border: 1px solid #ede9fe; border-radius: 12px;
+        padding: 1rem; transition: border-color .15s; height: 100%;
+    }
+    .op-card:hover { border-color: #783ae3; }
+
+    /* ── Alerta row ── */
+    .alert-row-danger { background: #fff5f5; }
+    .alert-row-warning { background: #fffbeb; }
 </style>
 
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold text-dark mb-0">Análise de Inteligência ERP</h2>
-        <a href="{% url 'dashboard_admin' %}" class="btn btn-light border shadow-sm px-4" style="border-radius: 10px;">
-            <i class="fas fa-arrow-left me-2"></i>Dashboard
-        </a>
+<!-- HEADER -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark">Análise de Inteligência ERP</h4>
+        <p class="text-muted small mb-0">Dados consolidados do ERP</p>
     </div>
+    <a href="{% url 'dashboard_admin' %}" class="btn btn-light border shadow-sm px-3" style="border-radius:10px;font-size:.85rem;">
+        <i class="fas fa-arrow-left me-2"></i>Dashboard
+    </a>
+</div>
 
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body bg-light rounded shadow-sm py-3">
-    <form method="GET" class="row g-2 align-items-end">
-
-
-        <div class="col-md-3">
-            <label class="small fw-bold text-muted mb-1 text-uppercase" style="font-size: 0.65rem;">Mês de Referência</label>
-            <select name="mes" class="form-select border-0 shadow-sm">
-                <option value="1" {% if mes_atual == 1 %}selected{% endif %}>Janeiro</option>
-                <option value="2" {% if mes_atual == 2 %}selected{% endif %}>Fevereiro</option>
-                <option value="3" {% if mes_atual == 3 %}selected{% endif %}>Março</option>
-                <option value="4" {% if mes_atual == 4 %}selected{% endif %}>Abril</option>
-                <option value="5" {% if mes_atual == 5 %}selected{% endif %}>Maio</option>
-                <option value="6" {% if mes_atual == 6 %}selected{% endif %}>Junho</option>
-                <option value="7" {% if mes_atual == 7 %}selected{% endif %}>Julho</option>
-                <option value="8" {% if mes_atual == 8 %}selected{% endif %}>Agosto</option>
-                <option value="9" {% if mes_atual == 9 %}selected{% endif %}>Setembro</option>
+<!-- FILTER BAR -->
+<form method="GET">
+    <div class="filter-bar mb-4">
+        <div>
+            <label>Mês de Referência</label>
+            <select name="mes" class="form-select">
+                <option value="1"  {% if mes_atual == 1  %}selected{% endif %}>Janeiro</option>
+                <option value="2"  {% if mes_atual == 2  %}selected{% endif %}>Fevereiro</option>
+                <option value="3"  {% if mes_atual == 3  %}selected{% endif %}>Março</option>
+                <option value="4"  {% if mes_atual == 4  %}selected{% endif %}>Abril</option>
+                <option value="5"  {% if mes_atual == 5  %}selected{% endif %}>Maio</option>
+                <option value="6"  {% if mes_atual == 6  %}selected{% endif %}>Junho</option>
+                <option value="7"  {% if mes_atual == 7  %}selected{% endif %}>Julho</option>
+                <option value="8"  {% if mes_atual == 8  %}selected{% endif %}>Agosto</option>
+                <option value="9"  {% if mes_atual == 9  %}selected{% endif %}>Setembro</option>
                 <option value="10" {% if mes_atual == 10 %}selected{% endif %}>Outubro</option>
                 <option value="11" {% if mes_atual == 11 %}selected{% endif %}>Novembro</option>
                 <option value="12" {% if mes_atual == 12 %}selected{% endif %}>Dezembro</option>
             </select>
         </div>
-
-        <div class="col-md-3">
-            <label class="small fw-bold text-muted mb-1 text-uppercase" style="font-size: 0.65rem;">Ano</label>
-            <select name="ano" class="form-select border-0 shadow-sm">
+        <div>
+            <label>Ano</label>
+            <select name="ano" class="form-select">
                 {% for ano in lista_anos %}
                     <option value="{{ ano }}" {% if ano_atual == ano %}selected{% endif %}>{{ ano }}</option>
                 {% endfor %}
             </select>
         </div>
-
-        <div class="col-md-3">
-            <button type="submit" class="btn btn-primary w-100 shadow-sm fw-bold">
-                <i class="fas fa-filter me-2"></i>Filtrar Resultados
-            </button>
-        </div>
-    </form>
-</div>
-
-    <ul class="nav nav-pills mb-4 gap-2" id="pills-tab" role="tablist">
-        <li class="nav-item">
-            <button class="nav-link active" id="pills-comercial-tab" data-bs-toggle="pill" data-bs-target="#pills-comercial" type="button" role="tab">
-                <i class="fas fa-chart-line me-2"></i>Visão Comercial
-            </button>
-        </li>
-     
-        <li class="nav-item">
-            <button class="nav-link" id="pills-logistica-tab" data-bs-toggle="pill" data-bs-target="#pills-logistica" type="button" role="tab">
-                <i class="fas fa-truck-loading me-2"></i>Logística & Heatmap
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" id="pills-saude-tab" data-bs-toggle="pill" data-bs-target="#pills-saude" type="button" role="tab">
-                <i class="fas fa-heartbeat me-2"></i>Saúde da Base
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" id="pills-wishlist-tab" data-bs-toggle="pill" data-bs-target="#pills-wishlist" type="button" role="tab">
-                <i class="fas fa-bell me-2"></i>Oportunidades Wishlist
-            </button>
-        </li>
-    </ul>
-
-    <div class="tab-content" id="pills-tabContent">
-
-        
-        
-        <div class="tab-pane fade show active" id="pills-comercial" role="tabpanel">
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <div class="metric-card p-4 bg-primary text-white">
-                        <div class="text-label opacity-75">Ticket Médio (Mês)</div>
-                        <h2 class="fw-bold mb-0">R$ {{ ticket_medio }}</h2>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="metric-card p-4 bg-success text-white">
-                        <div class="text-label opacity-75">Itens Faturados (Mês)</div>
-                        <h2 class="fw-bold mb-0">{{ total_itens_faturados }}</h2>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="metric-card p-4 bg-dark-card text-white">
-                        <div class="text-label opacity-75">Faturamento Real ERP</div>
-                        <h2 class="fw-bold mb-0">R$ {{ total_vendas|default:"0,00" }}</h2>
-                        {% if variacao_mes != 0 %}
-                        <div class="mt-2" style="font-size:.8rem;">
-                            {% if variacao_mes > 0 %}
-                                <span class="text-success fw-bold">▲ +{{ variacao_mes }}%</span>
-                            {% else %}
-                                <span class="text-danger fw-bold">▼ {{ variacao_mes }}%</span>
-                            {% endif %}
-                            <span class="opacity-50 ms-1">vs mês anterior</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="row mb-4">
-    <div class="col-12">
-        <div class="metric-card p-4 border-start border-4" style="border-color: #783ae3 !important; background: linear-gradient(145deg, #ffffff 0%, #fcfaff 100%);">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="text-label" style="color: #783ae3;">
-                    <i class="fas fa-undo-alt me-1"></i> Vendas Recuperadas (Wishlist)
-                </div>
-                <span class="badge" style="background-color: rgba(120, 58, 227, 0.1); color: #783ae3;">Mês selecionado</span>
-            </div>
-            <div class="d-flex align-items-baseline gap-3">
-                <h2 class="fw-bold mb-0" style="color: #2d3748;">R$ {{ total_recuperado_reais|default:"0,00" }}</h2>
-                <div class="text-success fw-bold" style="font-size: 0.9rem;">
-                    <i class="fas fa-arrow-up me-1"></i> {{ qtd_itens_recuperados|default:"0" }} itens convertidos
-                </div>
-            </div>
-            <p class="text-muted small mt-2 mb-0">
-                Faturamento real (ERP) gerado por clientes que compraram o produto logo após receberem o aviso automático de retorno ao estoque.
-            </p>
-        </div>
+        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold" style="font-size:.85rem;">
+            <i class="fas fa-filter me-2"></i>Filtrar
+        </button>
     </div>
-</div>
+</form>
 
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <div class="metric-card p-4 border-start border-4 border-info">
-                        <div class="text-label text-info">Média Diária de Vendas</div>
-                        <h3 class="fw-bold mb-1">R$ {{ media_diaria }}</h3>
-                        <div class="progress mt-2" style="height: 6px;">
-                            <div class="progress-bar bg-info" style="width: {{ progresso_mes }}%"></div>
+<!-- TABS -->
+<ul class="nav analytics-tabs" id="pills-tab" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" id="tab-resumo-btn" data-bs-toggle="pill" data-bs-target="#tab-resumo" type="button" role="tab">
+            <i class="fas fa-tachometer-alt me-2"></i>Resumo
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="tab-evolucao-btn" data-bs-toggle="pill" data-bs-target="#tab-evolucao" type="button" role="tab">
+            <i class="fas fa-chart-line me-2"></i>Evolução
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="tab-alertas-btn" data-bs-toggle="pill" data-bs-target="#tab-alertas" type="button" role="tab">
+            <i class="fas fa-exclamation-triangle me-2"></i>Alertas
+            {% if clientes_inativos or saude_base %}
+            <span class="tab-badge" style="background:#fee2e2;color:#ef4444;">
+                {{ clientes_inativos|length|add:saude_base|length }}
+            </span>
+            {% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="tab-logistica-btn" data-bs-toggle="pill" data-bs-target="#tab-logistica" type="button" role="tab">
+            <i class="fas fa-truck-loading me-2"></i>Logística
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="tab-wishlist-btn" data-bs-toggle="pill" data-bs-target="#tab-wishlist" type="button" role="tab">
+            <i class="fas fa-bell me-2"></i>Wishlist
+            {% if oportunidades_wishlist %}
+            <span class="tab-badge" style="background:#ede9fe;color:#783ae3;">
+                {{ oportunidades_wishlist|length }}
+            </span>
+            {% endif %}
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="pills-tabContent">
+
+    <!-- ══════════════════════════════════════════
+         ABA 1 — RESUMO
+         "Onde estamos hoje" — só números, nada mais
+    ══════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="tab-resumo" role="tabpanel">
+
+        <!-- 4 KPIs principais -->
+        <div class="row g-3 mb-3">
+            <div class="col-sm-6 col-xl-3">
+                <div class="kpi-card" style="border-left:3px solid #6366f1;">
+                    <div class="kpi-icon" style="background:#f5f3ff;color:#6366f1;"><i class="fas fa-wallet"></i></div>
+                    <div style="flex:1;min-width:0;">
+                        <div class="kpi-label">Faturamento Real ERP</div>
+                        <div class="kpi-value" style="font-size:1.2rem;">R$ {{ total_vendas|default:"0,00" }}</div>
+                        {% if variacao_mes != 0 %}
+                        <div class="kpi-sub">
+                            {% if variacao_mes > 0 %}<span class="text-success fw-bold">▲ +{{ variacao_mes }}%</span>
+                            {% else %}<span class="text-danger fw-bold">▼ {{ variacao_mes }}%</span>{% endif %}
+                            <span class="ms-1">vs mês ant.</span>
                         </div>
-                        <small class="text-muted">Período está em {{ progresso_mes }}% do tempo total.</small>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="metric-card p-4 border-start border-4 border-warning">
-                        <div class="text-label text-warning">Projeção de Fechamento</div>
-                        <h3 class="fw-bold mb-1" style="color: #f59e0b;">R$ {{ projecao_final }}</h3>
-                        <small class="text-muted">Estimativa baseada no ritmo do período selecionado.</small>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="metric-card p-4">
-                        <h5 class="fw-bold mb-4"><i class="fas fa-chart-line text-primary me-2"></i> Evolução Diária</h5>
-                        <div style="height: 300px;">
-                            <canvas id="graficoVendas"></canvas>
-                        </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="kpi-card" style="border-left:3px solid #3b82f6;">
+                    <div class="kpi-icon" style="background:#eff6ff;color:#3b82f6;"><i class="fas fa-receipt"></i></div>
+                    <div>
+                        <div class="kpi-label">Ticket Médio</div>
+                        <div class="kpi-value">R$ {{ ticket_medio }}</div>
+                        <div class="kpi-sub">por cliente no mês</div>
                     </div>
                 </div>
             </div>
-
-            <div class="row g-4 mb-4">
-                <div class="col-md-6">
-                    <div class="metric-card p-4 h-100">
-                        <h5 class="fw-bold mb-3"><i class="fas fa-box text-primary me-2"></i> Top 10 Produtos</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle small">
-                                <thead><tr><th>Produto</th><th class="text-center">Qtd</th><th class="text-end">Total</th></tr></thead>
-                                <tbody>
-                                    {% for p in top_produtos %}
-                                    <tr>
-                                        <td><span class="fw-bold d-block">{{ p.codigo }}</span><span class="text-muted">{{ p.descricao|truncatechars:35 }}</span></td>
-                                        <td class="text-center">{{ p.qtd }}</td>
-                                        <td class="text-end fw-bold text-success">R$ {{ p.total_formatado }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="metric-card p-4 h-100">
-                        <h5 class="fw-bold mb-3"><i class="fas fa-users text-info me-2"></i> Faturamento por Cliente</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle small">
-                                <thead><tr><th>Cliente</th><th class="text-end">Faturamento</th></tr></thead>
-                                <tbody>
-                                    {% for c in top_clientes %}
-                                    <tr>
-                                        <td><span class="fw-bold d-block">{{ c.codigo }}</span><span class="text-muted">{{ c.nome|truncatechars:40 }}</span></td>
-                                        <td class="text-end fw-bold text-dark">R$ {{ c.total_formatado }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="kpi-card" style="border-left:3px solid #22c55e;">
+                    <div class="kpi-icon" style="background:#f0fdf4;color:#22c55e;"><i class="fas fa-boxes"></i></div>
+                    <div>
+                        <div class="kpi-label">Itens Faturados</div>
+                        <div class="kpi-value">{{ total_itens_faturados }}</div>
+                        <div class="kpi-sub">unidades no mês</div>
                     </div>
                 </div>
             </div>
-
-            <div class="row">
-                <div class="col-12">
-                    <div class="metric-card p-4 border-start border-4 border-danger">
-                        <h5 class="fw-bold mb-3 text-danger"><i class="fas fa-exclamation-triangle me-2"></i> Alerta: Faturamento inferior a 50k no mês vigente</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle small">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th>Código</th>
-                                        <th>Cliente</th>
-                                        <th class="text-center">Faturado no Período</th>
-                                        <th class="text-end">Histórico Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for c in clientes_inativos %}
-                                    <tr>
-                                        <td><span class="badge bg-light text-dark border">{{ c.codigo }}</span></td>
-                                        <td class="fw-bold">{{ c.nome|truncatechars:60 }}</td>
-                                        <td class="text-center fw-bold text-danger">R$ {{ c.mes_atual_formatado }}</td>
-                                        <td class="text-end text-muted">R$ {{ c.total_formatado }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="kpi-card" style="border-left:3px solid #783ae3;">
+                    <div class="kpi-icon" style="background:#f8f5ff;color:#783ae3;"><i class="fas fa-undo-alt"></i></div>
+                    <div>
+                        <div class="kpi-label">Vendas Recuperadas</div>
+                        <div class="kpi-value" style="color:#783ae3;">R$ {{ total_recuperado_reais|default:"0,00" }}</div>
+                        <div class="kpi-sub"><span class="text-success fw-bold">{{ qtd_itens_recuperados|default:"0" }} itens</span> convertidos</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="tab-pane fade" id="pills-logistica" role="tabpanel">
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="metric-card p-4 h-100">
-                        <h5 class="fw-bold mb-3"><i class="fas fa-map-marker-alt text-danger me-2"></i> Distribuição SP vs ES</h5>
-                        {% if total_sp > 0 or total_es > 0 %}
-                        <div style="height: 180px; display:flex; align-items:center; justify-content:center;">
-                            <canvas id="graficoEstados"></canvas>
-                        </div>
-                        {% with total_estados=total_sp|add:total_es %}
-                        <div class="mt-3">
-                            <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
-                                <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4361ee;" class="me-2"></span><strong>SP</strong></span>
-                                <span class="fw-bold">R$ {{ total_sp_fmt }}</span>
-                            </div>
-                            <div class="d-flex align-items-center justify-content-between py-2">
-                                <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#0dcaf0;" class="me-2"></span><strong>ES</strong></span>
-                                <span class="fw-bold">R$ {{ total_es_fmt }}</span>
-                            </div>
-                        </div>
-                        {% endwith %}
-                        {% else %}
-                        <div class="text-center text-muted py-5" style="font-size:.85rem;">Sem dados de estado no período</div>
-                        {% endif %}
+        <!-- Métricas secundárias -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="metric-sm">
+                    <div class="ms-label text-info">Média Diária de Vendas</div>
+                    <div class="ms-value">R$ {{ media_diaria }}</div>
+                    <div class="progress mt-2 mb-1" style="height:5px;border-radius:99px;">
+                        <div class="progress-bar bg-info" style="width:{{ progresso_mes }}%;border-radius:99px;"></div>
                     </div>
+                    <div class="kpi-sub">Período em <strong>{{ progresso_mes }}%</strong> do tempo total</div>
                 </div>
-                <div class="col-md-8">
-                    <div class="metric-card p-4 h-100">
-                        <h5 class="fw-bold mb-4 text-dark"><i class="fas fa-calendar-week text-info me-2"></i> Concentração Logística Semanal</h5>
-                        <div style="height: 350px;">
-                            <canvas id="graficoSemana"></canvas>
-                        </div>
-                    </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metric-sm" style="border-left:3px solid #f59e0b;">
+                    <div class="ms-label" style="color:#f59e0b;">Projeção de Fechamento</div>
+                    <div class="ms-value" style="color:#d97706;">R$ {{ projecao_final }}</div>
+                    <div class="kpi-sub">Estimativa baseada no ritmo atual</div>
                 </div>
+            </div>
+        </div>
 
-                <div class="col-12">
-                    <h5 class="fw-bold mb-3 mt-2 text-dark">
-                        <i class="fas fa-truck-moving text-primary me-2"></i> Comportamento de compra semanal
-                    </h5>
-                    <div class="row g-3">
-                        {% for item in ranking_logistica_dia %}
-                        <div class="col-md">
-                            <div class="metric-card h-100 border-0 shadow-sm" style="background: #fdfdfd; border-radius: 12px; overflow: hidden;">
-                                <div class="p-2 text-center {% if item.clientes %}bg-primary text-white{% else %}bg-light text-muted{% endif %}" style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
-                                    {{ item.dia }}
-                                </div>
-                                <div class="p-3">
-                                    {% for c in item.clientes %}
-                                    <div class="mb-3 p-2 border-start border-3 {% if forloop.first %}border-warning{% else %}border-info{% endif %}" style="background: white; box-shadow: 2px 2px 8px rgba(0,0,0,0.02); border-radius: 4px;">
-                                        <div class="d-flex justify-content-between align-items-start mb-1">
-                                            <span class="text-dark fw-bold" style="font-size: 0.75rem; line-height: 1.2;">Cod: {{ c.codigo }}</span>
-                                            {% if forloop.first %}
-                                                <i class="fas fa-star text-warning" style="font-size: 0.6rem;" title="Principal do dia"></i>
-                                            {% endif %}
-                                        </div>
-                                        <div class="d-flex align-items-center justify-content-between">
-                                            <span class="badge bg-light text-primary fw-bold" style="font-size: 0.65rem;">R$ {{ c.valor }}</span>
-                                        </div>
-                                    </div>
-                                    {% empty %}
-                                    <div class="text-center py-4 opacity-50">
-                                        <i class="fas fa-box-open d-block mb-2 text-muted"></i>
-                                        <span class="text-muted small italic" style="font-size: 0.7rem;">Sem faturamento</span>
-                                    </div>
-                                    {% endfor %}
-                                </div>
+        <!-- Atalhos para outras abas -->
+        <div class="row g-3">
+            <div class="col-md-4">
+                <button onclick="switchTab('tab-evolucao-btn')" class="section-card w-100 border-0 text-start" style="cursor:pointer;transition:border-color .15s;" onmouseover="this.style.borderColor='#4361ee'" onmouseout="this.style.borderColor='#edf2f7'">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="kpi-icon" style="background:#eff6ff;color:#3b82f6;flex-shrink:0;"><i class="fas fa-chart-bar"></i></div>
+                        <div>
+                            <div class="fw-bold text-dark" style="font-size:.85rem;">Ver Evolução & Rankings</div>
+                            <div class="kpi-sub">Gráfico diário, top produtos e clientes</div>
+                        </div>
+                        <i class="fas fa-arrow-right text-muted ms-auto" style="font-size:.75rem;"></i>
+                    </div>
+                </button>
+            </div>
+            <div class="col-md-4">
+                <button onclick="switchTab('tab-alertas-btn')" class="section-card w-100 border-0 text-start" style="cursor:pointer;transition:border-color .15s;" onmouseover="this.style.borderColor='#ef4444'" onmouseout="this.style.borderColor='#edf2f7'">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="kpi-icon" style="background:#fef2f2;color:#ef4444;flex-shrink:0;"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div>
+                            <div class="fw-bold text-dark" style="font-size:.85rem;">Ver Alertas</div>
+                            <div class="kpi-sub">Clientes abaixo da meta e fora do hábito</div>
+                        </div>
+                        <i class="fas fa-arrow-right text-muted ms-auto" style="font-size:.75rem;"></i>
+                    </div>
+                </button>
+            </div>
+            <div class="col-md-4">
+                <button onclick="switchTab('tab-wishlist-btn')" class="section-card w-100 border-0 text-start" style="cursor:pointer;transition:border-color .15s;" onmouseover="this.style.borderColor='#783ae3'" onmouseout="this.style.borderColor='#edf2f7'">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="kpi-icon" style="background:#f8f5ff;color:#783ae3;flex-shrink:0;"><i class="fas fa-bell"></i></div>
+                        <div>
+                            <div class="fw-bold text-dark" style="font-size:.85rem;">Ver Oportunidades Wishlist</div>
+                            <div class="kpi-sub">{{ oportunidades_wishlist|length }} cliente{{ oportunidades_wishlist|length|pluralize:",s" }} aguardando aviso</div>
+                        </div>
+                        <i class="fas fa-arrow-right text-muted ms-auto" style="font-size:.75rem;"></i>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+    </div><!-- /tab resumo -->
+
+    <!-- ══════════════════════════════════════════
+         ABA 2 — EVOLUÇÃO
+         "Como chegamos aqui" — gráfico + rankings
+    ══════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-evolucao" role="tabpanel">
+
+        <div class="section-card mb-3">
+            <span class="section-label"><i class="fas fa-chart-line text-primary me-1"></i>Evolução Diária de Faturamento</span>
+            <div style="height:280px;">
+                <canvas id="graficoVendas"></canvas>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="section-card h-100">
+                    <span class="section-label"><i class="fas fa-box text-primary me-1"></i>Top 10 Produtos</span>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle small mb-0">
+                            <thead><tr><th>Produto</th><th class="text-center">Qtd</th><th class="text-end">Total</th></tr></thead>
+                            <tbody>
+                                {% for p in top_produtos %}
+                                <tr>
+                                    <td><span class="fw-bold d-block">{{ p.codigo }}</span><span class="text-muted">{{ p.descricao|truncatechars:35 }}</span></td>
+                                    <td class="text-center">{{ p.qtd }}</td>
+                                    <td class="text-end fw-bold text-success">R$ {{ p.total_formatado }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="section-card h-100">
+                    <span class="section-label"><i class="fas fa-users text-info me-1"></i>Top Clientes por Faturamento</span>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle small mb-0">
+                            <thead><tr><th>Cliente</th><th class="text-end">Faturamento</th></tr></thead>
+                            <tbody>
+                                {% for c in top_clientes %}
+                                <tr>
+                                    <td><span class="fw-bold d-block">{{ c.codigo }}</span><span class="text-muted">{{ c.nome|truncatechars:40 }}</span></td>
+                                    <td class="text-end fw-bold text-dark">R$ {{ c.total_formatado }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /tab evolucao -->
+
+    <!-- ══════════════════════════════════════════
+         ABA 3 — ALERTAS
+         "O que precisa de ação" — meta + hábito
+    ══════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-alertas" role="tabpanel">
+
+        <!-- Resumo dos alertas -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="kpi-card" style="border-left:3px solid #ef4444;">
+                    <div class="kpi-icon" style="background:#fef2f2;color:#ef4444;"><i class="fas fa-chart-bar"></i></div>
+                    <div>
+                        <div class="kpi-label">Abaixo da Meta (50k)</div>
+                        <div class="kpi-value text-danger">{{ clientes_inativos|length }}</div>
+                        <div class="kpi-sub">clientes com faturamento baixo no mês</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="kpi-card" style="border-left:3px solid #f59e0b;">
+                    <div class="kpi-icon" style="background:#fffbeb;color:#f59e0b;"><i class="fas fa-user-clock"></i></div>
+                    <div>
+                        <div class="kpi-label">Fora do Hábito</div>
+                        <div class="kpi-value" style="color:#d97706;">{{ total_clientes_risco }}</div>
+                        <div class="kpi-sub">clientes comprando fora do ritmo usual</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clientes abaixo da meta -->
+        <div class="section-card mb-3" style="border-left:3px solid #ef4444;">
+            <span class="section-label" style="color:#ef4444;"><i class="fas fa-exclamation-triangle me-1"></i>Faturamento inferior a 50k no mês vigente</span>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle small mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>Código</th><th>Cliente</th>
+                            <th class="text-center">Faturado no Período</th>
+                            <th class="text-end">Histórico Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in clientes_inativos %}
+                        <tr class="alert-row-danger">
+                            <td><span class="badge bg-light text-dark border">{{ c.codigo }}</span></td>
+                            <td class="fw-bold">{{ c.nome|truncatechars:60 }}</td>
+                            <td class="text-center fw-bold text-danger">R$ {{ c.mes_atual_formatado }}</td>
+                            <td class="text-end text-muted">R$ {{ c.total_formatado }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-4 text-success fw-bold"><i class="fas fa-check-circle me-2"></i>Todos os clientes acima da meta!</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Clientes fora do hábito -->
+        <div class="section-card" style="border-left:3px solid #f59e0b;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="section-label mb-0" style="color:#f59e0b;"><i class="fas fa-user-clock me-1"></i>Clientes Fora do Hábito de Compra</span>
+                <span class="badge bg-warning text-dark">Prevenção de Perda</span>
+            </div>
+            <p class="text-muted small mb-3">Clientes que costumam comprar em intervalos fixos, mas o tempo sem comprar atual superou a média histórica deles.</p>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle small mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>Cliente</th>
+                            <th class="text-center">Hábito (Média)</th>
+                            <th class="text-center">Sem comprar há</th>
+                            <th class="text-center">Atraso</th>
+                            <th class="text-end">Última Compra</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in saude_base %}
+                        <tr class="alert-row-warning">
+                            <td><strong>{{ c.nome }}</strong><br><span class="text-muted small">Cód: {{ c.codigo }}</span></td>
+                            <td class="text-center">{{ c.media_habito }} dias</td>
+                            <td class="text-center fw-bold text-danger">{{ c.dias_sem_comprar }} dias</td>
+                            <td class="text-center"><span class="badge bg-warning text-dark">+{{ c.atraso }}d</span></td>
+                            <td class="text-end text-muted">{{ c.ultima_data }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-4 text-success fw-bold"><i class="fas fa-check-circle me-2"></i>Toda a base está no ritmo normal!</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /tab alertas -->
+
+    <!-- ══════════════════════════════════════════
+         ABA 4 — LOGÍSTICA
+         "Como estão as rotas"
+    ══════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-logistica" role="tabpanel">
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <div class="section-card h-100">
+                    <span class="section-label"><i class="fas fa-map-marker-alt text-danger me-1"></i>Distribuição SP vs ES</span>
+                    {% if total_sp > 0 or total_es > 0 %}
+                    <div style="height:180px;display:flex;align-items:center;justify-content:center;">
+                        <canvas id="graficoEstados"></canvas>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4361ee;" class="me-2"></span><strong>SP</strong></span>
+                            <span class="fw-bold">R$ {{ total_sp_fmt }}</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between py-2">
+                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#0dcaf0;" class="me-2"></span><strong>ES</strong></span>
+                            <span class="fw-bold">R$ {{ total_es_fmt }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-5" style="font-size:.85rem;">Sem dados de estado no período</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="section-card h-100">
+                    <span class="section-label"><i class="fas fa-calendar-week text-info me-1"></i>Concentração de Faturamento por Dia da Semana</span>
+                    <div style="height:280px;">
+                        <canvas id="graficoSemana"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <span class="section-label"><i class="fas fa-truck-moving text-primary me-1"></i>Comportamento de compra semanal — Principais clientes por dia</span>
+        <div class="row g-3">
+            {% for item in ranking_logistica_dia %}
+            <div class="col-md">
+                <div class="section-card h-100" style="padding:0;overflow:hidden;">
+                    <div class="p-2 text-center {% if item.clientes %}bg-primary text-white{% else %}bg-light text-muted{% endif %}" style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;">
+                        {{ item.dia }}
+                    </div>
+                    <div class="p-3">
+                        {% for c in item.clientes %}
+                        <div class="mb-3 p-2 border-start border-3 {% if forloop.first %}border-warning{% else %}border-info{% endif %}" style="background:white;box-shadow:2px 2px 8px rgba(0,0,0,.02);border-radius:4px;">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <span class="text-dark fw-bold" style="font-size:.75rem;line-height:1.2;">Cod: {{ c.codigo }}</span>
+                                {% if forloop.first %}<i class="fas fa-star text-warning" style="font-size:.6rem;" title="Principal do dia"></i>{% endif %}
                             </div>
+                            <span class="badge bg-light text-primary fw-bold" style="font-size:.65rem;">R$ {{ c.valor }}</span>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-4 opacity-50">
+                            <i class="fas fa-box-open d-block mb-2 text-muted"></i>
+                            <span class="text-muted" style="font-size:.7rem;">Sem faturamento</span>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
             </div>
+            {% endfor %}
         </div>
 
-        <div class="tab-pane fade" id="pills-saude" role="tabpanel">
-            {% if total_clientes_analisados > 0 %}
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <div class="metric-card p-4 border-start border-4 border-danger">
-                        <div class="text-label text-danger">Fora do Hábito</div>
-                        <h2 class="fw-bold mb-0 text-danger">{{ total_clientes_risco }}</h2>
-                        <small class="text-muted">clientes em atraso</small>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="metric-card p-4 border-start border-4 border-success">
-                        <div class="text-label text-success">Em Dia</div>
-                        <h2 class="fw-bold mb-0 text-success">{{ total_clientes_analisados|add:"-"|add:total_clientes_risco }}</h2>
-                        <small class="text-muted">clientes no ritmo normal</small>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="metric-card p-4 border-start border-4 border-secondary">
-                        <div class="text-label text-secondary">Base Analisada</div>
-                        <h2 class="fw-bold mb-0">{{ total_clientes_analisados }}</h2>
-                        <small class="text-muted">clientes com histórico</small>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-            <div class="row">
-                <div class="col-12">
-                    <div class="metric-card p-4 border-start border-4 border-info">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="fw-bold mb-0 text-dark">
-                                <i class="fas fa-user-clock text-info me-2"></i> Clientes Fora do Hábito de Compra
-                            </h5>
-                            <span class="badge bg-info text-white">Prevenção de Perda</span>
-                        </div>
-                        <p class="text-muted small">Clientes que costumam comprar em intervalos fixos, mas o tempo sem comprar atual superou a média histórica deles.</p>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle small">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th>Cliente</th>
-                                        <th class="text-center">Hábito (Média)</th>
-                                        <th class="text-center">Sem comprar há</th>
-                                        <th class="text-center">Status de Atraso</th>
-                                        <th class="text-end">Última Compra</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for c in saude_base %}
-                                    <tr>
-                                        <td><strong>{{ c.nome }}</strong><br><span class="text-muted small">Cód: {{ c.codigo }}</span></td>
-                                        <td class="text-center">{{ c.media_habito }} dias</td>
-                                        <td class="text-center fw-bold text-danger">{{ c.dias_sem_comprar }} dias</td>
-                                        <td class="text-center"><span class="badge bg-danger-subtle text-danger">+{{ c.atraso }} dias</span></td>
-                                        <td class="text-end text-muted">{{ c.ultima_data }}</td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr><td colspan="6" class="text-center py-4 text-muted">Toda a base está com o hábito de compra em dia! 🚀</td></tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+    </div><!-- /tab logistica -->
+
+    <!-- ══════════════════════════════════════════
+         ABA 5 — WISHLIST
+         "Dinheiro na mesa"
+    ══════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-wishlist" role="tabpanel">
+
+        {% if oportunidades_wishlist %}
+        <!-- KPI de contexto -->
+        <div class="kpi-card mb-3" style="border-left:3px solid #783ae3;">
+            <div class="kpi-icon" style="background:#f8f5ff;color:#783ae3;"><i class="fas fa-bell"></i></div>
+            <div style="flex:1;">
+                <div class="kpi-label">Oportunidades pendentes</div>
+                <div class="kpi-value" style="color:#783ae3;">{{ oportunidades_wishlist|length }} cliente{{ oportunidades_wishlist|length|pluralize:",s" }}</div>
+                <div class="kpi-sub">com produto de volta ao estoque aguardando aviso</div>
             </div>
         </div>
 
-        <div class="tab-pane fade" id="pills-wishlist" role="tabpanel">
-            <div class="row">
-                <div class="col-12">
-                    <div class="metric-card p-4 border-start border-4" style="border-color: #783ae3 !important;">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="fw-bold mb-0 text-dark">
-                                <i class="fas fa-bell me-2" style="color: #783ae3;"></i> Clientes com Produtos Disponíveis para Notificar
-                            </h5>
-                            <span class="badge" style="background-color: rgba(120, 58, 227, 0.1); color: #783ae3;">Aguardando aviso</span>
+        <div class="row g-3">
+            {% for op in oportunidades_wishlist %}
+            <div class="col-md-6 col-lg-4">
+                <div class="op-card">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <span class="fw-bold text-dark" style="font-size:.85rem;">{{ op.cliente.client_name|truncatechars:28 }}</span><br>
+                            <span class="text-muted small">Cód: {{ op.cliente.client_id }}</span>
                         </div>
-                        <p class="text-muted small">Clientes que tinham itens na wishlist e o produto voltou ao estoque. Acesse o perfil para enviar o aviso via WhatsApp.</p>
-
-                        {% if oportunidades_wishlist %}
-                            <div class="row g-3">
-                                {% for op in oportunidades_wishlist %}
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="border rounded p-3 h-100" style="background: #fdfdff;">
-                                        <div class="d-flex justify-content-between align-items-start mb-2">
-                                            <div>
-                                                <span class="fw-bold text-dark">{{ op.cliente.client_name|truncatechars:30 }}</span><br>
-                                                <span class="text-muted small">Cód: {{ op.cliente.client_id }}</span>
-                                            </div>
-                                            <a href="{% url 'notificar_wishlist_whatsapp' op.cliente.client_id %}" class="btn btn-sm fw-bold" style="background-color: #783ae3; color: white; font-size: 0.7rem;">
-                                                <i class="fab fa-whatsapp me-1"></i>Notificar
-                                            </a>
-                                        </div>
-                                        <ul class="list-unstyled mb-0 mt-2">
-                                            {% for prod in op.produtos %}
-                                            <li class="d-flex justify-content-between align-items-center py-1 border-top">
-                                                <span class="small text-dark">
-                                                    <span class="fw-bold" style="color: #783ae3;">{{ prod.codigo }}</span>
-                                                    {% if prod.quantidade %}&times; {{ prod.quantidade }}un{% endif %}
-                                                    <span class="text-muted ms-1" style="font-size:.7rem;">{{ prod.data|timesince }} atrás</span>
-                                                </span>
-                                                <span class="badge bg-success ms-2">R$ {{ prod.preco|floatformat:2 }}</span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="text-center py-5 text-muted">
-                                <i class="fas fa-check-circle fa-2x mb-2 text-success"></i>
-                                <p class="mb-0">Nenhuma oportunidade pendente no momento.</p>
-                            </div>
-                        {% endif %}
+                        <a href="{% url 'notificar_wishlist_whatsapp' op.cliente.client_id %}" class="btn btn-sm fw-bold rounded-pill" style="background:#783ae3;color:white;font-size:.7rem;">
+                            <i class="fab fa-whatsapp me-1"></i>Notificar
+                        </a>
                     </div>
+                    <ul class="list-unstyled mb-0">
+                        {% for prod in op.produtos %}
+                        <li class="d-flex justify-content-between align-items-center py-1 border-top">
+                            <span class="small text-dark">
+                                <span class="fw-bold" style="color:#783ae3;">{{ prod.codigo }}</span>
+                                {% if prod.quantidade %}&times; {{ prod.quantidade }}un{% endif %}
+                                <span class="text-muted ms-1" style="font-size:.7rem;">{{ prod.data|timesince }} atrás</span>
+                            </span>
+                            <span class="badge bg-success ms-2">R$ {{ prod.preco|floatformat:2 }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
                 </div>
             </div>
+            {% endfor %}
         </div>
 
-    </div>
-</div>
+        {% else %}
+        <div class="section-card text-center py-5">
+            <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+            <h5 class="fw-bold text-dark">Nenhuma oportunidade pendente</h5>
+            <p class="text-muted mb-0">Todos os clientes com wishlist já foram notificados ou já compraram.</p>
+        </div>
+        {% endif %}
+
+    </div><!-- /tab wishlist -->
+
+</div><!-- /tab-content -->
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    // Utilitário BRL
     const _brl = v => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
 
-    // Gráfico Evolução Diária
-    const ctxVendas = document.getElementById('graficoVendas').getContext('2d');
-    const chartVendas = new Chart(ctxVendas, {
+    // Navegar entre abas programaticamente
+    function switchTab(btnId) {
+        const btn = document.getElementById(btnId);
+        if (btn) btn.click();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Gráfico: Evolução Diária ──
+    const chartVendas = new Chart(document.getElementById('graficoVendas'), {
         type: 'line',
         data: {
             labels: {{ labels_diario|safe }},
             datasets: [{
                 data: {{ valores_diario|safe }},
                 borderColor: '#4361ee',
-                backgroundColor: 'rgba(67, 97, 238, 0.1)',
-                fill: true,
-                tension: 0.4
+                backgroundColor: 'rgba(67,97,238,0.08)',
+                fill: true, tension: 0.4,
+                pointRadius: 3, pointHoverRadius: 6,
+                pointBackgroundColor: '#4361ee'
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => _brl(ctx.parsed.y) } } },
-            scales: { y: { ticks: { callback: _brl } } }
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => _brl(ctx.parsed.y) } }
+            },
+            scales: { y: { ticks: { callback: _brl }, grid: { color: '#f3f4f6' } } }
         }
     });
 
-    // Gráfico SP vs ES
+    // ── Gráfico: SP vs ES ──
     {% if total_sp > 0 or total_es > 0 %}
-    const ctxEstados = document.getElementById('graficoEstados').getContext('2d');
-    const chartEstados = new Chart(ctxEstados, {
+    const chartEstados = new Chart(document.getElementById('graficoEstados'), {
         type: 'doughnut',
         data: {
             labels: ['SP', 'ES'],
             datasets: [{
                 data: {{ valores_estados|safe }},
                 backgroundColor: ['#4361ee', '#0dcaf0'],
-                borderWidth: 0,
-                hoverOffset: 8
+                borderWidth: 0, hoverOffset: 8
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: ctx => ctx.label + ': ' + _brl(ctx.parsed) } }
@@ -495,35 +622,35 @@
     });
     {% endif %}
 
-    // Gráfico Semana
-    const ctxSemana = document.getElementById('graficoSemana').getContext('2d');
-    const chartSemana = new Chart(ctxSemana, {
+    // ── Gráfico: Heatmap Semanal ──
+    const chartSemana = new Chart(document.getElementById('graficoSemana'), {
         type: 'bar',
         data: {
             labels: {{ labels_semana|safe }},
             datasets: [{
                 data: {{ valores_semana|safe }},
-                backgroundColor: 'rgba(13, 202, 240, 0.3)',
+                backgroundColor: 'rgba(13,202,240,0.25)',
                 borderColor: '#0dcaf0',
-                borderWidth: 2,
-                borderRadius: 10
+                borderWidth: 2, borderRadius: 10
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => _brl(ctx.parsed.y) } } },
-            scales: { y: { ticks: { callback: _brl } } }
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => _brl(ctx.parsed.y) } }
+            },
+            scales: { y: { ticks: { callback: _brl }, grid: { color: '#f3f4f6' } } }
         }
     });
 
-    // Correção de resize para as abas
-    document.getElementById('pills-logistica-tab').addEventListener('shown.bs.tab', () => {
+    // Resize ao trocar aba
+    document.getElementById('tab-evolucao-btn').addEventListener('shown.bs.tab', () => chartVendas.resize());
+    document.getElementById('tab-logistica-btn').addEventListener('shown.bs.tab', () => {
         chartSemana.resize();
         {% if total_sp > 0 or total_es > 0 %}
         if (typeof chartEstados !== 'undefined') chartEstados.resize();
         {% endif %}
     });
-    document.getElementById('pills-comercial-tab').addEventListener('shown.bs.tab', () => chartVendas.resize());
 </script>
 {% endblock %}
