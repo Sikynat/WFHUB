@@ -4768,11 +4768,15 @@ def exportar_rfm_pdf(request):
     }
     ACOES = {
         'Campeão':    'Fidelize e recompense',
-        'Fiel':       'Cross-sell — venda mais',
+        'Fiel':       'Cross-sell, venda mais',
         'Potencial':  'Converta em recorrente',
-        'Em Risco':   'Ligar hoje — risco real de perda',
-        'Adormecido': 'Última tentativa de reativação',
+        'Em Risco':   'Ligar hoje - risco real de perda',
+        'Adormecido': 'Ultima tentativa de reativacao',
     }
+
+    def _pdf_str(s):
+        """Remove chars fora do latin-1 para compatibilidade com Helvetica."""
+        return s.encode('latin-1', errors='replace').decode('latin-1')
 
     class RFMPdf(FPDF):
         def header(self):
@@ -4781,18 +4785,18 @@ def exportar_rfm_pdf(request):
             self.set_font('Helvetica', 'B', 14)
             self.set_text_color(255, 255, 255)
             self.set_y(6)
-            self.cell(0, 10, f'Análise RFM — {empresa_nome}', align='L', new_x='LMARGIN', new_y='NEXT')
+            self.cell(0, 10, f'Analise RFM - {empresa_nome}', align='L', new_x='LMARGIN', new_y='NEXT')
             self.set_font('Helvetica', '', 8)
             self.set_text_color(180, 190, 210)
             self.set_y(14)
-            self.cell(0, 6, f'Gerado em {hoje.strftime("%d/%m/%Y")}  ·  Últimos 12 meses  ·  {rfm["total"]} clientes analisados', align='L')
+            self.cell(0, 6, f'Gerado em {hoje.strftime("%d/%m/%Y")} | Ultimos 12 meses | {rfm["total"]} clientes analisados', align='L')
             self.ln(14)
 
         def footer(self):
             self.set_y(-12)
             self.set_font('Helvetica', '', 7)
             self.set_text_color(160, 160, 160)
-            self.cell(0, 5, f'Página {self.page_no()} — RFM gerado por WFHUB', align='C')
+            self.cell(0, 5, f'Pagina {self.page_no()} - RFM gerado por WFHUB', align='C')
 
     pdf = RFMPdf(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=14)
@@ -4823,7 +4827,7 @@ def exportar_rfm_pdf(request):
         pdf.set_text_color(*cor)
         pdf.set_font('Helvetica', 'B', 7)
         pdf.set_xy(x0 + 2, pdf.get_y() + 4)
-        pdf.cell(card_w - 4, 4, nome.upper())
+        pdf.cell(card_w - 4, 4, _pdf_str(nome.upper()))
         pdf.set_text_color(30, 41, 59)
         pdf.set_font('Helvetica', 'B', 18)
         pdf.set_xy(x0 + 2, pdf.get_y() + 4)
@@ -4831,7 +4835,7 @@ def exportar_rfm_pdf(request):
         pdf.set_text_color(100, 116, 139)
         pdf.set_font('Helvetica', '', 6)
         pdf.set_xy(x0 + 2, pdf.get_y() + 6)
-        pdf.multi_cell(card_w - 4, 3, acao)
+        pdf.multi_cell(card_w - 4, 3, _pdf_str(acao))
         x0 += card_w + 4
 
     pdf.ln(28)
@@ -4839,19 +4843,19 @@ def exportar_rfm_pdf(request):
     # ── Tabela de clientes ───────────────────────────────────────────
     pdf.set_font('Helvetica', 'B', 9)
     pdf.set_text_color(100, 116, 139)
-    pdf.cell(0, 6, 'CLIENTES — DETALHAMENTO RFM', new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 6, 'CLIENTES - DETALHAMENTO RFM', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(1)
 
     # Cabeçalho da tabela
     cols = [
-        ('Cód.',         14),
+        ('Cod.',         14),
         ('Cliente',      72),
         ('Segmento',     28),
-        ('Recência',     22),
-        ('Frequência',   22),
+        ('Recencia',     22),
+        ('Frequencia',   22),
         ('Valor (12m)',  38),
         ('Score',        18),
-        ('Últ. Compra',  26),
+        ('Ult. Compra',  26),
     ]
     pdf.set_fill_color(30, 41, 59)
     pdf.set_text_color(255, 255, 255)
@@ -4875,12 +4879,12 @@ def exportar_rfm_pdf(request):
 
         pdf.set_text_color(30, 41, 59)
         row_h = 6
-        pdf.cell(cols[0][1], row_h, str(c['codigo']),       fill=True, align='C')
-        pdf.cell(cols[1][1], row_h, c['nome'][:38],         fill=True)
+        pdf.cell(cols[0][1], row_h, str(c['codigo']),              fill=True, align='C')
+        pdf.cell(cols[1][1], row_h, _pdf_str(c['nome'][:38]),      fill=True)
         # Segmento com cor
         pdf.set_text_color(*cor)
         pdf.set_font('Helvetica', 'B', 7)
-        pdf.cell(cols[2][1], row_h, seg,                    fill=True, align='C')
+        pdf.cell(cols[2][1], row_h, _pdf_str(seg),                 fill=True, align='C')
         pdf.set_text_color(30, 41, 59)
         pdf.set_font('Helvetica', '', 7)
         pdf.cell(cols[3][1], row_h, f"{c['recencia']}d",    fill=True, align='C')
