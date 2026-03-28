@@ -477,7 +477,7 @@
         data: {
             labels: ['SP', 'ES'],
             datasets: [{
-                data: [{{ total_sp }}, {{ total_es }}],
+                data: {{ valores_estados|safe }},
                 backgroundColor: ['#4361ee', '#0dcaf0'],
                 borderWidth: 0,
                 hoverOffset: 8

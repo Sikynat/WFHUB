@@ -233,6 +233,7 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado, empresa=None
         'oportunidades_wishlist': list(oportunidades_wishlist.values()),
         'total_recuperado_reais': recuperado_formatado, 'qtd_itens_recuperados': qtd_itens_recuperados,
         'total_sp': float(total_sp), 'total_es': float(total_es),
+        'valores_estados': json.dumps([float(total_sp), float(total_es)]),
     }
 
 # ====================================================================
