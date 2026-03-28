@@ -463,44 +463,75 @@ def calcular_historico_rfm(empresa=None, meses=6):
 
 
 # ====================================================================
-# 4. EVOLUÇÃO ANUAL DE CLIENTES
+# 4. EVOLUÇÃO DE CLIENTES (com suporte a períodos customizados)
 # ====================================================================
-def calcular_evolucao_clientes(empresa=None, ano=None):
-    """
-    Retorna a evolução mensal de compras por cliente no ano selecionado,
-    comparando com o ano anterior para calcular variação %.
 
-    Retorna:
-      - clientes: lista de dicts com meses[1..12], total_ano, total_ant, variacao_pct, tendencia
-      - meses_com_dados: lista de meses (1-12) que têm alguma venda no ano
-      - totais_mensais: soma de todos os clientes por mês
-      - ano, ano_anterior
-    """
+PERIODOS_EVOLUCAO = {
+    'ytd':  'Início do Ano',
+    '3m':   'Últimos 3 meses',
+    '6m':   'Últimos 6 meses',
+    '12m':  'Últimos 12 meses',
+}
+
+
+def _intervalo_periodo(periodo, ano=None):
+    """Retorna (data_inicio, data_fim) para o período selecionado."""
     hoje = date.today()
-    if ano is None:
-        ano = hoje.year
+    if periodo == 'ytd' or ano is not None:
+        _ano = ano if ano is not None else hoje.year
+        return date(_ano, 1, 1), date(_ano, 12, 31)
+    if periodo == '3m':
+        return (hoje.replace(day=1) - timedelta(days=2 * 28)).replace(day=1), hoje
+    if periodo == '6m':
+        return (hoje.replace(day=1) - timedelta(days=5 * 28)).replace(day=1), hoje
+    # default: 12m
+    return (hoje.replace(day=1) - timedelta(days=11 * 28)).replace(day=1), hoje
 
-    ano_anterior = ano - 1
 
-    # Base query
+def calcular_evolucao_clientes(empresa=None, ano=None, periodo='ytd'):
+    """
+    Retorna a evolução mensal de compras por cliente.
+
+    Modos:
+      - ano=YYYY          → ano completo (mantém compatibilidade)
+      - periodo='ytd'     → 1/Jan do ano atual até hoje
+      - periodo='3m'/'6m'/'12m' → janela deslizante
+
+    Comparação: mesmo intervalo de datas, deslocado 1 ano atrás.
+    """
+    from django.db.models.functions import ExtractMonth
+
+    data_ini, data_fim = _intervalo_periodo(periodo, ano)
+    # Período de comparação: 1 ano atrás
+    from dateutil.relativedelta import relativedelta
+    data_ini_ant = data_ini - relativedelta(years=1)
+    data_fim_ant = data_fim - relativedelta(years=1)
+
     qs_base = VendaReal.objects.all()
     if empresa:
         qs_base = qs_base.filter(empresa=empresa)
 
-    # Agrega por cliente + mês para o ano atual
-    from django.db.models.functions import ExtractMonth, ExtractYear
-    vendas_ano = (
+    # Meses do período selecionado
+    meses_periodo = set()
+    cur = data_ini.replace(day=1)
+    while cur <= data_fim:
+        meses_periodo.add(cur.month)
+        cur = (cur + timedelta(days=32)).replace(day=1)
+    meses_periodo = sorted(meses_periodo)
+
+    # Vendas do período atual — agrega por cliente + mês
+    vendas_atual = (
         qs_base
-        .filter(Emissao__year=ano)
+        .filter(Emissao__gte=data_ini, Emissao__lte=data_fim)
         .values('Codigo_Cliente', 'cliente_nome')
         .annotate(mes=ExtractMonth('Emissao'), total_mes=Sum('Total'))
         .order_by('Codigo_Cliente', 'mes')
     )
 
-    # Agrega por cliente para o ano anterior (total apenas)
+    # Vendas do período de comparação — total por cliente
     vendas_ant = (
         qs_base
-        .filter(Emissao__year=ano_anterior)
+        .filter(Emissao__gte=data_ini_ant, Emissao__lte=data_fim_ant)
         .values('Codigo_Cliente')
         .annotate(total_ant=Sum('Total'))
     )
@@ -508,7 +539,7 @@ def calcular_evolucao_clientes(empresa=None, ano=None):
 
     # Monta estrutura por cliente
     clientes_dict = {}
-    for row in vendas_ano:
+    for row in vendas_atual:
         cod = row['Codigo_Cliente']
         if cod not in clientes_dict:
             clientes_dict[cod] = {
@@ -518,28 +549,24 @@ def calcular_evolucao_clientes(empresa=None, ano=None):
             }
         clientes_dict[cod]['meses'][row['mes']] += row['total_mes'] or Decimal('0')
 
-    # Calcula totais e variação
     meses_com_dados = set()
     totais_mensais = {m: Decimal('0') for m in range(1, 13)}
 
     clientes = []
     for cod, c in clientes_dict.items():
-        total_ano = sum(c['meses'].values())
+        total_periodo = sum(c['meses'][m] for m in meses_periodo)
         total_ant = total_ant_por_cliente.get(cod, Decimal('0')) or Decimal('0')
 
         if total_ant > 0:
-            variacao_pct = float((total_ano - total_ant) / total_ant * 100)
-        elif total_ano > 0:
-            variacao_pct = 100.0  # cliente novo no ano
+            variacao_pct = float((total_periodo - total_ant) / total_ant * 100)
+        elif total_periodo > 0:
+            variacao_pct = 100.0
         else:
             variacao_pct = 0.0
 
-        if variacao_pct >= 10:
-            tendencia = 'crescendo'
-        elif variacao_pct <= -10:
-            tendencia = 'caindo'
-        else:
-            tendencia = 'estavel'
+        tendencia = ('crescendo' if variacao_pct >= 10
+                     else 'caindo' if variacao_pct <= -10
+                     else 'estavel')
 
         for m, v in c['meses'].items():
             if v > 0:
@@ -550,24 +577,36 @@ def calcular_evolucao_clientes(empresa=None, ano=None):
             'codigo': cod,
             'nome': c['nome'],
             'meses': c['meses'],
-            'total_ano': total_ano,
+            'total_ano': total_periodo,
             'total_ant': total_ant,
             'variacao_pct': variacao_pct,
             'tendencia': tendencia,
         })
 
-    # Ordena por total do ano (maior primeiro)
     clientes.sort(key=lambda x: x['total_ano'], reverse=True)
 
-    meses_com_dados = sorted(meses_com_dados) if meses_com_dados else list(range(1, 13))
+    # Mostrar apenas meses que pertencem ao período E têm dados
+    meses_exibir = sorted(meses_com_dados & set(meses_periodo)) if meses_com_dados else meses_periodo
+
+    label_periodo = (
+        f'{data_ini.year}' if ano is not None
+        else PERIODOS_EVOLUCAO.get(periodo, periodo)
+    )
+    label_comparacao = (
+        f'{data_ini_ant.strftime("%b/%y")} – {data_fim_ant.strftime("%b/%y")}'
+    )
 
     return {
-        'clientes': clientes,
-        'meses_com_dados': meses_com_dados,
-        'totais_mensais': totais_mensais,
-        'ano': ano,
-        'ano_anterior': ano_anterior,
-        'total_geral': sum(totais_mensais.values()),
+        'clientes':         clientes,
+        'meses_com_dados':  meses_exibir,
+        'totais_mensais':   totais_mensais,
+        'ano':              data_ini.year,
+        'ano_anterior':     data_ini_ant.year,
+        'total_geral':      sum(totais_mensais[m] for m in meses_exibir),
+        'label_periodo':    label_periodo,
+        'label_comparacao': label_comparacao,
+        'data_ini':         data_ini,
+        'data_fim':         data_fim,
     }
 
 

@@ -96,11 +96,11 @@
     <!-- Header -->
     <div class="page-header">
         <div>
-            <h1>📈 Evolução de Clientes {{ ano_selecionado }}</h1>
-            <p>Compras mensais por cliente — compare com {{ ano_anterior }} e identifique quem está crescendo ou sumindo</p>
+            <h1>📈 Evolução de Clientes — {{ label_periodo }}</h1>
+            <p>Comparando com {{ label_comparacao }} — identifique quem está crescendo ou sumindo</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'exportar_evolucao_clientes_excel' %}?ano={{ ano_selecionado }}"
+            <a href="{% url 'exportar_evolucao_clientes_excel' %}?periodo={{ periodo_selecionado }}{% if periodo_selecionado == 'ano' %}&ano={{ ano_selecionado }}{% endif %}"
                class="btn btn-success btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
             </a>
@@ -110,19 +110,39 @@
         </div>
     </div>
 
-    <!-- Filtros -->
-    <div class="filter-bar">
-        <label>Ano:</label>
-        <select onchange="window.location='?ano='+this.value">
+    <!-- Painel de período -->
+    <div class="filter-bar" style="gap:.75rem;">
+        <!-- Botões de período rápido -->
+        <label>Período:</label>
+        <div class="btn-group btn-group-sm" role="group">
+            {% for key, label in periodos_disponiveis.items %}
+            <a href="?periodo={{ key }}"
+               class="btn {% if periodo_selecionado == key %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+               style="font-size:.78rem;">
+                {{ label }}
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- Separador + seletor de ano específico -->
+        <div class="vr mx-1"></div>
+        <label>Ano específico:</label>
+        <select onchange="window.location='?ano='+this.value" style="min-width:90px;">
+            <option value="">—</option>
             {% for a in anos_disponiveis %}
-            <option value="{{ a }}" {% if a == ano_selecionado %}selected{% endif %}>{{ a }}</option>
+            <option value="{{ a }}" {% if periodo_selecionado == 'ano' and a == ano_selecionado %}selected{% endif %}>
+                {{ a }}
+            </option>
             {% endfor %}
         </select>
 
-        <label class="ms-2">Buscar cliente:</label>
-        <input type="text" id="searchCliente" placeholder="Nome ou código..." oninput="filtrarTabela()" style="min-width:180px;">
+        <!-- Filtros de tabela -->
+        <div class="vr mx-1"></div>
+        <label>Buscar:</label>
+        <input type="text" id="searchCliente" placeholder="Nome ou código..."
+               oninput="filtrarTabela()" style="min-width:160px;">
 
-        <label class="ms-2">Tendência:</label>
+        <label>Tendência:</label>
         <select id="filtroTendencia" onchange="filtrarTabela()">
             <option value="">Todas</option>
             <option value="crescendo">📈 Crescendo</option>
@@ -179,8 +199,8 @@
                         {% for m in meses_com_dados %}
                         <th>{{ meses_nomes|get_item:m }}</th>
                         {% endfor %}
-                        <th>Total {{ ano_selecionado }}</th>
-                        <th>Total {{ ano_anterior }}</th>
+                        <th>Total {{ label_periodo }}</th>
+                        <th>Comparação ({{ label_comparacao }})</th>
                         <th>Var %</th>
                         <th>Tendência</th>
                     </tr>

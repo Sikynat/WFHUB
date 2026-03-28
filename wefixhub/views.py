@@ -4744,16 +4744,24 @@ def dashboard_analise(request):
 
 @staff_member_required
 def evolucao_clientes(request):
-    ano = request.GET.get('ano')
-    try:
-        ano = int(ano)
-    except (TypeError, ValueError):
-        ano = date.today().year
-
-    dados = calcular_evolucao_clientes(empresa=request.empresa, ano=ano)
-
-    # Anos disponíveis para o filtro (baseado nos dados existentes)
+    from wefixhub.utils import PERIODOS_EVOLUCAO
     from django.db.models.functions import ExtractYear
+
+    periodo = request.GET.get('periodo', 'ytd')
+    ano_str = request.GET.get('ano', '')
+
+    # Se vier um ano específico, usa modo ano; senão usa periodo
+    try:
+        ano = int(ano_str)
+        periodo = 'ano'
+    except (TypeError, ValueError):
+        ano = None
+        if periodo not in PERIODOS_EVOLUCAO:
+            periodo = 'ytd'
+
+    dados = calcular_evolucao_clientes(empresa=request.empresa, ano=ano, periodo=periodo)
+
+    # Anos disponíveis para o seletor
     qs_anos = VendaReal.objects.all()
     if request.empresa:
         qs_anos = qs_anos.filter(empresa=request.empresa)
@@ -4763,9 +4771,10 @@ def evolucao_clientes(request):
     )
 
     dados['anos_disponiveis'] = anos_disponiveis
-    dados['ano_selecionado'] = ano
+    dados['ano_selecionado'] = ano or date.today().year
+    dados['periodo_selecionado'] = periodo
+    dados['periodos_disponiveis'] = PERIODOS_EVOLUCAO
 
-    # Nomes dos meses em PT
     MESES_PT = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
                 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     dados['meses_nomes'] = {m: MESES_PT[m] for m in range(1, 13)}
@@ -4775,13 +4784,18 @@ def evolucao_clientes(request):
 
 @staff_member_required
 def exportar_evolucao_clientes_excel(request):
-    ano = request.GET.get('ano')
+    from wefixhub.utils import PERIODOS_EVOLUCAO
+    periodo = request.GET.get('periodo', 'ytd')
+    ano_str = request.GET.get('ano', '')
     try:
-        ano = int(ano)
+        ano = int(ano_str)
+        periodo = 'ano'
     except (TypeError, ValueError):
-        ano = date.today().year
+        ano = None
+        if periodo not in PERIODOS_EVOLUCAO:
+            periodo = 'ytd'
 
-    dados = calcular_evolucao_clientes(empresa=request.empresa, ano=ano)
+    dados = calcular_evolucao_clientes(empresa=request.empresa, ano=ano, periodo=periodo)
 
     MESES_PT = ['', 'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
                 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -4789,7 +4803,7 @@ def exportar_evolucao_clientes_excel(request):
     output = BytesIO()
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = f'Evolucao {ano}'
+    ws.title = f'Evolucao {dados["label_periodo"]}'
 
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
