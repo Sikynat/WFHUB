@@ -17,6 +17,7 @@ urlpatterns = [
     path('analise/upload-vendas/', views.upload_vendas_reais, name='upload_vendas_reais'),
     path('analise/graficos/', views.dashboard_analise, name='dashboard_analise'),
     path('analise/rfm/exportar-pdf/', views.exportar_rfm_pdf, name='exportar_rfm_pdf'),
+    path('analise/rfm/historico/', views.historico_rfm, name='historico_rfm'),
     path('analise/evolucao-clientes/', views.evolucao_clientes, name='evolucao_clientes'),
     path('analise/evolucao-clientes/exportar/', views.exportar_evolucao_clientes_excel, name='exportar_evolucao_clientes_excel'),
     path('analise/sugestoes-admin/', views.sugestoes_admin, name='sugestoes_admin'),

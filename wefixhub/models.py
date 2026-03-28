@@ -727,3 +727,47 @@ class LogAuditoria(models.Model):
 
     def __str__(self):
         return f'{self.acao} por {self.usuario} em {self.criado_em:%d/%m/%Y %H:%M}'
+
+
+# ==========================================
+# HISTÓRICO RFM — SNAPSHOT MENSAL
+# ==========================================
+
+class SnapshotRFM(models.Model):
+    """
+    Guarda o segmento RFM de cada cliente em um determinado mês.
+    Gerado pelo management command 'salvar_snapshot_rfm'.
+    """
+    SEGMENTOS = [
+        ('Campeão',    'Campeão'),
+        ('Fiel',       'Fiel'),
+        ('Potencial',  'Potencial'),
+        ('Em Risco',   'Em Risco'),
+        ('Adormecido', 'Adormecido'),
+    ]
+
+    empresa      = models.ForeignKey('Empresa', on_delete=models.CASCADE,
+                                     null=True, blank=True, related_name='snapshots_rfm')
+    data_ref     = models.DateField(verbose_name='Referência (1º do mês)',
+                                    help_text='Sempre o dia 1 do mês de referência')
+    cod_cliente  = models.IntegerField(verbose_name='Código do Cliente')
+    nome_cliente = models.CharField(max_length=255)
+    segmento     = models.CharField(max_length=20, choices=SEGMENTOS)
+    r_score      = models.PositiveSmallIntegerField()
+    f_score      = models.PositiveSmallIntegerField()
+    m_score      = models.PositiveSmallIntegerField()
+    rfm_score    = models.PositiveSmallIntegerField()
+    recencia     = models.IntegerField(verbose_name='Recência (dias)')
+    frequencia   = models.IntegerField()
+    monetario    = models.DecimalField(max_digits=14, decimal_places=2)
+    criado_em    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wf_snapshot_rfm'
+        unique_together = ('empresa', 'data_ref', 'cod_cliente')
+        ordering = ['-data_ref', 'cod_cliente']
+        verbose_name = 'Snapshot RFM'
+        verbose_name_plural = 'Snapshots RFM'
+
+    def __str__(self):
+        return f'{self.nome_cliente} | {self.data_ref:%m/%Y} | {self.segmento}'

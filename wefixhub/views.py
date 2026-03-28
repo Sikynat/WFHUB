@@ -42,7 +42,7 @@ from django import template
 
 from .utils import ( gerar_dados_dashboard_analise, gerar_excel_vendas_reais,
                     processar_status_pdf, processar_giro_cliente,
-                    calcular_evolucao_clientes )
+                    calcular_evolucao_clientes, calcular_historico_rfm )
 
 
 # 4. ORM e Banco de Dados do Django
@@ -4862,6 +4862,25 @@ def exportar_evolucao_clientes_excel(request):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+@staff_member_required
+def historico_rfm(request):
+    meses = int(request.GET.get('meses', 6))
+    meses = max(2, min(meses, 12))  # entre 2 e 12
+
+    dados = calcular_historico_rfm(empresa=request.empresa, meses=meses)
+    dados['meses_selecionado'] = meses
+    dados['meses_opcoes'] = [3, 6, 9, 12]
+
+    # Nomes curtos dos meses em PT
+    MESES_PT = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+                'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    dados['datas_labels'] = {
+        d: f"{MESES_PT[d.month]}/{str(d.year)[2:]}" for d in dados['datas']
+    }
+
+    return render(request, 'analise/historico_rfm.html', dados)
 
 
 @staff_member_required

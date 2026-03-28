@@ -1,0 +1,265 @@
+{% extends 'base.html' %}
+{% load format_tags %}
+
+{% block content %}
+<style>
+    body { background: #f8f9fc; }
+
+    .page-header {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        padding: 1.5rem 2rem; margin-bottom: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .page-header h1 { font-size: 1.3rem; font-weight: 700; color: #1a202c; margin: 0; }
+    .page-header p  { font-size: .85rem; color: #718096; margin: .15rem 0 0; }
+
+    /* Cards de migração */
+    .mig-cards { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .mig-card {
+        background: white; border-radius: 12px; border: 1px solid #edf2f7;
+        padding: .9rem 1.4rem; flex: 1; min-width: 140px; text-align: center;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    .mig-card .num  { font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: .2rem; }
+    .mig-card .lbl  { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: #718096; }
+    .mig-card .sub  { font-size: .7rem; color: #9ca3af; margin-top: .15rem; }
+
+    /* Filtros */
+    .filter-bar {
+        background: white; border-radius: 12px; border: 1px solid #edf2f7;
+        padding: .9rem 1.5rem; margin-bottom: 1.25rem;
+        display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    .filter-bar label { font-size: .78rem; font-weight: 600; color: #4a5568; margin: 0; }
+    .filter-bar select, .filter-bar input {
+        font-size: .82rem; padding: .3rem .6rem; border: 1px solid #e2e8f0;
+        border-radius: 8px; color: #2d3748; background: #f7fafc;
+    }
+
+    /* Tabela */
+    .table-wrapper {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04); overflow: hidden;
+    }
+    .hist-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    .hist-table thead th {
+        background: #1F3864; color: white; font-weight: 600;
+        padding: .6rem .85rem; text-align: center; white-space: nowrap;
+        position: sticky; top: 0; z-index: 2;
+    }
+    .hist-table thead th.col-cliente { text-align: left; min-width: 200px; }
+    .hist-table tbody td { padding: .5rem .75rem; border-bottom: 1px solid #f0f4f8; }
+    .hist-table tbody tr:hover td { background: #f7fafc !important; }
+    .hist-table tbody tr:last-child td { border-bottom: none; }
+
+    .col-nome { font-weight: 600; color: #2d3748; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .col-tend { text-align: center; }
+
+    /* Badge de segmento */
+    .seg-badge {
+        display: inline-block; padding: .18rem .55rem; border-radius: 6px;
+        font-size: .72rem; font-weight: 700; white-space: nowrap;
+    }
+    .seg-vazio { color: #cbd5e0; font-size: .75rem; }
+
+    /* Tendência */
+    .tend-melhorou { color: #28a745; font-weight: 700; font-size: .8rem; }
+    .tend-piorou   { color: #dc3545; font-weight: 700; font-size: .8rem; }
+    .tend-estavel  { color: #6c757d; font-size: .8rem; }
+    .tend-novo     { color: #007bff; font-size: .8rem; }
+
+    /* Seta de migração entre células */
+    .seta-mig { color: #cbd5e0; font-size: .65rem; vertical-align: middle; }
+    .seta-up   { color: #28a745; }
+    .seta-down { color: #dc3545; }
+
+    /* Aviso sem dados */
+    .empty-state {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        padding: 3rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    }
+    .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
+    .empty-state h3 { font-size: 1.1rem; font-weight: 700; color: #2d3748; margin-bottom: .5rem; }
+    .empty-state p  { color: #718096; font-size: .85rem; max-width: 400px; margin: 0 auto; }
+    code { background: #f1f5f9; padding: .15rem .4rem; border-radius: 4px; font-size: .8rem; }
+</style>
+
+<div class="container-fluid px-3 py-4">
+
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1>🔄 Histórico de Segmentos RFM</h1>
+            <p>Acompanhe como cada cliente evoluiu entre segmentos ao longo dos meses</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'dashboard_analise' %}#rfm" class="btn btn-outline-secondary btn-sm">
+                ← Voltar ao RFM
+            </a>
+        </div>
+    </div>
+
+    {% if not tem_dados %}
+    <!-- Estado vazio -->
+    <div class="empty-state">
+        <div class="icon">📭</div>
+        <h3>Nenhum snapshot encontrado</h3>
+        <p>
+            O histórico é gerado mensalmente pelo comando:<br>
+            <code>python manage.py salvar_snapshot_rfm</code><br><br>
+            Execute este comando para salvar o snapshot do mês atual.
+            Após 2+ meses de dados, o histórico de migração ficará disponível aqui.
+        </p>
+    </div>
+
+    {% else %}
+
+    <!-- Cards de migração -->
+    <div class="mig-cards">
+        <div class="mig-card" style="border-top: 3px solid #28a745;">
+            <div class="num" style="color:#28a745;">{{ migracao.melhoraram }}</div>
+            <div class="lbl">📈 Melhoraram</div>
+            <div class="sub">subiram de segmento</div>
+        </div>
+        <div class="mig-card" style="border-top: 3px solid #dc3545;">
+            <div class="num" style="color:#dc3545;">{{ migracao.pioraram }}</div>
+            <div class="lbl">📉 Pioraram</div>
+            <div class="sub">caíram de segmento</div>
+        </div>
+        <div class="mig-card" style="border-top: 3px solid #6c757d;">
+            <div class="num" style="color:#6c757d;">{{ migracao.estaveis }}</div>
+            <div class="lbl">➡️ Estáveis</div>
+            <div class="sub">sem mudança</div>
+        </div>
+        <div class="mig-card" style="border-top: 3px solid #1F3864;">
+            <div class="num" style="color:#1F3864;">{{ clientes|length }}</div>
+            <div class="lbl">Total</div>
+            <div class="sub">clientes monitorados</div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+        <label>Período:</label>
+        <select onchange="window.location='?meses='+this.value">
+            {% for m in meses_opcoes %}
+            <option value="{{ m }}" {% if m == meses_selecionado %}selected{% endif %}>
+                Últimos {{ m }} meses
+            </option>
+            {% endfor %}
+        </select>
+
+        <label class="ms-2">Buscar:</label>
+        <input type="text" id="searchCliente" placeholder="Nome ou código..."
+               oninput="filtrarTabela()" style="min-width:180px;">
+
+        <label class="ms-2">Movimento:</label>
+        <select id="filtroMovimento" onchange="filtrarTabela()">
+            <option value="">Todos</option>
+            <option value="piorou">📉 Pioraram</option>
+            <option value="melhorou">📈 Melhoraram</option>
+            <option value="estavel">➡️ Estáveis</option>
+        </select>
+
+        <label class="ms-2">Segmento atual:</label>
+        <select id="filtroSegmento" onchange="filtrarTabela()">
+            <option value="">Todos</option>
+            {% for seg in segmentos_disponiveis %}
+            <option value="{{ seg }}">{{ seg }}</option>
+            {% endfor %}
+        </select>
+
+        <span class="ms-auto text-muted" style="font-size:.78rem;">
+            <strong id="contadorVisivel">{{ clientes|length }}</strong> clientes exibidos
+        </span>
+    </div>
+
+    <!-- Tabela -->
+    <div class="table-wrapper">
+        <div style="overflow-x: auto; max-height: 70vh; overflow-y: auto;">
+            <table class="hist-table">
+                <thead>
+                    <tr>
+                        <th class="col-cliente">Cliente</th>
+                        {% for d in datas %}
+                        <th>{{ datas_labels|get_item:d }}</th>
+                        {% endfor %}
+                        <th>Movimento</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaHistorico">
+                    {% for c in clientes %}
+                    <tr data-nome="{{ c.nome|lower }}"
+                        data-cod="{{ c.codigo }}"
+                        data-movimento="{{ c.tendencia }}"
+                        data-segmento="{{ c.segmento_atual }}">
+
+                        <td class="col-nome" title="{{ c.nome }}">
+                            <span style="color:#9ca3af;font-size:.7rem;margin-right:.3rem;">{{ c.codigo }}</span>
+                            {{ c.nome }}
+                        </td>
+
+                        {% for d in datas %}
+                        {% with info=c.meses|get_item:d %}
+                        <td class="col-tend">
+                            {% if info %}
+                                <span class="seg-badge"
+                                      style="background:{{ info.bg }};color:{{ info.cor }};">
+                                    {{ info.segmento }}
+                                </span>
+                            {% else %}
+                                <span class="seg-vazio">—</span>
+                            {% endif %}
+                        </td>
+                        {% endwith %}
+                        {% endfor %}
+
+                        <td class="col-tend">
+                            {% if c.tendencia == 'melhorou' %}
+                                <span class="tend-melhorou">▲ Melhorou</span>
+                            {% elif c.tendencia == 'piorou' %}
+                                <span class="tend-piorou">▼ Piorou</span>
+                            {% elif c.tendencia == 'estavel' %}
+                                <span class="tend-estavel">→ Estável</span>
+                            {% else %}
+                                <span class="tend-novo">★ Novo</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+
+<script>
+function filtrarTabela() {
+    const busca    = document.getElementById('searchCliente').value.toLowerCase();
+    const movFiltro= document.getElementById('filtroMovimento').value;
+    const segFiltro= document.getElementById('filtroSegmento').value;
+    const rows     = document.querySelectorAll('#tabelaHistorico tr');
+    let visivel    = 0;
+
+    rows.forEach(row => {
+        const nome = row.dataset.nome || '';
+        const cod  = row.dataset.cod  || '';
+        const mov  = row.dataset.movimento || '';
+        const seg  = row.dataset.segmento  || '';
+
+        const ok = (!busca     || nome.includes(busca) || cod.includes(busca))
+                && (!movFiltro || mov === movFiltro)
+                && (!segFiltro || seg === segFiltro);
+
+        row.style.display = ok ? '' : 'none';
+        if (ok) visivel++;
+    });
+
+    document.getElementById('contadorVisivel').textContent = visivel;
+}
+</script>
+{% endblock %}

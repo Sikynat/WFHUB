@@ -16,7 +16,7 @@ from django.db.models import Sum, Max, Q, Count
 from .models import (
     VendaReal, ItemPedidoIgnorado, Product,
     StatusPedidoERP, Pedido, WfClient, SugestaoCompraERP,
-    ItemPedido, Endereco 
+    ItemPedido, Endereco, SnapshotRFM,
 )
 
 # ====================================================================
@@ -356,7 +356,114 @@ def calcular_rfm(empresa=None):
 
 
 # ====================================================================
-# 3. EVOLUÇÃO ANUAL DE CLIENTES
+# 3. HISTÓRICO RFM — leitura de snapshots mensais
+# ====================================================================
+
+ORDEM_SEGMENTO = {
+    'Campeão': 5, 'Fiel': 4, 'Potencial': 3, 'Em Risco': 2, 'Adormecido': 1,
+}
+COR_SEGMENTO = {
+    'Campeão':    {'cor': '#10b981', 'bg': '#d1fae5'},
+    'Fiel':       {'cor': '#3b82f6', 'bg': '#dbeafe'},
+    'Potencial':  {'cor': '#8b5cf6', 'bg': '#ede9fe'},
+    'Em Risco':   {'cor': '#f59e0b', 'bg': '#fef3c7'},
+    'Adormecido': {'cor': '#6b7280', 'bg': '#f3f4f6'},
+}
+
+
+def calcular_historico_rfm(empresa=None, meses=6):
+    """
+    Lê os snapshots mensais e retorna:
+      - datas: lista de date (1º de cada mês), mais recente à direita
+      - clientes: lista de dicts com histórico de segmentos
+      - migracao: contagem de clientes que melhoraram / pioraram / estáveis
+      - total_por_mes: count de clientes por mês
+      - tem_dados: bool
+    """
+    hoje = date.today()
+
+    # Datas de referência desejadas (últimos N meses fechados)
+    datas = []
+    for i in range(meses - 1, -1, -1):
+        ano  = (hoje.replace(day=1) - timedelta(days=i * 28)).year
+        mes  = (hoje.replace(day=1) - timedelta(days=i * 28)).month
+        datas.append(date(ano, mes, 1))
+    # Garante datas únicas e ordenadas
+    datas = sorted(set(datas))[-meses:]
+
+    qs = SnapshotRFM.objects.filter(data_ref__in=datas)
+    if empresa:
+        qs = qs.filter(empresa=empresa)
+    qs = qs.order_by('cod_cliente', 'data_ref')
+
+    if not qs.exists():
+        return {'tem_dados': False, 'datas': datas, 'clientes': [], 'migracao': {}, 'total_por_mes': {}}
+
+    # Agrupa por cliente
+    por_cliente = {}
+    for snap in qs:
+        cod = snap.cod_cliente
+        if cod not in por_cliente:
+            por_cliente[cod] = {'codigo': cod, 'nome': snap.nome_cliente, 'meses': {}}
+        por_cliente[cod]['meses'][snap.data_ref] = {
+            'segmento':  snap.segmento,
+            'rfm_score': snap.rfm_score,
+            'cor':       COR_SEGMENTO.get(snap.segmento, {}).get('cor', '#9ca3af'),
+            'bg':        COR_SEGMENTO.get(snap.segmento, {}).get('bg', '#f3f4f6'),
+        }
+
+    # Calcula tendência comparando primeiro vs último mês disponível
+    melhoraram = pioraram = estaveis = 0
+    clientes = []
+    for c in por_cliente.values():
+        meses_presentes = [d for d in datas if d in c['meses']]
+        if len(meses_presentes) >= 2:
+            seg_ini  = ORDEM_SEGMENTO.get(c['meses'][meses_presentes[0]]['segmento'], 0)
+            seg_fim  = ORDEM_SEGMENTO.get(c['meses'][meses_presentes[-1]]['segmento'], 0)
+            delta = seg_fim - seg_ini
+            if delta > 0:
+                tendencia = 'melhorou'
+                melhoraram += 1
+            elif delta < 0:
+                tendencia = 'piorou'
+                pioraram += 1
+            else:
+                tendencia = 'estavel'
+                estaveis += 1
+        else:
+            tendencia = 'novo'
+
+        # Segmento atual (último mês disponível)
+        ultimo = c['meses'].get(meses_presentes[-1]) if meses_presentes else None
+        c['tendencia']       = tendencia
+        c['segmento_atual']  = ultimo['segmento'] if ultimo else '—'
+        c['cor_atual']       = ultimo['cor']       if ultimo else '#9ca3af'
+        c['bg_atual']        = ultimo['bg']        if ultimo else '#f3f4f6'
+        clientes.append(c)
+
+    # Ordena: piorou primeiro (mais urgente), depois por segmento atual
+    _ordem_tend = {'piorou': 0, 'estavel': 1, 'melhorou': 2, 'novo': 3}
+    clientes.sort(key=lambda c: (
+        _ordem_tend.get(c['tendencia'], 9),
+        -ORDEM_SEGMENTO.get(c['segmento_atual'], 0),
+    ))
+
+    total_por_mes = {}
+    for d in datas:
+        total_por_mes[d] = sum(1 for c in clientes if d in c['meses'])
+
+    return {
+        'tem_dados':    True,
+        'datas':        datas,
+        'clientes':     clientes,
+        'migracao':     {'melhoraram': melhoraram, 'pioraram': pioraram, 'estaveis': estaveis},
+        'total_por_mes': total_por_mes,
+        'segmentos_disponiveis': list(COR_SEGMENTO.keys()),
+    }
+
+
+# ====================================================================
+# 4. EVOLUÇÃO ANUAL DE CLIENTES
 # ====================================================================
 def calcular_evolucao_clientes(empresa=None, ano=None):
     """
