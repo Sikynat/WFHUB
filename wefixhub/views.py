@@ -4736,10 +4736,165 @@ def dashboard_analise(request):
     hoje = date.today()
     mes_selecionado = int(request.GET.get('mes', hoje.month))
     ano_selecionado = int(request.GET.get('ano', hoje.year))
-    
+
     contexto = gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado, empresa=request.empresa)
-    
+
     return render(request, 'analise/dashboard_analise.html', contexto)
+
+
+@staff_member_required
+def exportar_rfm_pdf(request):
+    from fpdf import FPDF
+    from wefixhub.utils import calcular_rfm
+
+    rfm = calcular_rfm(empresa=request.empresa)
+    hoje = date.today()
+    empresa_nome = request.empresa.nome if request.empresa else 'WFHUB'
+
+    # Paleta de cores por segmento (R, G, B)
+    CORES = {
+        'Campeão':    (16,  185, 129),
+        'Fiel':       (59,  130, 246),
+        'Potencial':  (139, 92,  246),
+        'Em Risco':   (245, 158, 11),
+        'Adormecido': (107, 114, 128),
+    }
+    BG = {
+        'Campeão':    (209, 250, 229),
+        'Fiel':       (219, 234, 254),
+        'Potencial':  (237, 233, 254),
+        'Em Risco':   (254, 243, 199),
+        'Adormecido': (243, 244, 246),
+    }
+    ACOES = {
+        'Campeão':    'Fidelize e recompense',
+        'Fiel':       'Cross-sell — venda mais',
+        'Potencial':  'Converta em recorrente',
+        'Em Risco':   'Ligar hoje — risco real de perda',
+        'Adormecido': 'Última tentativa de reativação',
+    }
+
+    class RFMPdf(FPDF):
+        def header(self):
+            self.set_fill_color(30, 41, 59)
+            self.rect(0, 0, 210, 22, 'F')
+            self.set_font('Helvetica', 'B', 14)
+            self.set_text_color(255, 255, 255)
+            self.set_y(6)
+            self.cell(0, 10, f'Análise RFM — {empresa_nome}', align='L', new_x='LMARGIN', new_y='NEXT')
+            self.set_font('Helvetica', '', 8)
+            self.set_text_color(180, 190, 210)
+            self.set_y(14)
+            self.cell(0, 6, f'Gerado em {hoje.strftime("%d/%m/%Y")}  ·  Últimos 12 meses  ·  {rfm["total"]} clientes analisados', align='L')
+            self.ln(14)
+
+        def footer(self):
+            self.set_y(-12)
+            self.set_font('Helvetica', '', 7)
+            self.set_text_color(160, 160, 160)
+            self.cell(0, 5, f'Página {self.page_no()} — RFM gerado por WFHUB', align='C')
+
+    pdf = RFMPdf(orientation='L', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.set_margins(12, 12, 12)
+    pdf.add_page()
+
+    # ── Resumo por segmento ──────────────────────────────────────────
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_text_color(100, 116, 139)
+    pdf.cell(0, 6, 'RESUMO POR SEGMENTO', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(1)
+
+    card_w = (pdf.w - 24 - 4 * 4) / 5  # 5 cards com gap
+    segs = rfm['segmentos']
+    x0 = pdf.l_margin
+    for nome, seg in segs.items():
+        cor = CORES.get(nome, (100, 100, 100))
+        bg  = BG.get(nome,  (240, 240, 240))
+        acao = ACOES.get(nome, '')
+        # Card background
+        pdf.set_fill_color(*bg)
+        pdf.set_draw_color(*cor)
+        pdf.rect(x0, pdf.get_y(), card_w, 22, 'FD')
+        # Barra colorida no topo do card
+        pdf.set_fill_color(*cor)
+        pdf.rect(x0, pdf.get_y(), card_w, 2, 'F')
+        # Conteúdo
+        pdf.set_text_color(*cor)
+        pdf.set_font('Helvetica', 'B', 7)
+        pdf.set_xy(x0 + 2, pdf.get_y() + 4)
+        pdf.cell(card_w - 4, 4, nome.upper())
+        pdf.set_text_color(30, 41, 59)
+        pdf.set_font('Helvetica', 'B', 18)
+        pdf.set_xy(x0 + 2, pdf.get_y() + 4)
+        pdf.cell(card_w - 4, 8, str(seg['count']))
+        pdf.set_text_color(100, 116, 139)
+        pdf.set_font('Helvetica', '', 6)
+        pdf.set_xy(x0 + 2, pdf.get_y() + 6)
+        pdf.multi_cell(card_w - 4, 3, acao)
+        x0 += card_w + 4
+
+    pdf.ln(28)
+
+    # ── Tabela de clientes ───────────────────────────────────────────
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_text_color(100, 116, 139)
+    pdf.cell(0, 6, 'CLIENTES — DETALHAMENTO RFM', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(1)
+
+    # Cabeçalho da tabela
+    cols = [
+        ('Cód.',         14),
+        ('Cliente',      72),
+        ('Segmento',     28),
+        ('Recência',     22),
+        ('Frequência',   22),
+        ('Valor (12m)',  38),
+        ('Score',        18),
+        ('Últ. Compra',  26),
+    ]
+    pdf.set_fill_color(30, 41, 59)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font('Helvetica', 'B', 7.5)
+    for label, w in cols:
+        pdf.cell(w, 7, label, border=0, fill=True, align='C')
+    pdf.ln()
+
+    # Linhas
+    pdf.set_font('Helvetica', '', 7)
+    for i, c in enumerate(rfm['clientes']):
+        seg = c['segmento']
+        cor = CORES.get(seg, (100, 100, 100))
+        bg  = BG.get(seg, (250, 250, 250))
+
+        # Zebra leve alternando branco / bg do segmento
+        if i % 2 == 0:
+            pdf.set_fill_color(*bg)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+
+        pdf.set_text_color(30, 41, 59)
+        row_h = 6
+        pdf.cell(cols[0][1], row_h, str(c['codigo']),       fill=True, align='C')
+        pdf.cell(cols[1][1], row_h, c['nome'][:38],         fill=True)
+        # Segmento com cor
+        pdf.set_text_color(*cor)
+        pdf.set_font('Helvetica', 'B', 7)
+        pdf.cell(cols[2][1], row_h, seg,                    fill=True, align='C')
+        pdf.set_text_color(30, 41, 59)
+        pdf.set_font('Helvetica', '', 7)
+        pdf.cell(cols[3][1], row_h, f"{c['recencia']}d",    fill=True, align='C')
+        pdf.cell(cols[4][1], row_h, f"{c['frequencia']}x",  fill=True, align='C')
+        pdf.cell(cols[5][1], row_h, f"R$ {c['monetario_fmt']}", fill=True, align='R')
+        pdf.cell(cols[6][1], row_h, f"{c['rfm_score']}/15", fill=True, align='C')
+        pdf.cell(cols[7][1], row_h, c['ultima_compra'],     fill=True, align='C')
+        pdf.ln()
+
+    buf = bytes(pdf.output())
+    resp = HttpResponse(buf, content_type='application/pdf')
+    resp['Content-Disposition'] = f'attachment; filename="RFM_{hoje.strftime("%Y%m%d")}.pdf"'
+    return resp
+
 
 @login_required
 def sugestoes_inteligentes_erp(request):

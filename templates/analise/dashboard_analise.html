@@ -581,6 +581,17 @@
 
         {% if rfm.total > 0 %}
 
+        <!-- Cabeçalho RFM -->
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+                <span class="fw-bold text-dark" style="font-size:.9rem;">Últimos 12 meses · {{ rfm.total }} cliente{{ rfm.total|pluralize:",s" }} analisado{{ rfm.total|pluralize:",s" }}</span>
+                <span class="text-muted small ms-2">Scores calculados por quintil (1–5)</span>
+            </div>
+            <a href="{% url 'exportar_rfm_pdf' %}" class="btn btn-sm rounded-pill px-3 fw-bold" style="background:#ef4444;color:white;font-size:.78rem;">
+                <i class="fas fa-file-pdf me-1"></i>Exportar PDF
+            </a>
+        </div>
+
         <!-- Cards de segmento -->
         <div class="row g-3 mb-3">
             {% for nome, seg in rfm.segmentos.items %}
