@@ -22,9 +22,13 @@ from .models import (
 # ====================================================================
 # 1. FUNÇÃO DO DASHBOARD DE ANÁLISE
 # ====================================================================
-def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
+def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado, empresa=None):
     hoje = date.today()
-    vendas_qs = VendaReal.objects.filter(Emissao__month=mes_selecionado, Emissao__year=ano_selecionado)
+
+    def _empresa(qs, campo='empresa'):
+        return qs.filter(**{campo: empresa}) if empresa else qs
+
+    vendas_qs = _empresa(VendaReal.objects.filter(Emissao__month=mes_selecionado, Emissao__year=ano_selecionado))
 
     primeiro_dia_mes = date(ano_selecionado, mes_selecionado, 1)
     ultimo_dia_valor = calendar.monthrange(ano_selecionado, mes_selecionado)[1]
@@ -55,15 +59,40 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
     media_diaria_str = "{:,.2f}".format(media_diaria_util).replace(",", "X").replace(".", ",").replace("X", ".")
     projecao_final_str = "{:,.2f}".format(projecao_valor).replace(",", "X").replace(".", ",").replace("X", ".")
 
+    # Comparativo mês anterior
+    mes_ant = mes_selecionado - 1 if mes_selecionado > 1 else 12
+    ano_ant = ano_selecionado if mes_selecionado > 1 else ano_selecionado - 1
+    total_mes_anterior = _empresa(VendaReal.objects.filter(
+        Emissao__month=mes_ant, Emissao__year=ano_ant
+    )).aggregate(total=Sum('Total'))['total'] or Decimal('0.00')
+    variacao_mes = round(
+        ((float(total_faturamento) - float(total_mes_anterior)) / float(total_mes_anterior) * 100), 1
+    ) if total_mes_anterior > 0 else 0
+
     top_produtos_raw = vendas_qs.values('Produto_Codigo', 'Produto_Descricao').annotate(total_gerado=Sum('Total'), qtd_vendida=Sum('Quantidade')).order_by('-total_gerado')[:10]
     top_produtos_formatados = [{'codigo': p['Produto_Codigo'], 'descricao': p['Produto_Descricao'], 'qtd': p['qtd_vendida'], 'total_formatado': "{:,.2f}".format(float(p['total_gerado'])).replace(",", "X").replace(".", ",").replace("X", ".")} for p in top_produtos_raw]
-    
-    top_clientes_raw = vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(total_gasto=Sum('Total')).order_by('-total_gasto')
+
+    top_clientes_raw = list(vendas_qs.values('Codigo_Cliente', 'cliente_nome').annotate(total_gasto=Sum('Total')).order_by('-total_gasto'))
     top_clientes_formatados = [{'codigo': c['Codigo_Cliente'], 'nome': c['cliente_nome'], 'total_formatado': "{:,.2f}".format(float(c['total_gasto'])).replace(",", "X").replace(".", ",").replace("X", ".")} for c in top_clientes_raw]
+
+    # SP vs ES breakdown
+    todos_codigos = [c['Codigo_Cliente'] for c in top_clientes_raw]
+    wf_qs = WfClient.objects.filter(client_code__in=todos_codigos).select_related('client_state')
+    if empresa:
+        wf_qs = wf_qs.filter(empresa=empresa)
+    mapa_estado = {str(wfc.client_code): wfc.client_state.uf_name for wfc in wf_qs if wfc.client_state}
+    total_sp = Decimal('0.00')
+    total_es = Decimal('0.00')
+    for c in top_clientes_raw:
+        estado = mapa_estado.get(str(c['Codigo_Cliente']))
+        if estado == 'SP':
+            total_sp += c['total_gasto']
+        elif estado == 'ES':
+            total_es += c['total_gasto']
 
     vendas_por_cliente_periodo = vendas_qs.values('Codigo_Cliente').annotate(total_periodo=Sum('Total'))
     mapa_vendas_periodo = {v['Codigo_Cliente']: v['total_periodo'] for v in vendas_por_cliente_periodo}
-    todos_clientes_historico = VendaReal.objects.values('Codigo_Cliente', 'cliente_nome').annotate(total_historico=Sum('Total'), ultima_compra=Max('Emissao')).order_by('-total_historico')
+    todos_clientes_historico = _empresa(VendaReal.objects.all()).values('Codigo_Cliente', 'cliente_nome').annotate(total_historico=Sum('Total'), ultima_compra=Max('Emissao')).order_by('-total_historico')
     clientes_alerta = []
     for c in todos_clientes_historico:
         total_no_periodo = mapa_vendas_periodo.get(c['Codigo_Cliente'], Decimal('0.00'))
@@ -74,7 +103,7 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
     dias_nomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
     vendas_por_dia = [0.0] * 7
     clientes_por_dia_acumulado = {i: {} for i in range(7)}
-    
+
     for v in vendas_qs:
         dia_indice = v.Emissao.weekday()
         vendas_por_dia[dia_indice] += float(v.Total)
@@ -83,21 +112,21 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
         if cod_cli not in clientes_por_dia_acumulado[dia_indice]:
             clientes_por_dia_acumulado[dia_indice][cod_cli] = {'nome': nome_cli, 'valor': 0.0}
         clientes_por_dia_acumulado[dia_indice][cod_cli]['valor'] += float(v.Total)
-    
+
     ranking_logistica_dia = []
     for i in range(7):
         top_clientes_dia = sorted(clientes_por_dia_acumulado[i].items(), key=lambda x: x[1]['valor'], reverse=True)[:3]
         ranking_logistica_dia.append({'dia': dias_nomes[i], 'clientes': [{'codigo': cod, 'nome': dados['nome'], 'valor': "{:,.2f}".format(dados['valor']).replace(",", "X").replace(".", ",").replace("X", ".")} for cod, dados in top_clientes_dia]})
 
     data_corte_habito = hoje - timedelta(days=548)  # ~18 meses
-    historico_total = VendaReal.objects.filter(Emissao__gte=data_corte_habito).values('Codigo_Cliente', 'Emissao', 'cliente_nome').order_by('Codigo_Cliente', 'Emissao')
+    historico_total = _empresa(VendaReal.objects.filter(Emissao__gte=data_corte_habito)).values('Codigo_Cliente', 'Emissao', 'cliente_nome').order_by('Codigo_Cliente', 'Emissao')
     dados_habito = {}
     for h in historico_total:
         cod = h['Codigo_Cliente']
         if cod not in dados_habito: dados_habito[cod] = {'nome': h['cliente_nome'], 'datas': set()}
         dados_habito[cod]['datas'].add(h['Emissao'])
 
-    saude_base = []
+    saude_base_todos = []
     for cod, info in dados_habito.items():
         datas = sorted(list(info['datas']))
         if len(datas) < 2: continue
@@ -105,17 +134,30 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
         media_habito = sum(intervalos) / len(intervalos)
         dias_sem_comprar = (hoje - datas[-1]).days
         if dias_sem_comprar > (media_habito * 1.2) and dias_sem_comprar > 7:
-            saude_base.append({'codigo': cod, 'nome': info['nome'], 'media_habito': round(media_habito), 'dias_sem_comprar': dias_sem_comprar, 'atraso': round(dias_sem_comprar - media_habito), 'ultima_data': datas[-1].strftime('%d/%m/%Y')})
-    saude_base = sorted(saude_base, key=lambda x: x['atraso'], reverse=True)[:15]
+            saude_base_todos.append({'codigo': cod, 'nome': info['nome'], 'media_habito': round(media_habito), 'dias_sem_comprar': dias_sem_comprar, 'atraso': round(dias_sem_comprar - media_habito), 'ultima_data': datas[-1].strftime('%d/%m/%Y')})
+    saude_base_todos = sorted(saude_base_todos, key=lambda x: x['atraso'], reverse=True)
+    total_clientes_risco = len(saude_base_todos)
+    total_clientes_analisados = len(dados_habito)
+    saude_base = saude_base_todos[:15]
 
     dados_grafico = vendas_qs.values('Emissao').annotate(total_dia=Sum('Total')).order_by('Emissao')
     l_diario = [d['Emissao'].strftime('%d/%m') for d in dados_grafico]
     v_diario = [float(d['total_dia']) for d in dados_grafico]
 
-    itens_pendentes = ItemPedidoIgnorado.objects.filter(notificado=False, motivo_erro__icontains="estoque").select_related('cliente', 'cliente__client_state')
+    # Wishlist com isolamento por empresa e filtro correto
+    itens_pendentes = ItemPedidoIgnorado.objects.filter(
+        descartado_pelo_cliente=False,
+        motivo_erro__icontains="estoque"
+    ).select_related('cliente', 'cliente__client_state')
+    if empresa:
+        itens_pendentes = itens_pendentes.filter(cliente__empresa=empresa)
+
     oportunidades_wishlist = {}
     codigos_pendentes = itens_pendentes.values_list('codigo_produto', flat=True).distinct()
-    produtos_dict = {p.product_code: p for p in Product.objects.filter(product_code__in=codigos_pendentes)}
+    produtos_qs = Product.objects.filter(product_code__in=codigos_pendentes)
+    if empresa:
+        produtos_qs = produtos_qs.filter(empresa=empresa)
+    produtos_dict = {p.product_code: p for p in produtos_qs}
 
     for item in itens_pendentes:
         produto = produtos_dict.get(item.codigo_produto)
@@ -124,18 +166,38 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
         preco_atual = getattr(produto, 'product_value_sp' if estado == 'SP' else 'product_value_es')
         if preco_atual and preco_atual > 0:
             c_id = item.cliente.client_id
-            if c_id not in oportunidades_wishlist: oportunidades_wishlist[c_id] = {'cliente': item.cliente, 'produtos': []}
-            if produto.product_description not in [p['descricao'] for p in oportunidades_wishlist[c_id]['produtos']]:
-                oportunidades_wishlist[c_id]['produtos'].append({'codigo': produto.product_code, 'descricao': produto.product_description, 'preco': float(preco_atual)})
+            if c_id not in oportunidades_wishlist:
+                oportunidades_wishlist[c_id] = {'cliente': item.cliente, 'produtos': []}
+            prods = oportunidades_wishlist[c_id]['produtos']
+            existing = next((p for p in prods if p['codigo'] == produto.product_code), None)
+            if existing:
+                existing['quantidade'] += item.quantidade_tentada or 0
+            else:
+                prods.append({
+                    'codigo': produto.product_code,
+                    'descricao': produto.product_description,
+                    'preco': float(preco_atual),
+                    'quantidade': item.quantidade_tentada or 0,
+                    'data': item.data_tentativa,
+                })
 
-    itens_notificados = ItemPedidoIgnorado.objects.filter(notificado=True, data_notificacao__year=ano_selecionado, data_notificacao__month=mes_selecionado).select_related('cliente')
+    itens_notificados = ItemPedidoIgnorado.objects.filter(
+        notificado=True,
+        data_notificacao__year=ano_selecionado,
+        data_notificacao__month=mes_selecionado
+    ).select_related('cliente')
+    if empresa:
+        itens_notificados = itens_notificados.filter(cliente__empresa=empresa)
+
     total_recuperado_reais = Decimal('0.00')
     qtd_itens_recuperados = 0
 
     if itens_notificados.exists():
         data_inicio_busca = date(ano_selecionado, mes_selecionado, 1)
-        data_fim_busca = data_inicio_busca + timedelta(days=45) 
-        vendas_base_cruzamento = VendaReal.objects.filter(Emissao__range=(data_inicio_busca, data_fim_busca)).values('Codigo_Cliente', 'Produto_Codigo', 'Emissao', 'Total')
+        data_fim_busca = data_inicio_busca + timedelta(days=45)
+        vendas_base_cruzamento = _empresa(VendaReal.objects.filter(
+            Emissao__range=(data_inicio_busca, data_fim_busca)
+        )).values('Codigo_Cliente', 'Produto_Codigo', 'Emissao', 'Total')
         vendas_erp_memoria = {}
         for v in vendas_base_cruzamento:
             chave = (str(v['Codigo_Cliente']), str(v['Produto_Codigo']))
@@ -149,7 +211,6 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
                 data_aviso = item.data_notificacao.date()
                 data_limite = data_aviso + timedelta(days=15)
                 chave_busca = (codigo_cli, codigo_prod)
-                
                 if chave_busca in vendas_erp_memoria:
                     vendas_validas = [compra['total'] for compra in vendas_erp_memoria[chave_busca] if data_aviso <= compra['data'] <= data_limite]
                     if vendas_validas:
@@ -159,14 +220,19 @@ def gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado):
     recuperado_formatado = "{:,.2f}".format(float(total_recuperado_reais)).replace(",", "X").replace(".", ",").replace("X", ".")
 
     return {
-        'total_vendas': total_vendas_str, 'ticket_medio': ticket_medio_formatado, 'total_itens_faturados': total_itens, 'total_pedidos_reais': total_pedidos,
+        'total_vendas': total_vendas_str, 'ticket_medio': ticket_medio_formatado,
+        'total_itens_faturados': total_itens, 'total_pedidos_reais': total_pedidos,
         'media_diaria': media_diaria_str, 'projecao_final': projecao_final_str, 'progresso_mes': progresso_percentual,
-        'top_produtos': top_produtos_formatados, 'top_clientes': top_clientes_formatados, 'clientes_inativos': clientes_alerta, 
+        'variacao_mes': variacao_mes,
+        'top_produtos': top_produtos_formatados, 'top_clientes': top_clientes_formatados, 'clientes_inativos': clientes_alerta,
         'labels_diario': json.dumps(l_diario), 'valores_diario': json.dumps(v_diario),
         'labels_semana': json.dumps(dias_nomes), 'valores_semana': json.dumps(vendas_por_dia),
         'ranking_logistica_dia': ranking_logistica_dia, 'saude_base': saude_base,
+        'total_clientes_risco': total_clientes_risco, 'total_clientes_analisados': total_clientes_analisados,
         'mes_atual': mes_selecionado, 'ano_atual': ano_selecionado, 'lista_anos': range(hoje.year - 2, hoje.year + 1),
-        'oportunidades_wishlist': oportunidades_wishlist.values(), 'total_recuperado_reais': recuperado_formatado, 'qtd_itens_recuperados': qtd_itens_recuperados,
+        'oportunidades_wishlist': list(oportunidades_wishlist.values()),
+        'total_recuperado_reais': recuperado_formatado, 'qtd_itens_recuperados': qtd_itens_recuperados,
+        'total_sp': float(total_sp), 'total_es': float(total_es),
     }
 
 # ====================================================================

@@ -4735,7 +4735,7 @@ def dashboard_analise(request):
     mes_selecionado = int(request.GET.get('mes', hoje.month))
     ano_selecionado = int(request.GET.get('ano', hoje.year))
     
-    contexto = gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado)
+    contexto = gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado, empresa=request.empresa)
     
     return render(request, 'analise/dashboard_analise.html', contexto)
 

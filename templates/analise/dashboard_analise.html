@@ -108,6 +108,16 @@
                     <div class="metric-card p-4 bg-dark-card text-white">
                         <div class="text-label opacity-75">Faturamento Real ERP</div>
                         <h2 class="fw-bold mb-0">R$ {{ total_vendas|default:"0,00" }}</h2>
+                        {% if variacao_mes != 0 %}
+                        <div class="mt-2" style="font-size:.8rem;">
+                            {% if variacao_mes > 0 %}
+                                <span class="text-success fw-bold">▲ +{{ variacao_mes }}%</span>
+                            {% else %}
+                                <span class="text-danger fw-bold">▼ {{ variacao_mes }}%</span>
+                            {% endif %}
+                            <span class="opacity-50 ms-1">vs mês anterior</span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -154,13 +164,29 @@
                 </div>
             </div>
 
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="metric-card p-4">
+            <div class="row mb-4 g-3">
+                <div class="col-lg-8">
+                    <div class="metric-card p-4 h-100">
                         <h5 class="fw-bold mb-4"><i class="fas fa-chart-line text-primary me-2"></i> Evolução Diária</h5>
-                        <div style="height: 300px;">
+                        <div style="height: 280px;">
                             <canvas id="graficoVendas"></canvas>
                         </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="metric-card p-4 h-100">
+                        <h5 class="fw-bold mb-3"><i class="fas fa-map-marker-alt text-danger me-2"></i> SP vs ES</h5>
+                        {% if total_sp > 0 or total_es > 0 %}
+                        <div style="height: 200px; display:flex; align-items:center; justify-content:center;">
+                            <canvas id="graficoEstados"></canvas>
+                        </div>
+                        <div class="d-flex justify-content-center gap-4 mt-2" style="font-size:.8rem;">
+                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4361ee;" class="me-1"></span>SP</span>
+                            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#0dcaf0;" class="me-1"></span>ES</span>
+                        </div>
+                        {% else %}
+                        <div class="text-center text-muted py-5" style="font-size:.85rem;">Sem dados de estado no período</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -287,6 +313,31 @@
         </div>
 
         <div class="tab-pane fade" id="pills-saude" role="tabpanel">
+            {% if total_clientes_analisados > 0 %}
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="metric-card p-4 border-start border-4 border-danger">
+                        <div class="text-label text-danger">Fora do Hábito</div>
+                        <h2 class="fw-bold mb-0 text-danger">{{ total_clientes_risco }}</h2>
+                        <small class="text-muted">clientes em atraso</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="metric-card p-4 border-start border-4 border-success">
+                        <div class="text-label text-success">Em Dia</div>
+                        <h2 class="fw-bold mb-0 text-success">{{ total_clientes_analisados|add:"-"|add:total_clientes_risco }}</h2>
+                        <small class="text-muted">clientes no ritmo normal</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="metric-card p-4 border-start border-4 border-secondary">
+                        <div class="text-label text-secondary">Base Analisada</div>
+                        <h2 class="fw-bold mb-0">{{ total_clientes_analisados }}</h2>
+                        <small class="text-muted">clientes com histórico</small>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             <div class="row">
                 <div class="col-12">
                     <div class="metric-card p-4 border-start border-4 border-info">
@@ -359,7 +410,8 @@
                                             <li class="d-flex justify-content-between align-items-center py-1 border-top">
                                                 <span class="small text-dark">
                                                     <span class="fw-bold" style="color: #783ae3;">{{ prod.codigo }}</span>
-                                                    — {{ prod.descricao|truncatechars:28 }}
+                                                    {% if prod.quantidade %}&times; {{ prod.quantidade }}un{% endif %}
+                                                    <span class="text-muted ms-1" style="font-size:.7rem;">{{ prod.data|timesince }} atrás</span>
                                                 </span>
                                                 <span class="badge bg-success ms-2">R$ {{ prod.preco|floatformat:2 }}</span>
                                             </li>
@@ -385,7 +437,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Gráfico Vendas
+    const _brl = v => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+
+    // Gráfico Evolução Diária
     const ctxVendas = document.getElementById('graficoVendas').getContext('2d');
     const chartVendas = new Chart(ctxVendas, {
         type: 'line',
@@ -399,8 +453,39 @@
                 tension: 0.4
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => _brl(ctx.parsed.y) } } },
+            scales: { y: { ticks: { callback: _brl } } }
+        }
     });
+
+    // Gráfico SP vs ES
+    {% if total_sp > 0 or total_es > 0 %}
+    const ctxEstados = document.getElementById('graficoEstados').getContext('2d');
+    new Chart(ctxEstados, {
+        type: 'doughnut',
+        data: {
+            labels: ['SP', 'ES'],
+            datasets: [{
+                data: [{{ total_sp }}, {{ total_es }}],
+                backgroundColor: ['#4361ee', '#0dcaf0'],
+                borderWidth: 0,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ctx.label + ': ' + _brl(ctx.parsed) } }
+            },
+            cutout: '65%'
+        }
+    });
+    {% endif %}
 
     // Gráfico Semana
     const ctxSemana = document.getElementById('graficoSemana').getContext('2d');
@@ -416,11 +501,11 @@
                 borderRadius: 10
             }]
         },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            plugins: { legend: { display: false } },
-            scales: { y: { ticks: { callback: v => 'R$ ' + v.toLocaleString('pt-BR') } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => _brl(ctx.parsed.y) } } },
+            scales: { y: { ticks: { callback: _brl } } }
         }
     });
 
