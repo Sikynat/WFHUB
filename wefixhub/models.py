@@ -356,7 +356,8 @@ class ItemPedidoIgnorado(models.Model):
     quantidade_tentada = models.IntegerField(null=True) # Quantidade
     
     # Campo extra muito útil: Por que foi ignorado?
-    motivo_erro = models.CharField(max_length=255) 
+    motivo_erro = models.CharField(max_length=255)
+    descartado_pelo_cliente = models.BooleanField(default=False, verbose_name="Descartado pelo cliente")
 
     class Meta:
         db_table = 'wf_itens_ignorados'

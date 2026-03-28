@@ -210,8 +210,8 @@
                         </div>
                         <div class="mt-1">
                             {% for prod in op.produtos %}
-                            <span style="background:#f3f4f6;border-radius:6px;padding:2px 7px;font-size:.72rem;font-weight:600;color:#374151;margin-right:.3rem;display:inline-block;margin-bottom:.2rem;">
-                                {{ prod.codigo }} · R$ {{ prod.preco|floatformat:2 }}
+                            <span style="background:#f3f4f6;border-radius:6px;padding:2px 7px;font-size:.72rem;font-weight:600;color:#374151;margin-right:.3rem;display:inline-block;margin-bottom:.2rem;" title="{{ prod.descricao }}">
+                                {{ prod.codigo }}{% if prod.quantidade %} &times; {{ prod.quantidade }}un{% endif %} · {{ prod.data|timesince }} atrás
                             </span>
                             {% endfor %}
                         </div>

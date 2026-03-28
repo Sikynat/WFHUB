@@ -50,6 +50,7 @@ urlpatterns = [
     path('novidades/', views.novidades, name='novidades'),
     path('meus-avisos/', views.meus_avisos, name='meus_avisos'),
     path('meus-avisos/cancelar/<int:item_id>/', views.cancelar_aviso, name='cancelar_aviso'),
+    path('meus-avisos/descartar/', views.descartar_wishlist_home, name='descartar_wishlist_home'),
     path('dashboard/historico-wishlist/', views.historico_wishlist, name='historico_wishlist'),
     path('dashboard/historico-precos/', views.historico_precos, name='historico_precos'),
     path('dashboard/reenviar-whatsapp/<int:cliente_id>/', views.reenviar_notificacao_whatsapp, name='reenviar_notificacao_whatsapp'),

@@ -237,25 +237,77 @@
 {% endif %}
 
 {% if produtos_wishlist_cliente %}
-<div class="alert alert-success shadow-sm mb-4 border-0 mt-3" style="background-color: #ecfdf5; border-left: 5px solid #10b981 !important; border-radius: 12px; color: #065f46;">
-    <div class="d-flex align-items-center mb-2">
+<div id="wishlist-banner" class="mb-4 mt-3" style="background: linear-gradient(135deg, #0a2e18, #0d3b20); border: 1px solid #10b981; border-radius: 12px; padding: 1.25rem;">
+    <div class="d-flex align-items-center mb-3">
         <i class="fas fa-box-open fs-4 text-success me-3"></i>
-        <h5 class="mb-0 fw-bold" style="color: #065f46;">Temos boas notícias, {{ cliente_logado.client_name }}!</h5>
+        <div>
+            <h5 class="mb-0 fw-bold text-white">Temos boas notícias, {{ cliente_logado.client_name }}!</h5>
+            <small class="text-success">Produtos que você queria voltaram ao estoque</small>
+        </div>
     </div>
-    <p class="mb-3 text-dark">Os produtos que você tentou comprar nas últimas semanas e estavam em falta <strong>acabaram de chegar ao nosso estoque:</strong></p>
-    
-    <div class="d-flex flex-wrap gap-2 mb-3">
+    <div id="wishlist-items">
         {% for p in produtos_wishlist_cliente %}
-        <span class="badge bg-white text-dark border p-2 shadow-sm" style="font-size: 0.9rem;">
-            <i class="fas fa-check-circle text-success me-1"></i> 
-            <strong>{{ p.codigo }}</strong> - {{ p.descricao }} <span class="text-success ms-1">(R$ {{ p.preco }})</span>
-        </span>
+        <div class="wishlist-item d-flex align-items-center justify-content-between py-2 border-top" style="border-color: rgba(16,185,129,.25) !important;" data-codigo="{{ p.codigo }}">
+            <div>
+                <strong class="text-white">{{ p.codigo }}</strong>
+                <span class="text-white-50 mx-1">—</span>
+                <span class="text-white-50" style="font-size:.9rem;">{{ p.descricao }}</span>
+                <span class="badge bg-success ms-2">R$ {{ p.preco }}</span>
+            </div>
+            <div class="d-flex gap-2 ms-3 flex-shrink-0">
+                <button class="btn btn-sm btn-success fw-bold" onclick="wishlistAddCart('{{ p.product_id }}', this)" style="font-size:.8rem;">
+                    <i class="fas fa-cart-plus me-1"></i>Adicionar
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="wishlistDescartar('{{ p.codigo }}', this)" style="font-size:.8rem;" title="Remover aviso">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
         {% endfor %}
     </div>
-    <p class="small text-muted mb-0">
-        <i class="fas fa-info-circle me-1"></i> Utilize a barra de busca abaixo com os códigos acima para adicioná-los rapidamente ao seu pedido.
-    </p>
 </div>
+
+<script>
+const _wishlistCsrf = '{{ csrf_token }}';
+
+function wishlistAddCart(productId, btn) {
+    btn.disabled = true;
+    fetch('{% url "adicionar_ao_carrinho_bd" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _wishlistCsrf},
+        body: 'product_id=' + productId + '&quantidade=1'
+    }).then(r => r.json()).then(data => {
+        if (data.sucesso) {
+            btn.closest('.wishlist-item').remove();
+            _wishlistCheckEmpty();
+        } else {
+            btn.disabled = false;
+        }
+    }).catch(() => { btn.disabled = false; });
+}
+
+function wishlistDescartar(productCode, btn) {
+    btn.disabled = true;
+    fetch('{% url "descartar_wishlist_home" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _wishlistCsrf},
+        body: 'product_code=' + encodeURIComponent(productCode)
+    }).then(r => r.json()).then(data => {
+        if (data.sucesso) {
+            btn.closest('.wishlist-item').remove();
+            _wishlistCheckEmpty();
+        } else {
+            btn.disabled = false;
+        }
+    }).catch(() => { btn.disabled = false; });
+}
+
+function _wishlistCheckEmpty() {
+    if (!document.querySelector('.wishlist-item')) {
+        document.getElementById('wishlist-banner').remove();
+    }
+}
+</script>
 {% endif %}
 
 <h2><span>Nossos Produtos</span></h2>

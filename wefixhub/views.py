@@ -241,7 +241,7 @@ def home(request):
                 data_limite = timezone.localdate() - timedelta(days=30)
                 itens_pendentes = ItemPedidoIgnorado.objects.filter(
                     cliente=cliente_logado,
-                    notificado=False,
+                    descartado_pelo_cliente=False,
                     motivo_erro__icontains="estoque",
                     data_tentativa__gte=data_limite
                 )
@@ -261,7 +261,8 @@ def home(request):
                                 produtos_wishlist_cliente.append({
                                     'codigo': produto.product_code,
                                     'descricao': produto.product_description,
-                                    'preco': f"{preco_atual.quantize(Decimal('0.01'))}".replace('.', ',')
+                                    'preco': f"{preco_atual.quantize(Decimal('0.01'))}".replace('.', ','),
+                                    'product_id': produto.product_id,
                                 })
 
                 # Produtos que o cliente já solicitou aviso
@@ -1075,11 +1076,17 @@ def dashboard_admin(request):
                         'cliente': item.cliente,
                         'produtos': []
                     }
-                if produto.product_description not in [p['descricao'] for p in oportunidades_wishlist[c_id]['produtos']]:
-                    oportunidades_wishlist[c_id]['produtos'].append({
+                prods = oportunidades_wishlist[c_id]['produtos']
+                existing = next((p for p in prods if p['codigo'] == produto.product_code), None)
+                if existing:
+                    existing['quantidade'] += item.quantidade_tentada or 0
+                else:
+                    prods.append({
                         'codigo': produto.product_code,
                         'descricao': produto.product_description,
-                        'preco': float(preco_atual)
+                        'preco': float(preco_atual),
+                        'quantidade': item.quantidade_tentada or 0,
+                        'data': item.data_tentativa,
                     })
         
         # Converte o dicionário em lista para facilitar a renderização e o cache
@@ -4265,7 +4272,8 @@ def notificar_wishlist_whatsapp(request, cliente_id):
         data_notificacao=timezone.now(),
         lote_notificacao=lote_id # <-- Salva o Lote!
     )
-    cache.delete('dashboard_wishlist')
+    empresa_key = request.empresa.slug if request.empresa else 'superuser'
+    cache.delete(f'dashboard_wishlist_{empresa_key}')
     
     produtos_texto = "\n".join(produtos_recuperados)
     mensagem = (
@@ -4362,6 +4370,7 @@ def meus_avisos(request):
     pendentes = ItemPedidoIgnorado.objects.filter(
         cliente=cliente,
         notificado=False,
+        descartado_pelo_cliente=False,
         motivo_erro__icontains='estoque'
     ).order_by('-data_tentativa')
 
@@ -4388,11 +4397,27 @@ def cancelar_aviso(request, item_id):
     ItemPedidoIgnorado.objects.filter(
         id=item_id,
         cliente=cliente,
-        notificado=False
-    ).delete()
+    ).update(descartado_pelo_cliente=True)
 
     messages.success(request, 'Aviso cancelado com sucesso.')
     return redirect('meus_avisos')
+
+@login_required
+@require_POST
+def descartar_wishlist_home(request):
+    product_code = request.POST.get('product_code', '').strip().upper()
+    if not product_code:
+        return JsonResponse({'erro': 'Código inválido.'}, status=400)
+    try:
+        cliente = request.user.wfclient
+    except WfClient.DoesNotExist:
+        return JsonResponse({'erro': 'Cliente não encontrado.'}, status=400)
+    ItemPedidoIgnorado.objects.filter(
+        cliente=cliente,
+        codigo_produto=product_code,
+        descartado_pelo_cliente=False,
+    ).update(descartado_pelo_cliente=True)
+    return JsonResponse({'sucesso': True})
 
 @login_required
 @require_POST
@@ -4438,8 +4463,8 @@ def adicionar_ao_carrinho_bd(request):
     ItemPedidoIgnorado.objects.filter(
         cliente=cliente_logado,
         codigo_produto=produto.product_code,
-        notificado=False
-    ).update(notificado=True)
+        descartado_pelo_cliente=False
+    ).update(descartado_pelo_cliente=True)
 
     # 3. Retorna os valores em tempo real para o Frontend atualizar a tela
     return JsonResponse({
