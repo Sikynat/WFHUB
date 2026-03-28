@@ -29,12 +29,12 @@ class WefixhubConfig(AppConfig):
             scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')
             scheduler.add_jobstore(DjangoJobStore(), 'default')
 
-            # Todo dia 30 às 23:00 (horário de Brasília)
+            # Último dia de cada mês às 23:00 (horário de Brasília)
             scheduler.add_job(
                 salvar_snapshot_rfm_job,
-                trigger=CronTrigger(day=30, hour=23, minute=0),
+                trigger=CronTrigger(day='last', hour=23, minute=0),
                 id='salvar_snapshot_rfm',
-                name='Snapshot RFM mensal (dia 30)',
+                name='Snapshot RFM mensal (ultimo dia)',
                 jobstore='default',
                 replace_existing=True,
                 max_instances=1,
