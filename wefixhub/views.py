@@ -40,9 +40,9 @@ from django import template
 
 #Utils
 
-from .utils import ( gerar_dados_dashboard_analise, gerar_excel_vendas_reais, 
-                    processar_status_pdf, processar_giro_cliente, 
-                    processar_giro_cliente )
+from .utils import ( gerar_dados_dashboard_analise, gerar_excel_vendas_reais,
+                    processar_status_pdf, processar_giro_cliente,
+                    calcular_evolucao_clientes )
 
 
 # 4. ORM e Banco de Dados do Django
@@ -4740,6 +4740,128 @@ def dashboard_analise(request):
     contexto = gerar_dados_dashboard_analise(mes_selecionado, ano_selecionado, empresa=request.empresa)
 
     return render(request, 'analise/dashboard_analise.html', contexto)
+
+
+@staff_member_required
+def evolucao_clientes(request):
+    ano = request.GET.get('ano')
+    try:
+        ano = int(ano)
+    except (TypeError, ValueError):
+        ano = date.today().year
+
+    dados = calcular_evolucao_clientes(empresa=request.empresa, ano=ano)
+
+    # Anos disponíveis para o filtro (baseado nos dados existentes)
+    from django.db.models.functions import ExtractYear
+    qs_anos = VendaReal.objects.all()
+    if request.empresa:
+        qs_anos = qs_anos.filter(empresa=request.empresa)
+    anos_disponiveis = sorted(
+        qs_anos.annotate(y=ExtractYear('Emissao')).values_list('y', flat=True).distinct(),
+        reverse=True
+    )
+
+    dados['anos_disponiveis'] = anos_disponiveis
+    dados['ano_selecionado'] = ano
+
+    # Nomes dos meses em PT
+    MESES_PT = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+                'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    dados['meses_nomes'] = {m: MESES_PT[m] for m in range(1, 13)}
+
+    return render(request, 'analise/evolucao_clientes.html', dados)
+
+
+@staff_member_required
+def exportar_evolucao_clientes_excel(request):
+    ano = request.GET.get('ano')
+    try:
+        ano = int(ano)
+    except (TypeError, ValueError):
+        ano = date.today().year
+
+    dados = calcular_evolucao_clientes(empresa=request.empresa, ano=ano)
+
+    MESES_PT = ['', 'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
+                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
+    output = BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f'Evolucao {ano}'
+
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    header_fill = PatternFill(start_color='1F3864', end_color='1F3864', fill_type='solid')
+    header_font = Font(color='FFFFFF', bold=True, size=10)
+    total_fill = PatternFill(start_color='E8F0FE', end_color='E8F0FE', fill_type='solid')
+    green_fill = PatternFill(start_color='D4EDDA', end_color='D4EDDA', fill_type='solid')
+    red_fill = PatternFill(start_color='F8D7DA', end_color='F8D7DA', fill_type='solid')
+
+    meses = dados['meses_com_dados']
+    headers = ['Cod.', 'Cliente'] + [MESES_PT[m] for m in meses] + ['Total Ano', f'Total {dados["ano_anterior"]}', 'Var %']
+    ws.append(headers)
+    for col_idx, _ in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+
+    fmt_brl = '#,##0.00'
+    for c in dados['clientes']:
+        row = [c['codigo'], c['nome']]
+        for m in meses:
+            row.append(float(c['meses'][m]))
+        row.append(float(c['total_ano']))
+        row.append(float(c['total_ant']))
+        row.append(round(c['variacao_pct'], 1))
+        ws.append(row)
+
+        row_num = ws.max_row
+        # Formata valores monetários
+        for col_idx in range(3, 3 + len(meses) + 2):
+            ws.cell(row=row_num, column=col_idx).number_format = fmt_brl
+
+        # Colorir variação
+        var_col = 3 + len(meses) + 2
+        var_cell = ws.cell(row=row_num, column=var_col)
+        var_cell.number_format = '0.0"%"'
+        if c['variacao_pct'] >= 10:
+            var_cell.fill = green_fill
+        elif c['variacao_pct'] <= -10:
+            var_cell.fill = red_fill
+
+    # Linha de totais
+    total_row = ['', 'TOTAL GERAL']
+    for m in meses:
+        total_row.append(float(dados['totais_mensais'][m]))
+    total_row.append(float(dados['total_geral']))
+    total_row.append('')
+    total_row.append('')
+    ws.append(total_row)
+    for col_idx in range(3, 3 + len(meses) + 1):
+        cell = ws.cell(row=ws.max_row, column=col_idx)
+        cell.fill = total_fill
+        cell.font = Font(bold=True)
+        cell.number_format = fmt_brl
+
+    # Ajusta largura das colunas
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['B'].width = 35
+    for col_idx in range(3, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 14
+
+    wb.save(output)
+    output.seek(0)
+    filename = f'evolucao_clientes_{ano}.xlsx'
+    response = HttpResponse(
+        output,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @staff_member_required

@@ -356,7 +356,116 @@ def calcular_rfm(empresa=None):
 
 
 # ====================================================================
-# 3. FUNÇÃO DE EXPORTAÇÃO EXCEL DE VENDAS REAIS
+# 3. EVOLUÇÃO ANUAL DE CLIENTES
+# ====================================================================
+def calcular_evolucao_clientes(empresa=None, ano=None):
+    """
+    Retorna a evolução mensal de compras por cliente no ano selecionado,
+    comparando com o ano anterior para calcular variação %.
+
+    Retorna:
+      - clientes: lista de dicts com meses[1..12], total_ano, total_ant, variacao_pct, tendencia
+      - meses_com_dados: lista de meses (1-12) que têm alguma venda no ano
+      - totais_mensais: soma de todos os clientes por mês
+      - ano, ano_anterior
+    """
+    hoje = date.today()
+    if ano is None:
+        ano = hoje.year
+
+    ano_anterior = ano - 1
+
+    # Base query
+    qs_base = VendaReal.objects.all()
+    if empresa:
+        qs_base = qs_base.filter(empresa=empresa)
+
+    # Agrega por cliente + mês para o ano atual
+    from django.db.models.functions import ExtractMonth, ExtractYear
+    vendas_ano = (
+        qs_base
+        .filter(Emissao__year=ano)
+        .values('Codigo_Cliente', 'cliente_nome')
+        .annotate(mes=ExtractMonth('Emissao'), total_mes=Sum('Total'))
+        .order_by('Codigo_Cliente', 'mes')
+    )
+
+    # Agrega por cliente para o ano anterior (total apenas)
+    vendas_ant = (
+        qs_base
+        .filter(Emissao__year=ano_anterior)
+        .values('Codigo_Cliente')
+        .annotate(total_ant=Sum('Total'))
+    )
+    total_ant_por_cliente = {v['Codigo_Cliente']: v['total_ant'] for v in vendas_ant}
+
+    # Monta estrutura por cliente
+    clientes_dict = {}
+    for row in vendas_ano:
+        cod = row['Codigo_Cliente']
+        if cod not in clientes_dict:
+            clientes_dict[cod] = {
+                'codigo': cod,
+                'nome': row['cliente_nome'] or f'Cliente {cod}',
+                'meses': {m: Decimal('0') for m in range(1, 13)},
+            }
+        clientes_dict[cod]['meses'][row['mes']] += row['total_mes'] or Decimal('0')
+
+    # Calcula totais e variação
+    meses_com_dados = set()
+    totais_mensais = {m: Decimal('0') for m in range(1, 13)}
+
+    clientes = []
+    for cod, c in clientes_dict.items():
+        total_ano = sum(c['meses'].values())
+        total_ant = total_ant_por_cliente.get(cod, Decimal('0')) or Decimal('0')
+
+        if total_ant > 0:
+            variacao_pct = float((total_ano - total_ant) / total_ant * 100)
+        elif total_ano > 0:
+            variacao_pct = 100.0  # cliente novo no ano
+        else:
+            variacao_pct = 0.0
+
+        if variacao_pct >= 10:
+            tendencia = 'crescendo'
+        elif variacao_pct <= -10:
+            tendencia = 'caindo'
+        else:
+            tendencia = 'estavel'
+
+        for m, v in c['meses'].items():
+            if v > 0:
+                meses_com_dados.add(m)
+                totais_mensais[m] += v
+
+        clientes.append({
+            'codigo': cod,
+            'nome': c['nome'],
+            'meses': c['meses'],
+            'total_ano': total_ano,
+            'total_ant': total_ant,
+            'variacao_pct': variacao_pct,
+            'tendencia': tendencia,
+        })
+
+    # Ordena por total do ano (maior primeiro)
+    clientes.sort(key=lambda x: x['total_ano'], reverse=True)
+
+    meses_com_dados = sorted(meses_com_dados) if meses_com_dados else list(range(1, 13))
+
+    return {
+        'clientes': clientes,
+        'meses_com_dados': meses_com_dados,
+        'totais_mensais': totais_mensais,
+        'ano': ano,
+        'ano_anterior': ano_anterior,
+        'total_geral': sum(totais_mensais.values()),
+    }
+
+
+# ====================================================================
+# 4. FUNÇÃO DE EXPORTAÇÃO EXCEL DE VENDAS REAIS
 # ====================================================================
 def gerar_excel_vendas_reais(filtro_pedido, filtro_produto, filtro_cliente, filtro_mes, filtro_ano):
     vendas_qs = VendaReal.objects.all().order_by('-Emissao')

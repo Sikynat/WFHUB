@@ -46,6 +46,25 @@ def avatar(user, size=32, classes=''):
     )
 
 @register.filter
+def get_item(dictionary, key):
+    """Acessa dicionário por chave variável: dict|get_item:key"""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key)
+    return None
+
+
+@register.filter
+def intcomma_br(value):
+    """Formata número com separadores brasileiros: 1.234.567"""
+    try:
+        value = float(value)
+        formatted = f'{value:,.0f}'
+        return formatted.replace(',', '.')
+    except (ValueError, TypeError):
+        return value
+
+
+@register.filter
 def format_br(value):
     try:
         # Converte o valor para float, se ainda não for

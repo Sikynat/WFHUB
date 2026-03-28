@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+{% load format_tags %}
+
+{% block content %}
+<style>
+    body { background: #f8f9fc; }
+
+    .page-header {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        padding: 1.5rem 2rem; margin-bottom: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .page-header h1 { font-size: 1.3rem; font-weight: 700; color: #1a202c; margin: 0; }
+    .page-header p { font-size: .85rem; color: #718096; margin: .15rem 0 0; }
+
+    /* Filtros */
+    .filter-bar {
+        background: white; border-radius: 12px; border: 1px solid #edf2f7;
+        padding: 1rem 1.5rem; margin-bottom: 1.25rem;
+        display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    .filter-bar label { font-size: .78rem; font-weight: 600; color: #4a5568; margin: 0; }
+    .filter-bar select, .filter-bar input {
+        font-size: .82rem; padding: .3rem .6rem; border: 1px solid #e2e8f0;
+        border-radius: 8px; color: #2d3748; background: #f7fafc;
+    }
+
+    /* Tabela */
+    .table-wrapper {
+        background: white; border-radius: 16px; border: 1px solid #edf2f7;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04); overflow: hidden;
+    }
+    .evo-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    .evo-table thead th {
+        background: #1F3864; color: white; font-weight: 600;
+        padding: .6rem .75rem; text-align: center; white-space: nowrap;
+        position: sticky; top: 0; z-index: 2;
+    }
+    .evo-table thead th.col-cliente { text-align: left; min-width: 180px; position: sticky; left: 0; z-index: 3; background: #1F3864; }
+    .evo-table thead th.col-cod { min-width: 55px; position: sticky; left: 0; z-index: 3; background: #1F3864; }
+    .evo-table tbody td { padding: .5rem .75rem; border-bottom: 1px solid #f0f4f8; }
+    .evo-table tbody tr:hover td { background: #f7fafc !important; }
+    .evo-table tbody tr:last-child td { border-bottom: none; }
+
+    .col-cod-body { text-align: center; color: #718096; font-size: .75rem; }
+    .col-nome-body { font-weight: 600; color: #2d3748; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .col-val { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .col-val.zero { color: #cbd5e0; }
+    .col-val.positive { color: #2d3748; }
+
+    /* Variação */
+    .badge-var {
+        display: inline-block; padding: .2rem .5rem; border-radius: 6px;
+        font-size: .75rem; font-weight: 700; white-space: nowrap;
+    }
+    .badge-up   { background: #d4edda; color: #155724; }
+    .badge-down { background: #f8d7da; color: #721c24; }
+    .badge-flat { background: #e2e8f0; color: #4a5568; }
+    .badge-new  { background: #cce5ff; color: #004085; }
+
+    /* Linha de totais */
+    .row-total td { background: #edf2f7 !important; font-weight: 700; color: #1a202c; border-top: 2px solid #cbd5e0; }
+
+    /* Heat map nas células mensais */
+    .heat-0  { }
+    .heat-1  { background: #e8f5e9; }
+    .heat-2  { background: #c8e6c9; }
+    .heat-3  { background: #a5d6a7; }
+    .heat-4  { background: #66bb6a; color: #fff; }
+    .heat-5  { background: #388e3c; color: #fff; }
+
+    /* Tendência ícone */
+    .tend-crescendo { color: #28a745; }
+    .tend-caindo    { color: #dc3545; }
+    .tend-estavel   { color: #6c757d; }
+
+    /* Sumário de tendências */
+    .tend-summary { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .tend-card {
+        background: white; border-radius: 12px; border: 1px solid #edf2f7;
+        padding: .75rem 1.25rem; flex: 1; min-width: 120px; text-align: center;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    .tend-card .num { font-size: 1.8rem; font-weight: 800; line-height: 1; margin-bottom: .25rem; }
+    .tend-card .lbl { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: #718096; }
+    .tend-crescendo-card .num { color: #28a745; }
+    .tend-caindo-card .num { color: #dc3545; }
+    .tend-estavel-card .num { color: #6c757d; }
+    .tend-novo-card .num { color: #007bff; }
+</style>
+
+<div class="container-fluid px-3 py-4">
+
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1>📈 Evolução de Clientes {{ ano_selecionado }}</h1>
+            <p>Compras mensais por cliente — compare com {{ ano_anterior }} e identifique quem está crescendo ou sumindo</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'exportar_evolucao_clientes_excel' %}?ano={{ ano_selecionado }}"
+               class="btn btn-success btn-sm">
+                <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
+            </a>
+            <a href="{% url 'dashboard_analise' %}" class="btn btn-outline-secondary btn-sm">
+                ← Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+        <label>Ano:</label>
+        <select onchange="window.location='?ano='+this.value">
+            {% for a in anos_disponiveis %}
+            <option value="{{ a }}" {% if a == ano_selecionado %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+
+        <label class="ms-2">Buscar cliente:</label>
+        <input type="text" id="searchCliente" placeholder="Nome ou código..." oninput="filtrarTabela()" style="min-width:180px;">
+
+        <label class="ms-2">Tendência:</label>
+        <select id="filtroTendencia" onchange="filtrarTabela()">
+            <option value="">Todas</option>
+            <option value="crescendo">📈 Crescendo</option>
+            <option value="caindo">📉 Caindo</option>
+            <option value="estavel">➡️ Estável</option>
+        </select>
+
+        <span class="ms-auto text-muted" style="font-size:.78rem;">
+            <strong id="contadorVisivel">{{ clientes|length }}</strong> clientes exibidos
+        </span>
+    </div>
+
+    <!-- Cards de tendência -->
+    {% with crescendo=0 caindo=0 estavel=0 novo=0 %}
+    {% with n_crescendo=clientes|length %}
+    <div class="tend-summary mb-3">
+        <div class="tend-card tend-crescendo-card">
+            <div class="num" id="cnt-crescendo">–</div>
+            <div class="lbl">📈 Crescendo</div>
+            <div style="font-size:.7rem;color:#718096;margin-top:.2rem;">≥ +10%</div>
+        </div>
+        <div class="tend-card tend-estavel-card">
+            <div class="num" id="cnt-estavel">–</div>
+            <div class="lbl">➡️ Estável</div>
+            <div style="font-size:.7rem;color:#718096;margin-top:.2rem;">entre -10% e +10%</div>
+        </div>
+        <div class="tend-card tend-caindo-card">
+            <div class="num" id="cnt-caindo">–</div>
+            <div class="lbl">📉 Caindo</div>
+            <div style="font-size:.7rem;color:#718096;margin-top:.2rem;">≤ -10%</div>
+        </div>
+        <div class="tend-card tend-novo-card">
+            <div class="num" id="cnt-novo">–</div>
+            <div class="lbl">🆕 Novos</div>
+            <div style="font-size:.7rem;color:#718096;margin-top:.2rem;">sem histórico anterior</div>
+        </div>
+        <div class="tend-card" style="background:#f7fafc;">
+            <div class="num" style="color:#1F3864;">{{ clientes|length }}</div>
+            <div class="lbl">Total clientes</div>
+            <div style="font-size:.7rem;color:#718096;margin-top:.2rem;">em {{ ano_selecionado }}</div>
+        </div>
+    </div>
+    {% endwith %}
+    {% endwith %}
+
+    <!-- Tabela -->
+    <div class="table-wrapper">
+        <div style="overflow-x: auto; max-height: 70vh; overflow-y: auto;">
+            <table class="evo-table">
+                <thead>
+                    <tr>
+                        <th class="col-cod">Cod.</th>
+                        <th class="col-cliente">Cliente</th>
+                        {% for m in meses_com_dados %}
+                        <th>{{ meses_nomes|get_item:m }}</th>
+                        {% endfor %}
+                        <th>Total {{ ano_selecionado }}</th>
+                        <th>Total {{ ano_anterior }}</th>
+                        <th>Var %</th>
+                        <th>Tendência</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaClientes">
+                    {% for c in clientes %}
+                    <tr data-nome="{{ c.nome|lower }}"
+                        data-cod="{{ c.codigo }}"
+                        data-tendencia="{{ c.tendencia }}"
+                        data-novo="{% if c.total_ant == 0 %}true{% else %}false{% endif %}">
+                        <td class="col-cod-body">{{ c.codigo }}</td>
+                        <td class="col-nome-body" title="{{ c.nome }}">{{ c.nome }}</td>
+                        {% for m in meses_com_dados %}
+                        {% with val=c.meses|get_item:m %}
+                        <td class="col-val {% if val > 0 %}positive{% else %}zero{% endif %}"
+                            data-val="{{ val }}">
+                            {% if val > 0 %}
+                                R$ {{ val|floatformat:0|intcomma_br }}
+                            {% else %}
+                                <span style="color:#e2e8f0;">—</span>
+                            {% endif %}
+                        </td>
+                        {% endwith %}
+                        {% endfor %}
+                        <td class="col-val positive"><strong>R$ {{ c.total_ano|floatformat:0|intcomma_br }}</strong></td>
+                        <td class="col-val {% if c.total_ant > 0 %}positive{% else %}zero{% endif %}">
+                            {% if c.total_ant > 0 %}R$ {{ c.total_ant|floatformat:0|intcomma_br }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if c.total_ant == 0 %}
+                                <span class="badge-var badge-new">Novo</span>
+                            {% elif c.variacao_pct >= 10 %}
+                                <span class="badge-var badge-up">+{{ c.variacao_pct|floatformat:1 }}%</span>
+                            {% elif c.variacao_pct <= -10 %}
+                                <span class="badge-var badge-down">{{ c.variacao_pct|floatformat:1 }}%</span>
+                            {% else %}
+                                <span class="badge-var badge-flat">{{ c.variacao_pct|floatformat:1 }}%</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if c.total_ant == 0 %}
+                                <span style="color:#007bff;">🆕 Novo</span>
+                            {% elif c.tendencia == 'crescendo' %}
+                                <span class="tend-crescendo">📈 Crescendo</span>
+                            {% elif c.tendencia == 'caindo' %}
+                                <span class="tend-caindo">📉 Caindo</span>
+                            {% else %}
+                                <span class="tend-estavel">➡️ Estável</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="row-total">
+                        <td></td>
+                        <td>TOTAL GERAL</td>
+                        {% for m in meses_com_dados %}
+                        <td class="col-val">R$ {{ totais_mensais|get_item:m|floatformat:0|intcomma_br }}</td>
+                        {% endfor %}
+                        <td class="col-val">R$ {{ total_geral|floatformat:0|intcomma_br }}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function filtrarTabela() {
+    const busca = document.getElementById('searchCliente').value.toLowerCase();
+    const tendFiltro = document.getElementById('filtroTendencia').value;
+    const rows = document.querySelectorAll('#tabelaClientes tr');
+    let visivel = 0;
+
+    const cnt = {crescendo: 0, estavel: 0, caindo: 0, novo: 0};
+
+    rows.forEach(row => {
+        const nome = row.dataset.nome || '';
+        const cod  = row.dataset.cod  || '';
+        const tend = row.dataset.tendencia || '';
+        const novo = row.dataset.novo === 'true';
+
+        const matchBusca = !busca || nome.includes(busca) || cod.includes(busca);
+        const matchTend  = !tendFiltro || tend === tendFiltro;
+
+        if (matchBusca && matchTend) {
+            row.style.display = '';
+            visivel++;
+            if (novo) cnt.novo++;
+            else cnt[tend]++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    document.getElementById('contadorVisivel').textContent = visivel;
+    document.getElementById('cnt-crescendo').textContent = cnt.crescendo;
+    document.getElementById('cnt-estavel').textContent   = cnt.estavel;
+    document.getElementById('cnt-caindo').textContent    = cnt.caindo;
+    document.getElementById('cnt-novo').textContent      = cnt.novo;
+}
+
+// Calcula heat map por coluna de mês
+document.addEventListener('DOMContentLoaded', () => {
+    filtrarTabela(); // inicializa contadores
+
+    // Heat map: para cada coluna de mês, pega o max e aplica classe
+    const numMeses = {{ meses_com_dados|length }};
+    for (let col = 2; col < 2 + numMeses; col++) {
+        const cells = document.querySelectorAll(`#tabelaClientes tr td:nth-child(${col + 1})`);
+        let max = 0;
+        cells.forEach(c => {
+            const v = parseFloat(c.dataset.val) || 0;
+            if (v > max) max = v;
+        });
+        if (max === 0) continue;
+        cells.forEach(c => {
+            const v = parseFloat(c.dataset.val) || 0;
+            if (v === 0) return;
+            const ratio = v / max;
+            if      (ratio >= 0.8) c.classList.add('heat-5');
+            else if (ratio >= 0.6) c.classList.add('heat-4');
+            else if (ratio >= 0.4) c.classList.add('heat-3');
+            else if (ratio >= 0.2) c.classList.add('heat-2');
+            else                   c.classList.add('heat-1');
+        });
+    }
+});
+</script>
+{% endblock %}
