@@ -16,6 +16,12 @@ Cobertura:
  12. WishlistMeusAvisosTest       — página meus-avisos exibe/oculta itens corretamente
  13. WishlistDashboardAdminTest   — oportunidades do dashboard agrupam e filtram corretamente
  14. WishlistIsolacaoEmpresaTest  — itens de empresa A não vazam para empresa B
+ 15. RFMCalculoTest               — scoring, segmentos, borda e base vazia
+ 16. RFMIsolacaoEmpresaTest       — empresa A não vê dados de empresa B no RFM
+ 17. RFMViewTest                  — aba RFM no dashboard e export PDF acessíveis ao staff
+ 18. EvolucaoClientesCalculoTest  — matriz mensal, variação %, tendência e totais
+ 19. EvolucaoClientesIsolacaoTest — isolamento multi-tenant na evolução
+ 20. EvolucaoClientesViewTest     — página e export Excel acessíveis ao staff
 """
 
 import io
@@ -44,6 +50,7 @@ from .models import (
     NotificacaoPedido, LogAuditoria, AnexoTarefa,
     Carrinho, ItemCarrinho,
     ItemPedidoIgnorado,
+    VendaReal,
 )
 
 
@@ -1460,3 +1467,462 @@ class WishlistIsolacaoEmpresaTest(WFTestCase):
         self.assertEqual(resp.status_code, 404)
         item_b.refresh_from_db()
         self.assertFalse(item_b.notificado)
+
+
+# ===========================================================================
+# HELPERS DE FIXTURE — VendaReal
+# ===========================================================================
+
+from datetime import date
+from decimal import Decimal
+
+
+def make_venda(empresa, cod_cliente, nome_cliente, emissao, pedido_nr, total,
+               produto='PROD001', quantidade=1):
+    """Cria um registro VendaReal com os campos mínimos."""
+    return VendaReal.objects.create(
+        empresa=empresa,
+        Emissao=emissao,
+        Codigo_Cliente=cod_cliente,
+        cliente_nome=nome_cliente,
+        Pedido=pedido_nr,
+        Produto_Codigo=produto,
+        Produto_Descricao='Produto Teste',
+        Quantidade=quantidade,
+        Unitario=Decimal(str(total)),
+        Total=Decimal(str(total)),
+    )
+
+
+# ===========================================================================
+# 15. RFM — calcular_rfm()
+# ===========================================================================
+
+class RFMCalculoTest(WFTestCase):
+    """Testa a função calcular_rfm isolada da camada HTTP."""
+
+    def setUp(self):
+        self.empresa = make_empresa('rfm-calculo')
+        hoje = date.today()
+        # Cliente "campeão": comprou recentemente, muitas vezes, valor alto
+        for i in range(5):
+            make_venda(
+                self.empresa, cod_cliente=1, nome_cliente='Campeao LTDA',
+                emissao=date(hoje.year, hoje.month, 1) - __import__('datetime').timedelta(days=i * 5),
+                pedido_nr=f'CAM{i}', total=10000,
+            )
+        # Cliente "adormecido": comprou há muito tempo, uma vez, valor baixo
+        make_venda(
+            self.empresa, cod_cliente=2, nome_cliente='Adormecido LTDA',
+            emissao=hoje - __import__('datetime').timedelta(days=340),
+            pedido_nr='DORM01', total=50,
+        )
+
+    def test_retorna_estrutura_correta(self):
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        self.assertIn('clientes', rfm)
+        self.assertIn('segmentos', rfm)
+        self.assertIn('segmentos_json', rfm)
+        self.assertIn('total', rfm)
+
+    def test_encontra_clientes_corretos(self):
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        self.assertEqual(rfm['total'], 2)
+        codigos = [c['codigo'] for c in rfm['clientes']]
+        self.assertIn(1, codigos)
+        self.assertIn(2, codigos)
+
+    def test_campos_obrigatorios_por_cliente(self):
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        for c in rfm['clientes']:
+            for campo in ('codigo', 'nome', 'recencia', 'frequencia', 'monetario',
+                          'r_score', 'f_score', 'm_score', 'rfm_score', 'segmento', 'acao'):
+                self.assertIn(campo, c, f"Campo '{campo}' ausente no cliente {c.get('codigo')}")
+
+    def test_scores_dentro_do_range_1_5(self):
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        for c in rfm['clientes']:
+            for score in (c['r_score'], c['f_score'], c['m_score']):
+                self.assertGreaterEqual(score, 1)
+                self.assertLessEqual(score, 5)
+
+    def test_campeao_tem_score_maior_que_adormecido(self):
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        por_codigo = {c['codigo']: c for c in rfm['clientes']}
+        self.assertGreater(
+            por_codigo[1]['rfm_score'],
+            por_codigo[2]['rfm_score'],
+            'Campeão deve ter rfm_score maior que Adormecido',
+        )
+
+    def test_base_vazia_retorna_zero_clientes(self):
+        from wefixhub.utils import calcular_rfm
+        empresa_vazia = make_empresa('rfm-vazia')
+        rfm = calcular_rfm(empresa=empresa_vazia)
+        self.assertEqual(rfm['total'], 0)
+        self.assertEqual(rfm['clientes'], [])
+
+    def test_cliente_unico_recebe_score_valido(self):
+        """Com apenas 1 cliente (sem quartis distintos), scores devem ser válidos."""
+        from wefixhub.utils import calcular_rfm
+        empresa_solo = make_empresa('rfm-solo')
+        make_venda(empresa_solo, cod_cliente=99, nome_cliente='Solo LTDA',
+                   emissao=date.today(), pedido_nr='SOLO01', total=500)
+        rfm = calcular_rfm(empresa=empresa_solo)
+        self.assertEqual(rfm['total'], 1)
+        c = rfm['clientes'][0]
+        self.assertGreaterEqual(c['rfm_score'], 3)  # único cliente não deve ser penalizado
+
+    def test_segmentos_somam_total_clientes(self):
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        total_segmentos = sum(v['count'] for v in rfm['segmentos'].values())
+        self.assertEqual(total_segmentos, rfm['total'])
+
+    def test_segmentos_json_e_string_valida(self):
+        import json
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        data = json.loads(rfm['segmentos_json'])
+        self.assertIsInstance(data, dict)
+        self.assertTrue(all(isinstance(v, int) for v in data.values()))
+
+    def test_ordenado_por_score_decrescente(self):
+        from wefixhub.utils import calcular_rfm
+        rfm = calcular_rfm(empresa=self.empresa)
+        scores = [c['rfm_score'] for c in rfm['clientes']]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+
+# ===========================================================================
+# 16. RFM — isolamento multi-tenant
+# ===========================================================================
+
+class RFMIsolacaoEmpresaTest(WFTestCase):
+    """calcular_rfm(empresa=X) nunca retorna dados de empresa Y."""
+
+    def setUp(self):
+        self.empresa_a = make_empresa('rfm-iso-a')
+        self.empresa_b = make_empresa('rfm-iso-b')
+        make_venda(self.empresa_a, 10, 'ClienteA', date.today(), 'PA01', 1000)
+        make_venda(self.empresa_b, 20, 'ClienteB', date.today(), 'PB01', 2000)
+
+    def test_empresa_a_nao_ve_cliente_b(self):
+        from wefixhub.utils import calcular_rfm
+        rfm_a = calcular_rfm(empresa=self.empresa_a)
+        codigos = [c['codigo'] for c in rfm_a['clientes']]
+        self.assertIn(10, codigos)
+        self.assertNotIn(20, codigos)
+
+    def test_empresa_b_nao_ve_cliente_a(self):
+        from wefixhub.utils import calcular_rfm
+        rfm_b = calcular_rfm(empresa=self.empresa_b)
+        codigos = [c['codigo'] for c in rfm_b['clientes']]
+        self.assertIn(20, codigos)
+        self.assertNotIn(10, codigos)
+
+    def test_sem_filtro_empresa_retorna_todos(self):
+        from wefixhub.utils import calcular_rfm
+        rfm_global = calcular_rfm(empresa=None)
+        codigos = [c['codigo'] for c in rfm_global['clientes']]
+        self.assertIn(10, codigos)
+        self.assertIn(20, codigos)
+
+
+# ===========================================================================
+# 17. RFM — views (dashboard + export PDF)
+# ===========================================================================
+
+class RFMViewTest(WFTestCase):
+    """Acesso às rotas de RFM: staff pode, cliente não pode."""
+
+    def setUp(self):
+        self.empresa = make_empresa('rfm-view')
+        self.uf = make_uf('SP')
+        self.staff = make_staff('staff_rfm', self.empresa)
+        self.user_cli, self.wfclient = make_cliente('cli_rfm', self.empresa, self.uf, code=5)
+        make_venda(self.empresa, 5, 'ClienteRFM', date.today(), 'RFM001', 500)
+
+    def test_dashboard_analise_carrega_aba_rfm(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('dashboard_analise'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('rfm', resp.context)
+        self.assertGreaterEqual(resp.context['rfm']['total'], 1)
+
+    def test_export_pdf_retorna_pdf(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('exportar_rfm_pdf'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        # Verifica que é um PDF real (começa com %PDF)
+        self.assertTrue(resp.content.startswith(b'%PDF'))
+
+    def test_export_pdf_bloqueado_para_cliente(self):
+        self.client.force_login(self.user_cli)
+        resp = self.client.get(reverse('exportar_rfm_pdf'))
+        self.assertIn(resp.status_code, [302, 403])
+
+    def test_export_pdf_base_vazia_nao_quebra(self):
+        """PDF deve ser gerado mesmo com 0 clientes no RFM."""
+        empresa_vazia = make_empresa('rfm-pdf-vazia')
+        staff_vazio = make_staff('staff_rfm_vazio', empresa_vazia)
+        self.client.force_login(staff_vazio)
+        resp = self.client.get(reverse('exportar_rfm_pdf'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.content.startswith(b'%PDF'))
+
+    def test_dashboard_analise_bloqueado_para_anonimo(self):
+        resp = self.client.get(reverse('dashboard_analise'))
+        self.assertIn(resp.status_code, [302, 403])
+
+
+# ===========================================================================
+# 18. Evolução de Clientes — calcular_evolucao_clientes()
+# ===========================================================================
+
+class EvolucaoClientesCalculoTest(WFTestCase):
+    """Testa a função calcular_evolucao_clientes isolada da camada HTTP."""
+
+    def setUp(self):
+        self.empresa = make_empresa('evo-calculo')
+        self.ano = 2024
+        self.ano_ant = 2023
+
+        # Cliente que CRESCEU: comprou 1000 em 2023, 5000 em 2024
+        make_venda(self.empresa, 1, 'Crescendo LTDA',
+                   date(self.ano_ant, 6, 1), 'ANT01', 1000)
+        for m in range(1, 7):
+            make_venda(self.empresa, 1, 'Crescendo LTDA',
+                       date(self.ano, m, 1), f'CRE{m}', 1000, produto=f'P{m}')
+
+        # Cliente que CAIU: comprou 5000 em 2023, 500 em 2024
+        make_venda(self.empresa, 2, 'Caindo LTDA',
+                   date(self.ano_ant, 3, 1), 'CANT01', 5000)
+        make_venda(self.empresa, 2, 'Caindo LTDA',
+                   date(self.ano, 1, 1), 'CAI01', 500)
+
+        # Cliente NOVO em 2024 (sem histórico anterior)
+        make_venda(self.empresa, 3, 'Novo LTDA',
+                   date(self.ano, 4, 1), 'NOVO01', 800)
+
+    def _evo(self):
+        from wefixhub.utils import calcular_evolucao_clientes
+        return calcular_evolucao_clientes(empresa=self.empresa, ano=self.ano)
+
+    def test_retorna_estrutura_correta(self):
+        dados = self._evo()
+        for campo in ('clientes', 'meses_com_dados', 'totais_mensais', 'ano', 'ano_anterior', 'total_geral'):
+            self.assertIn(campo, dados)
+
+    def test_ano_e_ano_anterior_corretos(self):
+        dados = self._evo()
+        self.assertEqual(dados['ano'], self.ano)
+        self.assertEqual(dados['ano_anterior'], self.ano_ant)
+
+    def test_encontra_tres_clientes(self):
+        dados = self._evo()
+        self.assertEqual(len(dados['clientes']), 3)
+
+    def test_campos_obrigatorios_por_cliente(self):
+        dados = self._evo()
+        for c in dados['clientes']:
+            for campo in ('codigo', 'nome', 'meses', 'total_ano', 'total_ant', 'variacao_pct', 'tendencia'):
+                self.assertIn(campo, c, f"Campo '{campo}' ausente no cliente {c.get('codigo')}")
+
+    def test_meses_tem_doze_entradas(self):
+        dados = self._evo()
+        for c in dados['clientes']:
+            self.assertEqual(len(c['meses']), 12)
+            self.assertEqual(sorted(c['meses'].keys()), list(range(1, 13)))
+
+    def test_cliente_crescendo_tem_tendencia_correta(self):
+        dados = self._evo()
+        por_cod = {c['codigo']: c for c in dados['clientes']}
+        c = por_cod[1]
+        self.assertEqual(c['tendencia'], 'crescendo')
+        self.assertGreater(c['variacao_pct'], 10)
+
+    def test_cliente_caindo_tem_tendencia_correta(self):
+        dados = self._evo()
+        por_cod = {c['codigo']: c for c in dados['clientes']}
+        c = por_cod[2]
+        self.assertEqual(c['tendencia'], 'caindo')
+        self.assertLess(c['variacao_pct'], -10)
+
+    def test_cliente_novo_tem_variacao_100(self):
+        """Cliente sem histórico no ano anterior deve ter variação de 100%."""
+        dados = self._evo()
+        por_cod = {c['codigo']: c for c in dados['clientes']}
+        c = por_cod[3]
+        self.assertEqual(c['total_ant'], Decimal('0'))
+        self.assertEqual(c['variacao_pct'], 100.0)
+
+    def test_totais_mensais_corretos(self):
+        dados = self._evo()
+        # Janeiro 2024: Crescendo(1000) + Caindo(500) = 1500
+        self.assertEqual(dados['totais_mensais'][1], Decimal('1500'))
+
+    def test_total_geral_e_soma_dos_meses(self):
+        dados = self._evo()
+        soma_meses = sum(dados['totais_mensais'].values())
+        self.assertEqual(dados['total_geral'], soma_meses)
+
+    def test_meses_com_dados_contem_apenas_meses_com_venda(self):
+        dados = self._evo()
+        # Meses sem nenhuma venda não devem aparecer (ex: Dezembro)
+        self.assertNotIn(12, dados['meses_com_dados'])
+        # Meses com venda devem aparecer
+        for m in dados['meses_com_dados']:
+            self.assertGreater(dados['totais_mensais'][m], 0)
+
+    def test_ordenado_por_total_ano_decrescente(self):
+        dados = self._evo()
+        totais = [c['total_ano'] for c in dados['clientes']]
+        self.assertEqual(totais, sorted(totais, reverse=True))
+
+    def test_base_vazia_retorna_lista_vazia(self):
+        from wefixhub.utils import calcular_evolucao_clientes
+        empresa_vazia = make_empresa('evo-vazia')
+        dados = calcular_evolucao_clientes(empresa=empresa_vazia, ano=self.ano)
+        self.assertEqual(dados['clientes'], [])
+        self.assertEqual(dados['total_geral'], Decimal('0'))
+
+    def test_ano_sem_vendas_mas_com_historico_anterior(self):
+        """Ano sem vendas retorna lista vazia mesmo com dados no ano anterior."""
+        from wefixhub.utils import calcular_evolucao_clientes
+        dados = calcular_evolucao_clientes(empresa=self.empresa, ano=2020)
+        self.assertEqual(dados['clientes'], [])
+
+    def test_valores_mensais_somam_total_ano_por_cliente(self):
+        dados = self._evo()
+        for c in dados['clientes']:
+            soma_meses = sum(c['meses'].values())
+            self.assertAlmostEqual(float(soma_meses), float(c['total_ano']), places=2,
+                                   msg=f"Soma dos meses diverge do total_ano para cliente {c['codigo']}")
+
+
+# ===========================================================================
+# 19. Evolução de Clientes — isolamento multi-tenant
+# ===========================================================================
+
+class EvolucaoClientesIsolacaoTest(WFTestCase):
+    """calcular_evolucao_clientes(empresa=X) nunca retorna dados de empresa Y."""
+
+    def setUp(self):
+        self.ano = date.today().year
+        self.empresa_a = make_empresa('evo-iso-a')
+        self.empresa_b = make_empresa('evo-iso-b')
+        make_venda(self.empresa_a, 11, 'EvoClienteA', date(self.ano, 1, 1), 'EA01', 999)
+        make_venda(self.empresa_b, 22, 'EvoClienteB', date(self.ano, 1, 1), 'EB01', 888)
+
+    def test_empresa_a_nao_ve_cliente_de_b(self):
+        from wefixhub.utils import calcular_evolucao_clientes
+        dados = calcular_evolucao_clientes(empresa=self.empresa_a, ano=self.ano)
+        codigos = [c['codigo'] for c in dados['clientes']]
+        self.assertIn(11, codigos)
+        self.assertNotIn(22, codigos)
+
+    def test_empresa_b_nao_ve_cliente_de_a(self):
+        from wefixhub.utils import calcular_evolucao_clientes
+        dados = calcular_evolucao_clientes(empresa=self.empresa_b, ano=self.ano)
+        codigos = [c['codigo'] for c in dados['clientes']]
+        self.assertIn(22, codigos)
+        self.assertNotIn(11, codigos)
+
+    def test_sem_filtro_retorna_todos(self):
+        from wefixhub.utils import calcular_evolucao_clientes
+        dados = calcular_evolucao_clientes(empresa=None, ano=self.ano)
+        codigos = [c['codigo'] for c in dados['clientes']]
+        self.assertIn(11, codigos)
+        self.assertIn(22, codigos)
+
+    def test_total_geral_e_exclusivo_da_empresa(self):
+        from wefixhub.utils import calcular_evolucao_clientes
+        dados_a = calcular_evolucao_clientes(empresa=self.empresa_a, ano=self.ano)
+        self.assertEqual(dados_a['total_geral'], Decimal('999'))
+
+
+# ===========================================================================
+# 20. Evolução de Clientes — views (página + export Excel)
+# ===========================================================================
+
+class EvolucaoClientesViewTest(WFTestCase):
+    """Testa acesso às rotas de evolução de clientes."""
+
+    def setUp(self):
+        self.empresa = make_empresa('evo-view')
+        self.uf = make_uf('SP')
+        self.staff = make_staff('staff_evo', self.empresa)
+        self.user_cli, self.wfclient = make_cliente('cli_evo', self.empresa, self.uf, code=7)
+        self.ano = date.today().year
+        make_venda(self.empresa, 7, 'ClienteEvo', date(self.ano, 3, 1), 'EVO001', 1200)
+
+    def test_pagina_carrega_para_staff(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('evolucao_clientes'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('clientes', resp.context)
+        self.assertGreaterEqual(len(resp.context['clientes']), 1)
+
+    def test_pagina_com_ano_especifico(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('evolucao_clientes') + f'?ano={self.ano}')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['ano_selecionado'], self.ano)
+
+    def test_pagina_com_ano_invalido_usa_ano_atual(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('evolucao_clientes') + '?ano=abc')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['ano_selecionado'], date.today().year)
+
+    def test_pagina_bloqueada_para_cliente(self):
+        self.client.force_login(self.user_cli)
+        resp = self.client.get(reverse('evolucao_clientes'))
+        self.assertIn(resp.status_code, [302, 403])
+
+    def test_pagina_bloqueada_para_anonimo(self):
+        resp = self.client.get(reverse('evolucao_clientes'))
+        self.assertIn(resp.status_code, [302, 403])
+
+    def test_export_excel_retorna_xlsx(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('exportar_evolucao_clientes_excel') + f'?ano={self.ano}')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('spreadsheetml', resp['Content-Type'])
+        # Verifica que é um arquivo ZIP válido (formato xlsx)
+        self.assertTrue(resp.content[:4] == b'PK\x03\x04')
+
+    def test_export_excel_bloqueado_para_cliente(self):
+        self.client.force_login(self.user_cli)
+        resp = self.client.get(reverse('exportar_evolucao_clientes_excel'))
+        self.assertIn(resp.status_code, [302, 403])
+
+    def test_export_excel_base_vazia_nao_quebra(self):
+        """Excel deve ser gerado mesmo sem vendas no ano."""
+        empresa_vazia = make_empresa('evo-excel-vazia')
+        staff_vazio = make_staff('staff_evo_vazio', empresa_vazia)
+        self.client.force_login(staff_vazio)
+        resp = self.client.get(reverse('exportar_evolucao_clientes_excel') + f'?ano={self.ano}')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.content[:4] == b'PK\x03\x04')
+
+    def test_contexto_tem_meses_nomes(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('evolucao_clientes'))
+        self.assertIn('meses_nomes', resp.context)
+        nomes = resp.context['meses_nomes']
+        self.assertEqual(nomes[1], 'Jan')
+        self.assertEqual(nomes[12], 'Dez')
+
+    def test_contexto_tem_anos_disponiveis(self):
+        self.client.force_login(self.staff)
+        resp = self.client.get(reverse('evolucao_clientes'))
+        self.assertIn('anos_disponiveis', resp.context)
+        self.assertIn(self.ano, resp.context['anos_disponiveis'])
