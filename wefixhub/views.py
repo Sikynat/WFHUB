@@ -2355,6 +2355,8 @@ def upload_pedido(request):
 
                 # 2. Normalização e Mapeamento de Colunas
                 df.columns = [normalize_text(col) for col in df.columns]
+                # Remove colunas duplicadas (pode ocorrer ao concatenar sheets com estruturas diferentes)
+                df = df.loc[:, ~df.columns.duplicated()]
 
                 expected_cols = {
                     'codigo': ['codigo', 'código', 'cod'],
@@ -3245,6 +3247,8 @@ def upload_pedido_cliente(request):
 
                 # 2. Normalização e Mapeamento de Colunas
                 df.columns = [normalize_text(col) for col in df.columns]
+                # Remove colunas duplicadas (pode ocorrer ao concatenar sheets com estruturas diferentes)
+                df = df.loc[:, ~df.columns.duplicated()]
 
                 expected_cols = {
                     'codigo': ['codigo', 'código', 'cod'],
