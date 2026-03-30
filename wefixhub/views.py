@@ -3456,33 +3456,41 @@ def exportar_detalhes_pedido_whatsapp_excel(request, pedido_id):
 
 def _parse_texto_pedido(texto):
     """
-    Interpreta um texto livre de pedido enviado via WhatsApp/mensagem.
+    Interpreta um texto livre de pedido.
+    Regra: primeiro token da linha = código, último número da linha = quantidade.
+
     Suporta formatos:
-        K6020 —-10
-        K1071 ——3
-        C2011    PLACA CARGA SAMSUNG A03    -7
-    Retorna lista de dicts: [{'codigo': 'K6020', 'quantidade': 10}, ...]
+        W6130    50                      (espaço/tab)
+        1ICP4/39/93    20               (código com barras/dígito inicial)
+        HRG-H82    20                   (código com traço interno)
+        K6020 — 10                      (traço como separador)
+        C2011  PLACA CARGA A03  -7      (descrição no meio ignorada)
     """
-    itens = []
     vistos = {}  # deduplica somando quantidades
 
     for linha in texto.splitlines():
         linha = linha.strip()
         if not linha:
             continue
-        # Código: 1-2 letras maiúsculas + dígitos no início da linha
-        # Quantidade: último número após traços (-, —, combinações)
-        match = re.match(r'^([A-Z]{1,2}\d+).*[-—]+\s*(\d+)\s*$', linha, re.IGNORECASE)
-        if match:
-            codigo = match.group(1).upper()
-            quantidade = int(match.group(2))
-            if quantidade > 0:
-                vistos[codigo] = vistos.get(codigo, 0) + quantidade
 
-    for codigo, quantidade in vistos.items():
-        itens.append({'codigo': codigo, 'quantidade': quantidade})
+        tokens = linha.split()
+        if len(tokens) < 2:
+            continue
 
-    return itens
+        codigo = tokens[0].upper()
+
+        # Último token numérico da linha (ignora traços e espaços)
+        quantidade = None
+        for token in reversed(tokens[1:]):
+            limpo = re.sub(r'[-—\s]', '', token)
+            if limpo.isdigit() and int(limpo) > 0:
+                quantidade = int(limpo)
+                break
+
+        if quantidade:
+            vistos[codigo] = vistos.get(codigo, 0) + quantidade
+
+    return [{'codigo': cod, 'quantidade': qtd} for cod, qtd in vistos.items()]
 
 
 @login_required
